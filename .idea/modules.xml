@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/fronAngular/fronAngular.iml" filepath="$PROJECT_DIR$/fronAngular/fronAngular.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/front.iml" filepath="$PROJECT_DIR$/.idea/front.iml" />
     </modules>
   </component>

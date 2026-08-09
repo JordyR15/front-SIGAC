@@ -1,0 +1,52 @@
+<div class="login-page-container">
+  <div class="login-card">
+
+    <!-- Cabecera sin icono -->
+    <div class="login-header">
+      <h1>Portal Académico</h1>
+      <p>Inicia sesión para tu SIGAC</p>
+    </div>
+
+    <!-- Mensaje de error si ocurre alguno -->
+    <div *ngIf="errorMessage" class="error-message">
+      {{ errorMessage }}
+    </div>
+
+    <form (ngSubmit)="onLogin()" class="login-form">
+      <!-- Campo Correo/Usuario -->
+      <div class="form-group">
+        <input
+          type="text"
+          name="email"
+          [(ngModel)]="credentials.email"
+          placeholder="Correo Institucional o Usuario"
+          required
+        />
+      </div>
+
+      <!-- Campo Contraseña -->
+      <div class="form-group">
+        <input
+          type="password"
+          name="password"
+          [(ngModel)]="credentials.password"
+          placeholder="Contraseña"
+          required
+        />
+      </div>
+
+      <!-- Botón Ingresar -->
+      <button type="submit" [disabled]="isLoading" class="btn-primary">
+        <span *ngIf="!isLoading">INGRESAR</span>
+        <span *ngIf="isLoading" class="spinner"></span>
+      </button>
+    </form>
+
+    <!-- Enlaces de pie de página -->
+    <div class="login-footer">
+      <a href="#" class="link-secondary">¿Has olvidado tu contraseña?</a>
+      <p>¿No tienes cuenta? <a href="#" class="link-primary">Regístrate aquí</a></p>
+    </div>
+
+  </div>
+</div>
