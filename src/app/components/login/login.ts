@@ -21,12 +21,11 @@ export class LoginComponent {
 
   // DTO de login en el frontend
   credentials = {
-    email: '',
+    username: '',
     password: ''
   };
-
   onLogin() {
-    if (!this.credentials.email || !this.credentials.password) {
+    if (!this.credentials.username || !this.credentials.password) {
       this.errorMessage = 'Por favor complete todos los campos';
       return;
     }

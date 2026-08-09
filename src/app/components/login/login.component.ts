@@ -1,37 +1,34 @@
-import { Component, inject } from '@angular/core';
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { AuthService } from '../../services/auth.service';
-import { LoginRequest } from '../../models/login-request.model';
+import { AuthService, LoginDto } from '../../services/auth.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl: './login.html', // <-- Quitar ".component" para que coincida con el nombre real de tu archivo
-  styleUrl: './login.css'     // <-- Verificar que también se llame login.css
+  templateUrl: './login.html',
+  styleUrl: './login.css'
 })
 export class LoginComponent {
-  private authService = inject(AuthService);
-  private router = inject(Router);
-
-  // Modelo ligado al formulario
-  // src/app/components/login/login.component.ts
-
-  credentials = {
-    email: '',
+  // Estructura coincidente con LoginDto en C#
+  credentials: LoginDto = {
+    username: '',
     password: ''
   };
 
-  // Variables de estado para la UI
   isLoading = false;
   errorMessage = '';
 
+  constructor(
+    private authService: AuthService,
+    private router: Router
+  ) {}
+
   onLogin(): void {
-    // Validar campos básicos
-    if (!this.credentials.email || !this.credentials.password) {
-      this.errorMessage = 'Por favor, ingrese el usuario y la contraseña.';
+    if (!this.credentials.username || !this.credentials.password) {
+      this.errorMessage = 'Por favor ingrese usuario y contraseña.';
       return;
     }
 
@@ -39,22 +36,18 @@ export class LoginComponent {
     this.errorMessage = '';
 
     this.authService.login(this.credentials).subscribe({
-      next: (response) => {
+      next: (user) => {
         this.isLoading = false;
-
-        if (response.success && response.token) {
-          // Guardar token JWT en localStorage
-          this.authService.saveToken(response.token);
-          // Redirigir a la pantalla principal o dashboard
-          this.router.navigate(['/dashboard']);
-        } else {
-          this.errorMessage = response.message || 'Credenciales incorrectas.';
-        }
+        // Redirigir al dashboard o ruta principal tras login exitoso
+        this.router.navigate(['/dashboard']);
       },
-      error: (error) => {
+      error: (err) => {
         this.isLoading = false;
-        console.error('Error de autenticación:', error);
-        this.errorMessage = error.error?.message || 'Error al conectar con el servidor. Intente más tarde.';
+        if (err.status === 401) {
+          this.errorMessage = 'Usuario o contraseña incorrectos.';
+        } else {
+          this.errorMessage = 'Ocurrió un error de conexión con el servidor.';
+        }
       }
     });
   }
