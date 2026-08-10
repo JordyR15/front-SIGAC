@@ -1,30 +1,22 @@
 import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule } from '@angular/common'; // <-- Solo CommonModule aquí
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { AuthService, LoginDto } from '../../services/auth.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule], // <-- Quitamos NgOptimizedImage
   templateUrl: './login.html',
   styleUrl: './login.css'
 })
 export class LoginComponent {
-  // Estructura coincidente con LoginDto en C#
-  credentials: LoginDto = {
-    username: '',
-    password: ''
-  };
-
+  credentials = { username: '', password: '' };
   isLoading = false;
   errorMessage = '';
 
-  constructor(
-    private authService: AuthService,
-    private router: Router
-  ) {}
+  constructor(private authService: AuthService, private router: Router) {}
 
   onLogin(): void {
     if (!this.credentials.username || !this.credentials.password) {
@@ -38,7 +30,6 @@ export class LoginComponent {
     this.authService.login(this.credentials).subscribe({
       next: (user) => {
         this.isLoading = false;
-        // Redirigir al dashboard o ruta principal tras login exitoso
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {

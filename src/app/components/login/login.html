@@ -1,50 +1,93 @@
-<div class="login-page-container">
-  <div class="login-card">
+<div class="bg-slate-50 text-slate-900 antialiased min-h-screen flex items-center justify-center p-4 selection:bg-accent selection:text-white">
 
-    <!-- Cabecera sin icono -->
-    <div class="login-header">
-      <h1>Portal Académico</h1>
-      <p>Inicia sesión para tu SIGAC</p>
-    </div>
+  <div class="w-full max-w-md">
 
-    <!-- Mensaje de error si ocurre alguno -->
-    <div *ngIf="errorMessage" class="error-message">
-      {{ errorMessage }}
-    </div>
-
-    <form (ngSubmit)="onLogin()" class="login-form">
-      <!-- Campo Correo/Usuario -->
-      <input
-        type="text"
-        name="username"
-        [(ngModel)]="credentials.username"
-        placeholder="Correo Institucional o Usuario"
-        required
+    <!-- Logo Area (Corregido con ruta absoluta) -->
+    <div class="flex flex-col items-center mb-8">
+      <!-- Asegúrate de que el archivo esté en: src/assets/logo-sigac.png -->
+      <img
+        src="/logo-sigac.png"
+        alt="SIGAC Logo"
+        width="80"
+        height="80"
+        class="object-contain mb-4 rounded-2xl shadow-sm border border-slate-200 bg-white"
       />
-
-      <!-- Campo Contraseña -->
-      <div class="form-group">
-        <input
-          type="password"
-          name="password"
-          [(ngModel)]="credentials.password"
-          placeholder="Contraseña"
-          required
-        />
-      </div>
-
-      <!-- Botón Ingresar -->
-      <button type="submit" [disabled]="isLoading" class="btn-primary">
-        <span *ngIf="!isLoading">INGRESAR</span>
-        <span *ngIf="isLoading" class="spinner"></span>
-      </button>
-    </form>
-
-    <!-- Enlaces de pie de página -->
-    <div class="login-footer">
-      <a href="#" class="link-secondary">¿Has olvidado tu contraseña?</a>
-      <p>¿No tienes cuenta? <a href="#" class="link-primary">Regístrate aquí</a></p>
+      <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">SIGAC</h1>
+      <p class="text-slate-500 mt-2 text-center">Sistema de Gestión Académica Centralizado</p>
     </div>
+
+    <!-- Login Card -->
+    <div class="glass-card rounded-3xl p-8 shadow-xl shadow-slate-200/50 relative overflow-hidden">
+      <div class="absolute -top-24 -right-24 w-48 h-48 bg-accent/5 rounded-full blur-3xl"></div>
+
+      <form (ngSubmit)="onLogin()" class="space-y-6 relative z-10">
+
+        <!-- Campo Usuario -->
+        <div>
+          <label for="email" class="block text-sm font-medium text-slate-700 mb-2">Correo Institucional</label>
+          <div class="relative group">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-accent transition-colors">
+              <i class="fa-regular fa-envelope"></i>
+            </div>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              [(ngModel)]="credentials.username"
+              required
+              class="block w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all placeholder:text-slate-400 text-slate-900"
+              placeholder="usuario@institucion.edu"
+            />
+          </div>
+        </div>
+
+        <!-- Campo Contraseña -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label for="password" class="block text-sm font-medium text-slate-700">Contraseña</label>
+            <a href="#" class="text-xs text-accent hover:text-accent-dim transition-colors font-medium">¿Olvidaste tu contraseña?</a>
+          </div>
+          <div class="relative group">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-accent transition-colors">
+              <i class="fa-solid fa-lock"></i>
+            </div>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              [(ngModel)]="credentials.password"
+              required
+              class="block w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all placeholder:text-slate-400 text-slate-900"
+              placeholder="••••••••"
+            />
+          </div>
+        </div>
+
+        <!-- Checkbox -->
+        <div class="flex items-center">
+          <input type="checkbox" id="remember" class="w-4 h-4 rounded border-slate-300 bg-white text-accent focus:ring-accent/20 accent-accent" />
+          <label for="remember" class="ml-2 text-sm text-slate-600">Mantener sesión iniciada</label>
+        </div>
+
+        <!-- Botón de Acceso -->
+        <button
+          type="submit"
+          [disabled]="isLoading"
+          class="w-full py-3.5 px-4 bg-accent hover:bg-accent-dim text-white font-bold rounded-xl shadow-lg shadow-accent/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 group"
+        >
+          <span *ngIf="!isLoading">Acceder al Sistema</span>
+          <span *ngIf="isLoading">Cargando...</span>
+          <i class="fa-solid fa-arrow-right text-sm group-hover:translate-x-1 transition-transform" *ngIf="!isLoading"></i>
+        </button>
+
+      </form>
+    </div>
+
+    <!-- Footer Info -->
+    <p class="mt-8 text-center text-sm text-slate-600">
+      ¿Eres nuevo en la institución?
+      <a href="#" class="text-accent font-semibold hover:underline transition-colors">Solicita tus credenciales</a>
+    </p>
 
   </div>
 </div>
