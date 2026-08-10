@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-declare const Plotly: any; // <-- Declaración para que Angular sepa que Plotly existe
+declare const Plotly: any;
 
 @Component({
   selector: 'app-dashboard',
@@ -12,8 +12,44 @@ declare const Plotly: any; // <-- Declaración para que Angular sepa que Plotly 
 })
 export class DashboardComponent implements OnInit {
 
+  // ✅ ESTRUCTURA ALINEADA CON LOS DTOS DE C# (Inscripcion, Catedra, User)
+  materias = [
+    {
+      id: 1,
+      catedraId: 101,
+      catedra: {
+        id: 101,
+        nombre: 'Cálculo Avanzado',
+        docente: { username: 'Dra. Evelyn Vance' }
+      },
+      promedioActual: 4.8,
+      alertaRendimiento: false
+    },
+    {
+      id: 2,
+      catedraId: 102,
+      catedra: {
+        id: 102,
+        nombre: 'Mecánica Cuántica',
+        docente: { username: 'Dr. Marcus Thorne' }
+      },
+      promedioActual: 4.5,
+      alertaRendimiento: false
+    },
+    {
+      id: 3,
+      catedraId: 103,
+      catedra: {
+        id: 103,
+        nombre: 'Redes Neuronales',
+        docente: { username: 'Prof. Sarah Chen' }
+      },
+      promedioActual: 4.9,
+      alertaRendimiento: false
+    }
+  ];
+
   ngOnInit(): void {
-    // Dibujar el gráfico al cargar el componente
     this.renderChart();
   }
 
@@ -60,8 +96,6 @@ export class DashboardComponent implements OnInit {
     };
 
     const config = { responsive: true, displayModeBar: false, displaylogo: false };
-
-    // Renderizar el gráfico en el div con id 'trajectory-chart'
     Plotly.newPlot('trajectory-chart', data, layout, config);
   }
 }

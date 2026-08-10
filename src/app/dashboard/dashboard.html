@@ -11,11 +11,10 @@
         <span class="flex items-center gap-1.5 text-slate-500"><span class="w-2.5 h-2.5 rounded-sm bg-slate-300"></span>Promedio Grupal</span>
       </div>
     </div>
-    <!-- Aquí se renderizará el gráfico con Plotly -->
     <div id="trajectory-chart" class="h-[300px]"></div>
   </section>
 
-  <!-- KPI ROW -->
+  <!-- KPI ROW (Datos simulados para visualización, se conectarán a C# después) -->
   <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
     <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
       <div class="w-11 h-11 rounded-xl bg-accent/5 border border-accent/10 flex items-center justify-center text-accent shrink-0"><i class="fa-solid fa-award text-xl"></i></div>
@@ -47,7 +46,7 @@
     </div>
   </section>
 
-  <!-- DATA TABLE SECTION -->
+  <!-- DATA TABLE SECTION (Ahora usa las propiedades de los DTOs) -->
   <section class="glass-card rounded-2xl overflow-hidden">
     <div class="px-5 md:px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
       <h2 class="text-base font-semibold text-slate-900">Materias en Curso</h2>
@@ -65,26 +64,35 @@
         </tr>
         </thead>
         <tbody class="divide-y divide-slate-200">
-        <tr class="hover:bg-slate-50 transition-colors">
-          <td class="px-5 md:px-6 py-4"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center"><i class="fa-solid fa-square-root-variable"></i></div><span class="font-medium text-slate-900">Cálculo Avanzado</span></div></td>
-          <td class="px-4 py-4 text-slate-500 hidden sm:table-cell">Dra. Evelyn Vance</td>
-          <td class="px-4 py-4 text-right font-semibold text-slate-900">4.8 <span class="text-slate-400 text-xs">(91%)</span></td>
-          <td class="px-4 py-4"><div class="flex items-center gap-2"><div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-violet-500 rounded-full" style="width:94%"></div></div><span class="text-xs text-slate-400 w-8 text-right">94%</span></div></td>
-          <td class="px-5 md:px-6 py-4 text-right"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 text-xs font-medium text-violet-600 border border-violet-100">Top 5%</span></td>
-        </tr>
-        <tr class="hover:bg-slate-50 transition-colors">
-          <td class="px-5 md:px-6 py-4"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-cyan-50 text-cyan-600 flex items-center justify-center"><i class="fa-solid fa-atom text-sm"></i></div><span class="font-medium text-slate-900">Mecánica Cuántica</span></div></td>
-          <td class="px-4 py-4 text-slate-500 hidden sm:table-cell">Dr. Marcus Thorne</td>
-          <td class="px-4 py-4 text-right font-semibold text-slate-900">4.5 <span class="text-slate-400 text-xs">(87%)</span></td>
-          <td class="px-4 py-4"><div class="flex items-center gap-2"><div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-cyan-500 rounded-full" style="width:88%"></div></div><span class="text-xs text-slate-400 w-8 text-right">88%</span></div></td>
-          <td class="px-5 md:px-6 py-4 text-right"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-50 text-xs font-medium text-cyan-600 border border-cyan-100">Al día</span></td>
-        </tr>
-        <tr class="hover:bg-slate-50 transition-colors">
-          <td class="px-5 md:px-6 py-4"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-accent/5 text-accent flex items-center justify-center"><i class="fa-solid fa-brain text-sm"></i></div><span class="font-medium text-slate-900">Redes Neuronales</span></div></td>
-          <td class="px-4 py-4 text-slate-500 hidden sm:table-cell">Prof. Sarah Chen</td>
-          <td class="px-4 py-4 text-right font-semibold text-slate-900">4.9 <span class="text-slate-400 text-xs">(96%)</span></td>
-          <td class="px-4 py-4"><div class="flex items-center gap-2"><div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-accent rounded-full" style="width:97%"></div></div><span class="text-xs text-slate-400 w-8 text-right">97%</span></div></td>
-          <td class="px-5 md:px-6 py-4 text-right"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/5 text-xs font-medium text-accent border border-accent/10">Excelente</span></td>
+        <!-- ✅ NG FOR ALINEADO CON LOS DTOS DE C# -->
+        <tr *ngFor="let materia of materias" class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 md:px-6 py-4">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                <i class="fa-solid fa-square-root-variable text-sm"></i>
+              </div>
+              <!-- Accede a la propiedad anidada Catedra.Nombre -->
+              <span class="font-medium text-slate-900">{{ materia.catedra.nombre }}</span>
+            </div>
+          </td>
+          <!-- Accede a la propiedad anidada Catedra.Docente.Username -->
+          <td class="px-4 py-4 text-slate-500 hidden sm:table-cell">{{ materia.catedra.docente.username }}</td>
+          <td class="px-4 py-4 text-right font-semibold text-slate-900">
+            {{ materia.promedioActual }} <span class="text-slate-400 text-xs">({{ (materia.promedioActual * 20) | number:'1.0-0' }}%)</span>
+          </td>
+          <td class="px-4 py-4">
+            <div class="flex items-center gap-2">
+              <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                <div class="h-full bg-violet-500 rounded-full" [style.width]="(materia.promedioActual * 20) + '%'"></div>
+              </div>
+              <span class="text-xs text-slate-400 w-8 text-right">{{ (materia.promedioActual * 20) | number:'1.0-0' }}%</span>
+            </div>
+          </td>
+          <td class="px-5 md:px-6 py-4 text-right">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 text-xs font-medium text-violet-600 border border-violet-100">
+                                Top 5%
+                            </span>
+          </td>
         </tr>
         </tbody>
       </table>

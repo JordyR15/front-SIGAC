@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common'; // <-- Solo CommonModule aquí
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -7,7 +7,7 @@ import { AuthService } from '../../services/auth.service';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule], // <-- Quitamos NgOptimizedImage
+  imports: [CommonModule, FormsModule],
   templateUrl: './login.html',
   styleUrl: './login.css'
 })
@@ -30,6 +30,8 @@ export class LoginComponent {
     this.authService.login(this.credentials).subscribe({
       next: (user) => {
         this.isLoading = false;
+        // El backend ya nos devolvió el rol, podemos usarlo si queremos hacer algo específico
+        console.log('Usuario logueado con rol:', user.rol);
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {
