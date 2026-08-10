@@ -1,1 +1,104 @@
-<p>layout works!</p>
+<div class="bg-surface-50 text-slate-900 antialiased min-h-screen overflow-hidden flex selection:bg-accent selection:text-white">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="w-[260px] bg-white border-r border-slate-200 flex flex-col shrink-0 hidden md:flex z-20 relative">
+    <!-- Logo en el Sidebar -->
+    <div class="h-[72px] flex items-center px-6 shrink-0 border-b border-slate-200">
+      <div class="flex items-center gap-3">
+        <img src="/logo-sigac.png" alt="SIGAC" class="w-8 h-8 object-contain" />
+        <span class="font-bold tracking-tight text-xl text-slate-900">SIGAC</span>
+      </div>
+    </div>
+
+    <!-- Menú de Navegación -->
+    <nav class="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+      <p class="px-3 pb-2 pt-4 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">Panel Académico</p>
+
+      <a routerLink="/dashboard"
+         routerLinkActive="bg-accent/5 text-accent"
+         #rla="routerLinkActive"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
+        <!-- La línea azul a la izquierda solo se mostrará si la ruta está activa -->
+        <span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" *ngIf="rla.isActive"></span>
+        <i class="fa-solid fa-house-chimney text-sm w-5 text-center"></i>
+        <span class="text-sm font-semibold">Inicio</span>
+      </a>
+
+      <a routerLink="/materias" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <i class="fa-solid fa-book-open text-sm w-5 text-center"></i>
+        <span class="text-sm font-medium">Materias</span>
+      </a>
+
+      <a routerLink="/calificaciones" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <i class="fa-solid fa-star text-sm w-5 text-center"></i>
+        <span class="text-sm font-medium">Calificaciones</span>
+      </a>
+
+      <a routerLink="/horarios" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <i class="fa-solid fa-calendar-days text-sm w-5 text-center"></i>
+        <span class="text-sm font-medium">Horarios</span>
+      </a>
+
+      <a routerLink="/tramites" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <i class="fa-solid fa-file-invoice text-sm w-5 text-center"></i>
+        <span class="text-sm font-medium">Trámites</span>
+      </a>
+
+      <div class="my-4 border-t border-slate-200 mx-2"></div>
+
+      <a routerLink="/ajustes" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <i class="fa-solid fa-sliders text-sm w-5 text-center"></i>
+        <span class="text-sm font-medium">Ajustes</span>
+      </a>
+    </nav>
+
+    <!-- Perfil del Usuario (Footer del Sidebar) -->
+    <div class="p-3 shrink-0 border-t border-slate-200">
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-100 transition-colors">
+        <!-- Avatar placeholder -->
+        <div class="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold border-2 border-white shadow-sm">
+          AG
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold text-slate-900 truncate">Alejandro García</p>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-[10px] font-medium text-emerald-600 border border-emerald-100 mt-0.5 uppercase">
+                        <span class="relative flex h-1.5 w-1.5"><span class="live-dot absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span></span>
+                        ESTUDIANTE
+                    </span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT (Fluid) -->
+  <main class="flex-1 flex flex-col min-w-0 relative">
+
+    <!-- HEADER -->
+    <header class="h-[72px] border-b border-slate-200 flex items-center justify-between px-6 lg:px-8 shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+      <div class="flex items-center gap-4">
+        <button class="md:hidden text-slate-500 hover:text-slate-900"><i class="fa-solid fa-bars text-xl"></i></button>
+        <div>
+          <h1 class="text-xl font-bold text-slate-900 tracking-tight">Bienvenido, Alejandro</h1>
+          <p class="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Semestre Otoño 2024 · Semana 8
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 border border-slate-200 text-xs text-slate-500">
+          <i class="fa-solid fa-magnifying-glass text-[10px]"></i>
+          <input placeholder="Buscar cursos..." class="bg-transparent outline-none placeholder:text-slate-400 w-48">
+        </div>
+        <button class="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors relative">
+          <i class="fa-regular fa-bell"></i>
+          <span class="absolute top-3 right-3 w-2 h-2 rounded-full bg-amber-500 border-2 border-white"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENIDO DINÁMICO (Aquí se cargará el Dashboard, Materias, etc.) -->
+    <div class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-6">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+</div>
