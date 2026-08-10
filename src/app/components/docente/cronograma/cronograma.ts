@@ -6,10 +6,10 @@ import { FormsModule } from '@angular/forms';
   selector: 'app-cronograma',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl: './cronograma.html',
-  styleUrls: ['./cronograma.css']
+  templateUrl: './cronograma.html'
 })
 export class CronogramaComponent {
+  // Alineado con CronogramaActividadDto
   actividad = {
     id: 0,
     catedraId: 0,

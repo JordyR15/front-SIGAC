@@ -5,11 +5,10 @@ import { CommonModule } from '@angular/common';
   selector: 'app-monitoreo',
   standalone: true,
   imports: [CommonModule],
-  templateUrl: './monitoreo.html',
-  styleUrls: ['./monitoreo.css']
+  templateUrl: './monitoreo.html'
 })
 export class MonitoreoComponent {
-  // Datos mock alineados con MonitoreoAyudantiaDto de C#
+  // Alineado con MonitoreoAyudantiaDto
   monitoreo = {
     ayudantiaId: 1,
     nombreAyudante: 'Ana López',
@@ -18,8 +17,8 @@ export class MonitoreoComponent {
       { id: 2, descripcion: 'Ayuda con Ejercicios', fechaPlanificada: '2026-08-18', completada: true }
     ],
     bitacoras: [
-      { id: 1, fecha: '2026-08-15', actividadesRealizadas: 'Sesión de repaso de 2 horas', evidenciaUrl: '#' },
-      { id: 2, fecha: '2026-08-12', actividadesRealizadas: 'Tutoría personalizada de 1 hora', evidenciaUrl: '#' }
+      { id: 1, fecha: '2026-08-15', actividadesRealizadas: 'Sesión de repaso 2h', evidenciaUrl: '#' },
+      { id: 2, fecha: '2026-08-12', actividadesRealizadas: 'Tutoría 1h', evidenciaUrl: '#' }
     ]
   };
 }

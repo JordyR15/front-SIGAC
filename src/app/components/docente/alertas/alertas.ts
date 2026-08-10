@@ -5,23 +5,12 @@ import { CommonModule } from '@angular/common';
   selector: 'app-alertas',
   standalone: true,
   imports: [CommonModule],
-  templateUrl: './alertas.html',
-  styleUrls: ['./alertas.css']
+  templateUrl: './alertas.html'
 })
 export class AlertasComponent {
-  // Datos mock alineados con AlertaTempranaDto de C#
+  // Alineado con AlertaTempranaDto
   alertas = [
-    {
-      estudianteId: 1,
-      nombreEstudiante: 'María González',
-      promedioActual: 2.8,
-      alertaActiva: true
-    },
-    {
-      estudianteId: 2,
-      nombreEstudiante: 'Carlos Pérez',
-      promedioActual: 3.2,
-      alertaActiva: true
-    }
+    { estudianteId: 1, nombreEstudiante: 'María González', promedioActual: 2.8, alertaActiva: true },
+    { estudianteId: 2, nombreEstudiante: 'Carlos Pérez', promedioActual: 3.2, alertaActiva: true }
   ];
 }
