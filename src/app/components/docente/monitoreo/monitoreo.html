@@ -1,0 +1,41 @@
+<div class="space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold text-slate-900">Monitoreo de Ayudantía</h2>
+    <p class="text-slate-500 text-sm mt-1">Supervisa el cumplimiento de las actividades del ayudante: <strong>{{ monitoreo.nombreAyudante }}</strong></p>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Planificación -->
+    <section class="glass-card rounded-2xl p-6">
+      <h3 class="text-sm font-semibold text-slate-900 mb-4">Actividades Planificadas</h3>
+      <div class="space-y-4">
+        <div *ngFor="let actividad of monitoreo.planificacion" class="border border-slate-200 rounded-xl p-4" [ngClass]="{'bg-slate-50': !actividad.completada}">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-slate-900">{{ actividad.descripcion }}</p>
+              <p class="text-xs text-slate-500 mt-1">Fecha prevista: {{ actividad.fechaPlanificada }}</p>
+            </div>
+            <span *ngIf="!actividad.completada" class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 text-xs font-medium text-amber-600 border border-amber-100">
+              Pendiente
+            </span>
+            <span *ngIf="actividad.completada" class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-xs font-medium text-emerald-600 border border-emerald-100">
+              Completada
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bitácora -->
+    <section class="glass-card rounded-2xl p-6">
+      <h3 class="text-sm font-semibold text-slate-900 mb-4">Bitácora de Evidencias</h3>
+      <div class="space-y-4">
+        <div *ngFor="let bitacora of monitoreo.bitacoras" class="border border-slate-200 rounded-xl p-4">
+          <p class="text-sm font-medium text-slate-900">{{ bitacora.actividadesRealizadas }}</p>
+          <p class="text-xs text-slate-500 mt-1">{{ bitacora.fecha }}</p>
+          <a href="#" class="text-xs text-accent hover:underline mt-2 inline-block">Ver evidencia adjunta</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>

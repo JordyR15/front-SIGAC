@@ -1,0 +1,37 @@
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-slate-900">Alertas Tempranas</h2>
+      <p class="text-slate-500 text-sm mt-1">Estudiantes con bajo rendimiento académico detectados automáticamente.</p>
+    </div>
+  </div>
+
+  <section class="glass-card rounded-2xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+        <tr class="text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-200 bg-slate-50/50">
+          <th class="text-left font-semibold px-5 md:px-6 py-3">Estudiante</th>
+          <th class="text-right font-semibold px-4 py-3">Promedio Actual</th>
+          <th class="text-center font-semibold px-4 py-3">Estado</th>
+          <th class="text-right font-semibold px-5 md:px-6 py-3">Acciones</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+        <tr *ngFor="let alerta of alertas" class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 md:px-6 py-4 font-medium text-slate-900">{{ alerta.nombreEstudiante }}</td>
+          <td class="px-4 py-4 text-right font-semibold text-red-600">{{ alerta.promedioActual }}</td>
+          <td class="px-4 py-4 text-center">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-xs font-medium text-red-600 border border-red-100">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> Riesgo Alto
+              </span>
+          </td>
+          <td class="px-5 md:px-6 py-4 text-right">
+            <button class="text-xs text-accent hover:underline font-medium">Ver Detalle</button>
+          </td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
