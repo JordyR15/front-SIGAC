@@ -1,8 +1,7 @@
-<!-- CONTENEDOR PRINCIPAL DEL LAYOUT -->
-<div class="bg-surface-50 text-slate-900 antialiased min-h-screen overflow-hidden flex selection:bg-accent selection:text-white">
+<div class="bg-surface-50 text-slate-900 antialiased min-h-screen overflow-hidden flex flex-col md:flex-row selection:bg-accent selection:text-white">
 
-  <!-- LEFT SIDEBAR (Menú lateral) -->
-  <aside class="w-[260px] bg-white border-r border-slate-200 flex flex-col shrink-0 hidden md:flex z-20 relative">
+  <!-- LEFT SIDEBAR (Menú Lateral) -->
+  <aside class="w-full md:w-[260px] bg-white border-r border-slate-200 flex flex-col shrink-0 z-20 relative">
     <!-- Logo en el Sidebar -->
     <div class="h-[72px] flex items-center px-6 shrink-0 border-b border-slate-200">
       <div class="flex items-center gap-3">
@@ -21,35 +20,11 @@
         <span class="text-sm font-semibold">Inicio</span>
       </a>
 
-      <!-- OPCIONES DE DOCENTE -->
-      <ng-container *ngIf="rol === 'Docente'">
-        <a routerLink="/docente/alertas" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-          <i class="fa-solid fa-triangle-exclamation text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Alertas Tempranas</span>
-        </a>
-        <a routerLink="/docente/expediente" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-          <i class="fa-solid fa-user-graduate text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Expediente</span>
-        </a>
-        <a routerLink="/docente/cronograma" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-          <i class="fa-solid fa-calendar-days text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Cronograma</span>
-        </a>
-        <a routerLink="/docente/monitoreo" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-          <i class="fa-solid fa-chart-simple text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Monitoreo</span>
-        </a>
-      </ng-container>
-
-      <!-- OPCIONES DE ESTUDIANTE -->
+      <!-- SECCIÓN: ESTUDIANTE (Visible para cualquier Estudiante) -->
       <ng-container *ngIf="rol === 'Estudiante'">
-        <a routerLink="/estudiante/postulacion" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-          <i class="fa-solid fa-pen-to-square text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Postulación</span>
-        </a>
-        <a routerLink="/estudiante/bitacora" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-          <i class="fa-solid fa-book text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Bitácora</span>
+        <a routerLink="/estudiante/materias" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+          <i class="fa-solid fa-book-open text-sm w-5 text-center"></i>
+          <span class="text-sm font-medium">Mis Materias</span>
         </a>
         <a routerLink="/estudiante/mi-perfil" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-user text-sm w-5 text-center"></i>
@@ -57,8 +32,30 @@
         </a>
       </ng-container>
 
-      <!-- OPCIONES DE ADMIN -->
+      <!-- SECCIÓN: AYUDANTE DE CÁTEDRA (Visible solo si es Ayudante) -->
+      <ng-container *ngIf="rol === 'Estudiante' && esAyudante">
+        <div class="my-4 border-t border-slate-200 mx-2"></div>
+        <p class="px-3 pb-2 pt-4 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">Gestión de Ayudantía</p>
+
+        <a routerLink="/ayudante/bitacora" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+          <i class="fa-solid fa-book text-sm w-5 text-center"></i>
+          <span class="text-sm font-medium">Bitácora</span>
+        </a>
+        <a routerLink="/ayudante/informes" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+          <i class="fa-solid fa-file-lines text-sm w-5 text-center"></i>
+          <span class="text-sm font-medium">Informes</span>
+        </a>
+        <a routerLink="/ayudante/postulacion" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+          <i class="fa-solid fa-pen-to-square text-sm w-5 text-center"></i>
+          <span class="text-sm font-medium">Postulación</span>
+        </a>
+      </ng-container>
+
+      <!-- SECCIÓN: ADMINISTRADOR (Visible solo si es Administrador) -->
       <ng-container *ngIf="rol === 'Administrador'">
+        <div class="my-4 border-t border-slate-200 mx-2"></div>
+        <p class="px-3 pb-2 pt-4 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">Administración</p>
+
         <a routerLink="/admin/solicitudes" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-list-check text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Solicitudes</span>
@@ -71,17 +68,12 @@
           <i class="fa-solid fa-eye text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Seguimiento</span>
         </a>
-        <a routerLink="/admin/reportes" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-          <i class="fa-solid fa-chart-pie text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Reportes</span>
-        </a>
       </ng-container>
     </nav>
 
     <!-- Perfil del Usuario (Footer del Sidebar) -->
     <div class="p-3 shrink-0 border-t border-slate-200">
       <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-100 transition-colors">
-        <!-- Avatar placeholder -->
         <div class="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold border-2 border-white shadow-sm">AG</div>
         <div class="min-w-0 flex-1">
           <p class="text-sm font-semibold text-slate-900 truncate">Alejandro García</p>
@@ -94,7 +86,7 @@
     </div>
   </aside>
 
-  <!-- MAIN CONTENT (Contenido central) -->
+  <!-- MAIN CONTENT (Contenido central + Right Sidebar) -->
   <main class="flex-1 flex flex-col min-w-0 relative">
     <!-- HEADER -->
     <header class="h-[72px] border-b border-slate-200 flex items-center justify-between px-6 lg:px-8 shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-10">
@@ -119,12 +111,12 @@
       </div>
     </header>
 
-    <!-- CONTENIDO DINÁMICO (Aquí se cargará el Dashboard, Materias, etc.) -->
+    <!-- CONTENIDO DINÁMICO (Aquí se cargan el Dashboard, Materias, etc.) -->
     <div class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-6">
       <router-outlet></router-outlet>
     </div>
   </main>
 
-  <!-- RIGHT SIDEBAR (Agenda y Comunicados) -->
-  <app-right-sidebar></app-right-sidebar>
+  <!-- RIGHT SIDEBAR (Agenda y Notificaciones) -->
+  <app-right-sidebar class="hidden xl:flex w-full xl:w-[340px] border-l border-slate-200"></app-right-sidebar>
 </div>

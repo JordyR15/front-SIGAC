@@ -8,18 +8,26 @@ import { CommonModule } from '@angular/common';
   templateUrl: './right-sidebar.html'
 })
 export class RightSidebarComponent {
-  // Datos mock para la agenda (Entregas)
-  entregas = [
-    { titulo: 'Proyecto Redes', descripcion: 'Finalización de arquitectura', tiempo: 'En 2 horas', color: 'amber-500' },
-    { titulo: 'Laboratorio Física', descripcion: 'Reporte de práctica #4', tiempo: 'Mañana', color: 'accent' }
+  // Mock de Tareas Pendientes (basado en ActividadDto)
+  tareasPendientes = [
+    { titulo: 'Proyecto Redes', descripcion: 'Finalización de arquitectura', fechaEntrega: '2026-08-12', color: 'amber-500' }
   ];
 
-  // Datos mock para los comunicados
-  comunicados = [
-    {
-      titulo: 'Semana de Innovación 2024',
-      descripcion: 'Participa en los talleres de IA y Computación.',
-      imagen: 'https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_f12a272c27_7e9b51c1eba3044d.png'
-    }
+  // Mock de Recursos Esenciales (basado en RecursoDto)
+  recursosEsenciales = [
+    { id: 1, titulo: 'Guía de Estudio - Cálculo', descripcion: 'Documento base para el examen', visto: false }
   ];
+
+  // Mock de Próximas Clases (basado en ClaseSesionDto)
+  proximasClases = [
+    { titulo: 'Clase Virtual - Cálculo', link: 'https://zoom.us/...', app: 'Zoom', fecha: '2026-08-11 10:00' }
+  ];
+
+  marcarComoVisto(id: number) {
+    console.log('Marcando recurso como visto:', id);
+    // Conexión futura: POST api/materia/recursos/marcar-visto
+    this.recursosEsenciales = this.recursosEsenciales.map(r =>
+      r.id === id ? { ...r, visto: true } : r
+    );
+  }
 }

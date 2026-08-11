@@ -1,0 +1,42 @@
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-slate-900">{{ materia.nombre }}</h2>
+      <p class="text-slate-500 text-sm mt-1">Explora los recursos y actividades de esta materia.</p>
+    </div>
+    <a routerLink="/estudiante/materias" class="text-sm text-accent hover:underline">← Volver a Materias</a>
+  </div>
+
+  <!-- SECCIÓN DE RECURSOS -->
+  <section class="glass-card rounded-2xl p-6">
+    <h3 class="text-sm font-semibold text-slate-900 mb-4">Recursos</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div *ngFor="let recurso of materia.recursos" class="border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-900">{{ recurso.titulo }}</p>
+          <p class="text-xs text-slate-500 mt-1">{{ recurso.descripcion }}</p>
+          <a [href]="recurso.url" target="_blank" class="text-xs text-accent hover:underline mt-2 inline-block">Ver recurso</a>
+        </div>
+        <span *ngIf="recurso.esEsencial" class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full border border-amber-200">Esencial</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECCIÓN DE ACTIVIDADES -->
+  <section class="glass-card rounded-2xl p-6">
+    <h3 class="text-sm font-semibold text-slate-900 mb-4">Actividades</h3>
+    <div class="space-y-4">
+      <div *ngFor="let actividad of materia.actividades" class="border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-900">{{ actividad.titulo }}</p>
+          <p class="text-xs text-slate-500 mt-1">{{ actividad.descripcion }}</p>
+          <div class="flex items-center gap-2 mt-2 text-xs">
+            <span class="text-slate-400">Entrega: {{ actividad.fechaEntrega }}</span>
+            <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">{{ actividad.estado }}</span>
+          </div>
+        </div>
+        <span class="text-[10px] text-slate-400">{{ actividad.tipo }}</span>
+      </div>
+    </div>
+  </section>
+</div>

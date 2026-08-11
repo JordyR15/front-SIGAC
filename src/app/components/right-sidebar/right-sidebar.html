@@ -1,36 +1,49 @@
-<aside class="w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 hidden xl:flex z-20 relative">
+<aside class="w-full bg-white flex flex-col shrink-0 z-20 relative">
   <div class="h-[72px] flex items-center px-6 shrink-0 border-b border-slate-200">
     <h2 class="text-sm font-semibold text-slate-900">Agenda Próxima</h2>
   </div>
   <div class="flex-1 overflow-y-auto p-5 space-y-7">
 
-    <!-- UPCOMING DEADLINES -->
+    <!-- TAREAS PENDIENTES -->
     <div>
-      <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">Entregas</h3>
+      <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">Tareas Pendientes</h3>
       <div class="space-y-3">
-        <div *ngFor="let entrega of entregas"
-             class="bg-white border border-slate-200 rounded-xl p-4 border-l-4 shadow-sm hover:shadow-md transition-all cursor-pointer"
-             [ngClass]="'border-l-' + entrega.color">
-          <p class="text-sm font-semibold text-slate-900">{{ entrega.titulo }}</p>
-          <p class="text-[11px] text-slate-500 mt-0.5">{{ entrega.descripcion }}</p>
-          <div class="flex items-center gap-1.5 mt-2 text-[11px] font-bold" [ngClass]="'text-' + entrega.color">
-            <i class="fa-solid fa-clock"></i>{{ entrega.tiempo }}
+        <div *ngFor="let tarea of tareasPendientes" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <p class="text-sm font-semibold text-slate-900">{{ tarea.titulo }}</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">{{ tarea.descripcion }}</p>
+          <div class="flex items-center gap-1.5 mt-2 text-[11px] font-bold text-amber-600">
+            <i class="fa-solid fa-clock"></i> Entrega: {{ tarea.fechaEntrega }}
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ANNOUNCEMENTS -->
+    <!-- RECURSOS ESENCIALES -->
     <div>
-      <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">Comunicados</h3>
-      <div *ngFor="let item of comunicados" class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm group cursor-pointer">
-        <div class="h-32 overflow-hidden bg-slate-100">
-          <img [src]="item.imagen" alt="Comunicado" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+      <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">Recursos Esenciales</h3>
+      <div class="space-y-3">
+        <div *ngFor="let recurso of recursosEsenciales" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-slate-900">{{ recurso.titulo }}</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">{{ recurso.descripcion }}</p>
+          </div>
+          <button (click)="marcarComoVisto(recurso.id)"
+                  class="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+                  [ngClass]="recurso.visto ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400 hover:bg-accent/10 hover:text-accent'">
+            <i class="fa-solid" [ngClass]="recurso.visto ? 'fa-check' : 'fa-eye'"></i>
+          </button>
         </div>
-        <div class="p-4">
-          <span class="text-[10px] font-bold text-accent bg-accent/5 px-2 py-0.5 rounded-full uppercase">Evento</span>
-          <h4 class="text-sm font-semibold text-slate-900 mt-2">{{ item.titulo }}</h4>
-          <p class="text-xs text-slate-500 mt-1">{{ item.descripcion }}</p>
+      </div>
+    </div>
+
+    <!-- PRÓXIMAS CLASES -->
+    <div>
+      <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">Próximas Clases</h3>
+      <div class="space-y-3">
+        <div *ngFor="let clase of proximasClases" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <p class="text-sm font-semibold text-slate-900">{{ clase.titulo }}</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">{{ clase.app }} - {{ clase.fecha }}</p>
+          <a [href]="clase.link" target="_blank" class="text-xs text-accent hover:underline mt-2 inline-block">Unirse a la clase</a>
         </div>
       </div>
     </div>
