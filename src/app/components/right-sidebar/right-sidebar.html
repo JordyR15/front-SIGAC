@@ -1,0 +1,38 @@
+<aside class="w-[340px] bg-white border-l border-slate-200 flex flex-col shrink-0 hidden xl:flex z-20 relative">
+  <div class="h-[72px] flex items-center px-6 shrink-0 border-b border-slate-200">
+    <h2 class="text-sm font-semibold text-slate-900">Agenda Próxima</h2>
+  </div>
+  <div class="flex-1 overflow-y-auto p-5 space-y-7">
+
+    <!-- UPCOMING DEADLINES -->
+    <div>
+      <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">Entregas</h3>
+      <div class="space-y-3">
+        <div *ngFor="let entrega of entregas"
+             class="bg-white border border-slate-200 rounded-xl p-4 border-l-4 shadow-sm hover:shadow-md transition-all cursor-pointer"
+             [ngClass]="'border-l-' + entrega.color">
+          <p class="text-sm font-semibold text-slate-900">{{ entrega.titulo }}</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">{{ entrega.descripcion }}</p>
+          <div class="flex items-center gap-1.5 mt-2 text-[11px] font-bold" [ngClass]="'text-' + entrega.color">
+            <i class="fa-solid fa-clock"></i>{{ entrega.tiempo }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANNOUNCEMENTS -->
+    <div>
+      <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-3">Comunicados</h3>
+      <div *ngFor="let item of comunicados" class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm group cursor-pointer">
+        <div class="h-32 overflow-hidden bg-slate-100">
+          <img [src]="item.imagen" alt="Comunicado" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        </div>
+        <div class="p-4">
+          <span class="text-[10px] font-bold text-accent bg-accent/5 px-2 py-0.5 rounded-full uppercase">Evento</span>
+          <h4 class="text-sm font-semibold text-slate-900 mt-2">{{ item.titulo }}</h4>
+          <p class="text-xs text-slate-500 mt-1">{{ item.descripcion }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
