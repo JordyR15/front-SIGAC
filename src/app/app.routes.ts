@@ -11,6 +11,12 @@ import { ExpedienteComponent } from './components/docente/expediente/expediente'
 import { IndicadoresComponent } from './components/docente/indicadores/indicadores';
 import { EvaluacionDiagnosticaComponent } from './components/docente/evaluacion-diagnostica/evaluacion-diagnostica';
 
+// Estudiante
+import { MiPerfilComponent } from './components/estudiante/mi-perfil/mi-perfil';
+import { PostulacionComponent } from './components/estudiante/postulacion/postulacion';
+import { BitacoraComponent } from './components/estudiante/bitacora/bitacora';
+import { InformesComponent } from './components/estudiante/informes/informes';
+
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   {
@@ -20,12 +26,19 @@ export const routes: Routes = [
       { path: 'dashboard', component: DashboardComponent },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 
+      // Docente
       { path: 'docente/alertas', component: AlertasComponent },
       { path: 'docente/cronograma', component: CronogramaComponent },
       { path: 'docente/monitoreo', component: MonitoreoComponent },
       { path: 'docente/expediente', component: ExpedienteComponent },
       { path: 'docente/indicadores', component: IndicadoresComponent },
-      { path: 'docente/evaluacion-diagnostica', component: EvaluacionDiagnosticaComponent }
+      { path: 'docente/evaluacion-diagnostica', component: EvaluacionDiagnosticaComponent },
+
+      // Estudiante
+      { path: 'estudiante/mi-perfil', component: MiPerfilComponent },
+      { path: 'estudiante/postulacion', component: PostulacionComponent },
+      { path: 'estudiante/bitacora', component: BitacoraComponent },
+      { path: 'estudiante/informes', component: InformesComponent }
     ]
   }
 ];
