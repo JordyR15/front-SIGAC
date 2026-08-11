@@ -9,15 +9,11 @@ import { FormsModule } from '@angular/forms';
   templateUrl: './mi-perfil.html'
 })
 export class MiPerfilComponent {
-  // Mock alineado con PersonaDto y UserDto
+  // Mock alineado con PersonaDto (que devuelve PersonaController)
   perfil = {
-    username: 'estudiante01',
     nombre: 'Alejandro',
     apellido: 'García',
-    correo: 'alejandro.garcia@institucion.edu',
-    rol: 'Estudiante',
-    semestre: 'Otoño 2024',
-    creditosAprobados: 114
+    correo: 'alejandro.garcia@institucion.edu'
   };
 
   guardarCambios() {

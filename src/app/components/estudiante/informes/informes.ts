@@ -15,7 +15,7 @@ export class InformesComponent {
     { id: 2, nombre: 'Ayudantía - Mecánica Cuántica' }
   ];
 
-  // Filtros para el informe
+  // Filtros para el informe (coinciden con los query params de C#)
   filtro = {
     ayudantiaId: 0,
     mes: new Date().getMonth() + 1,
@@ -30,6 +30,7 @@ export class InformesComponent {
 
   generarInforme() {
     console.log('Generando informe con filtros:', this.filtro);
-    // Cuando el backend exista: this.http.get('api/estudiante/ayudantias/informe-mensual?ayudantiaId=' + this.filtro.ayudantiaId + '&mes=' + this.filtro.mes + '&anio=' + this.filtro.anio)
+    // Cuando el backend exista:
+    // this.http.get(`api/estudiante/ayudantias/informe-mensual?ayudantiaId=${this.filtro.ayudantiaId}&mes=${this.filtro.mes}&anio=${this.filtro.anio}`)
   }
 }
