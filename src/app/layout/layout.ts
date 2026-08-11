@@ -1,14 +1,19 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, RouterLinkActive } from '@angular/router'; // <-- Importa RouterLinkActive
+import { RouterModule } from '@angular/router';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [CommonModule, RouterModule, RouterLinkActive], // <-- Agrégalo aquí también
+  imports: [CommonModule, RouterModule],
   templateUrl: './layout.html',
   styleUrls: ['./layout.css']
 })
-export class LayoutComponent {
-  // Ya no necesitas la variable 'isActive'
+export class LayoutComponent implements OnInit {
+  rol: string = '';
+
+  ngOnInit() {
+    // Simulamos que el rol viene del localStorage (como lo guardamos en el Login)
+    this.rol = localStorage.getItem('rol') || 'Estudiante';
+  }
 }
