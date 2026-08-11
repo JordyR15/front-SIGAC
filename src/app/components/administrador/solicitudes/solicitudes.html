@@ -1,1 +1,34 @@
-<p>solicitudes works!</p>
+<div class="space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold text-slate-900">Solicitudes de Ayudantía</h2>
+    <p class="text-slate-500 text-sm mt-1">Revisa las postulaciones pendientes de aprobación.</p>
+  </div>
+
+  <section class="glass-card rounded-2xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+        <tr class="text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-200 bg-slate-50/50">
+          <th class="text-left font-semibold px-5 md:px-6 py-3">Estudiante</th>
+          <th class="text-left font-semibold px-4 py-3">Cátedra</th>
+          <th class="text-center font-semibold px-4 py-3">Estado</th>
+          <th class="text-right font-semibold px-5 md:px-6 py-3">Acciones</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+        <tr *ngFor="let s of solicitudes" class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 md:px-6 py-4 font-medium text-slate-900">{{ s.nombreEstudiante }}</td>
+          <td class="px-4 py-4 text-slate-500">{{ s.nombreCatedra }}</td>
+          <td class="px-4 py-4 text-center">
+            <span class="px-2.5 py-1 rounded-full bg-amber-50 text-xs font-medium text-amber-600 border border-amber-100">Pendiente</span>
+          </td>
+          <td class="px-5 md:px-6 py-4 text-right space-x-2">
+            <button (click)="aprobar(s.ayudantiaId)" class="text-xs bg-accent text-white px-3 py-1 rounded-lg hover:bg-accent-dim transition-colors">Aprobar</button>
+            <button (click)="rechazar(s.ayudantiaId)" class="text-xs bg-red-50 text-red-600 px-3 py-1 rounded-lg hover:bg-red-100 transition-colors">Rechazar</button>
+          </td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

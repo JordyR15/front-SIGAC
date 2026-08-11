@@ -17,6 +17,12 @@ import { PostulacionComponent } from './components/estudiante/postulacion/postul
 import { BitacoraComponent } from './components/estudiante/bitacora/bitacora';
 import { InformesComponent } from './components/estudiante/informes/informes';
 
+//administrador
+import { SolicitudesComponent } from './components/administrador/solicitudes/solicitudes';
+import { AsignacionesComponent } from './components/administrador/asignaciones/asignaciones';
+import { SeguimientoComponent } from './components/administrador/seguimiento/seguimiento';
+import { ReportesComponent } from './components/administrador/reportes/reportes';
+
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   {
@@ -38,7 +44,13 @@ export const routes: Routes = [
       { path: 'estudiante/mi-perfil', component: MiPerfilComponent },
       { path: 'estudiante/postulacion', component: PostulacionComponent },
       { path: 'estudiante/bitacora', component: BitacoraComponent },
-      { path: 'estudiante/informes', component: InformesComponent }
+      { path: 'estudiante/informes', component: InformesComponent },
+
+      //admin
+      { path: 'admin/solicitudes', component: SolicitudesComponent },
+      { path: 'admin/asignaciones', component: AsignacionesComponent },
+      { path: 'admin/seguimiento', component: SeguimientoComponent },
+      { path: 'admin/reportes', component: ReportesComponent }
     ]
   }
 ];
