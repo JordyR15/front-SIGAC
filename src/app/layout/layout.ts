@@ -12,13 +12,26 @@ import { RightSidebarComponent } from '../components/right-sidebar/right-sidebar
 })
 export class LayoutComponent implements OnInit {
   rol: string = '';
-  esAyudante: boolean = false; // Esto vendrá del backend en el futuro
+  esAyudante: boolean = false;
 
   ngOnInit() {
-    // Simulamos que el rol viene del localStorage (como lo guardamos en el Login)
     this.rol = localStorage.getItem('rol') || 'Estudiante';
+    this.actualizarEstadoAyudante();
+  }
 
-    // Simulamos si es ayudante (en el futuro esto vendrá de una API /api/estudiante/es-ayudante)
-    this.esAyudante = this.rol === 'Estudiante' && true; // Ejemplo: siempre true para pruebas
+  // Método para cambiar el rol rápidamente desde el Header
+  cambiarRol(nuevoRol: string) {
+    this.rol = nuevoRol;
+    localStorage.setItem('rol', nuevoRol);
+    this.actualizarEstadoAyudante();
+
+    // Recargar la página para que el menú se actualice completamente
+    window.location.reload();
+  }
+
+  // Método auxiliar para actualizar el estado de ayudante
+  actualizarEstadoAyudante() {
+    // Si el rol seleccionado es 'Ayudante', lo ponemos como true
+    this.esAyudante = this.rol === 'Ayudante';
   }
 }

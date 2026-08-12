@@ -1,0 +1,89 @@
+<div class="space-y-5">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-xl font-bold text-slate-900">Semana Actual — Otoño 2025</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Haz clic en una clase para ver detalles</p>
+    </div>
+  </div>
+
+  <!-- Leyenda de colores -->
+  <div class="flex items-center gap-4 flex-wrap">
+    <div *ngFor="let materia of materias" class="flex items-center gap-1.5 text-xs text-slate-600">
+      <span class="w-2.5 h-2.5 rounded-sm" [ngClass]="materia.color"></span>
+      {{ materia.nombre }}
+    </div>
+    <div class="flex items-center gap-3 ml-auto">
+      <div class="flex items-center gap-1.5 text-xs text-slate-500">
+        <i class="fa-solid fa-wifi text-blue-500 text-[11px]"></i> Virtual
+      </div>
+      <div class="flex items-center gap-1.5 text-xs text-slate-500">
+        <i class="fa-solid fa-location-dot text-emerald-600 text-[11px]"></i> Presencial
+      </div>
+    </div>
+  </div>
+
+  <!-- Cuadrícula de horarios -->
+  <div class="glass-card rounded-2xl overflow-hidden">
+    <div class="overflow-x-auto">
+      <div [style.minWidth.px]="60 + 120 * dias.length">
+        <!-- Encabezados de días -->
+        <div class="flex border-b border-slate-200 bg-slate-50/50">
+          <div class="shrink-0 px-3 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wider" style="width: 60px">Hora</div>
+          <div *ngFor="let dia of dias" class="shrink-0 px-3 py-3 text-[10px] font-semibold text-slate-700 uppercase tracking-wider text-center border-l border-slate-200" style="width: 120px">
+            {{ dia }}
+          </div>
+        </div>
+
+        <!-- Cuadrícula -->
+        <div class="flex relative" [style.height.px]="horas.length * alturaCelda">
+          <!-- Columna de horas -->
+          <div class="shrink-0 relative" style="width: 60px">
+            <div *ngFor="let hora of horas; let i = index"
+                 class="border-b border-slate-100 flex items-start px-2 pt-1"
+                 [style.position.absolute]="'absolute'"
+                 [style.top.px]="i * alturaCelda"
+                 [style.left.px]="0"
+                 [style.right.px]="0"
+                 [style.height.px]="alturaCelda">
+              <span class="text-[10px] text-slate-400 font-medium">{{ hora }}</span>
+            </div>
+          </div>
+
+          <!-- Columnas de días -->
+          <div *ngFor="let dia of dias" class="shrink-0 relative border-l border-slate-200" style="width: 120px">
+            <!-- Líneas de fondo -->
+            <div *ngFor="let hora of horas; let i = index"
+                 class="border-b border-slate-100"
+                 [style.position.absolute]="'absolute'"
+                 [style.top.px]="i * alturaCelda"
+                 [style.left.px]="0"
+                 [style.right.px]="0"
+                 [style.height.px]="alturaCelda">
+            </div>
+
+            <!-- ✅ AHORA USAMOS EL MÉTODO DEL TS -->
+            <div *ngFor="let clase of getClasesPorDia(dia)"
+                 class="rounded-lg p-2 text-left hover:shadow-md transition-all cursor-pointer"
+                 [style.position.absolute]="'absolute'"
+                 [style.top.px]="getTop(clase.horaInicio) + 2"
+                 [style.left.px]="4"
+                 [style.right.px]="4"
+                 [style.height.px]="getHeight(clase.horaInicio, clase.horaFin)"
+                 [ngClass]="[getColor(clase.materiaId)?.color, getColor(clase.materiaId)?.borde]">
+              <div class="flex items-center gap-1 mb-0.5">
+                <i class="fa-solid text-[9px]"
+                   [ngClass]="clase.tipo === 'virtual' ? 'fa-wifi text-blue-500' : 'fa-location-dot text-emerald-600'"></i>
+                <span class="text-[10px] font-bold truncate" [ngClass]="getColor(clase.materiaId)?.texto">
+                  {{ getColor(clase.materiaId)?.nombre }}
+                </span>
+              </div>
+              <p class="text-[9px] text-slate-500 truncate">{{ clase.horaInicio }} – {{ clase.horaFin }}</p>
+              <p class="text-[9px] text-slate-400 truncate" *ngIf="clase.tipo === 'presencial'">Aula {{ clase.aula }}</p>
+              <p class="text-[9px] text-slate-400 truncate" *ngIf="clase.tipo === 'virtual'">{{ clase.plataforma }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

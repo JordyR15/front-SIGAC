@@ -7,8 +7,11 @@ import { DashboardComponent } from './components/dashboard/dashboard';
 import { MateriasComponent } from './components/estudiante/materias/materias';
 import { MateriaDetalleComponent } from './components/estudiante/materia-detalle/materia-detalle';
 import { MiPerfilComponent } from './components/estudiante/mi-perfil/mi-perfil';
+import { HorariosComponent } from './components/estudiante/horarios/horarios';
+
 
 // Ayudante
+import { AyudanteMateriasComponent } from './components/ayudante/materias/materias';
 import { PostulacionComponent } from './components/estudiante/postulacion/postulacion';
 import { BitacoraComponent } from './components/estudiante/bitacora/bitacora';
 import { InformesComponent } from './components/estudiante/informes/informes';
@@ -30,13 +33,16 @@ export const routes: Routes = [
       // ESTUDIANTE
       { path: 'estudiante/materias', component: MateriasComponent },
       { path: 'estudiante/materia/:id', component: MateriaDetalleComponent },
-      { path: 'estudiante/materias', component: MateriasComponent },
+      { path: 'estudiante/horarios', component: HorariosComponent },
       { path: 'estudiante/mi-perfil', component: MiPerfilComponent },
 
+
       // AYUDANTE (Rutas que solo verán los ayudantes)
-      { path: 'ayudante/postulacion', component: PostulacionComponent },
+      { path: 'ayudante/materias', component: AyudanteMateriasComponent },
+      { path: 'ayudante/materia/:id', component: MateriaDetalleComponent }, // Comparte el detalle
       { path: 'ayudante/bitacora', component: BitacoraComponent },
       { path: 'ayudante/informes', component: InformesComponent },
+      { path: 'ayudante/postulacion', component: PostulacionComponent },
 
       // ADMINISTRADOR
       { path: 'admin/solicitudes', component: SolicitudesComponent },

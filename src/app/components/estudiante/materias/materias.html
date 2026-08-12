@@ -1,27 +1,23 @@
 <div class="space-y-6">
   <div>
     <h2 class="text-2xl font-bold text-slate-900">Mis Materias</h2>
-    <p class="text-slate-500 text-sm mt-1">Selecciona una materia para ver sus recursos, actividades y clases.</p>
+    <p class="text-slate-500 text-sm mt-1">Selecciona una materia para ver sus recursos y actividades.</p>
   </div>
 
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     <div *ngFor="let materia of materias"
          class="glass-card rounded-2xl p-6 border border-slate-200 hover:shadow-lg transition-all cursor-pointer group"
          [routerLink]="['/estudiante/materia', materia.id]">
-
-      <!-- Icono de la materia (uso un placeholder dinámico basado en el ID) -->
       <div class="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center text-accent mb-4 group-hover:scale-110 transition-transform">
         <i class="fa-solid fa-book-open text-xl"></i>
       </div>
-
       <div>
         <h3 class="text-lg font-bold text-slate-900">{{ materia.nombre }}</h3>
         <p class="text-xs text-slate-400 font-mono mt-1">{{ materia.codigo }}</p>
         <p class="text-sm text-slate-600 mt-2 line-clamp-2">{{ materia.descripcion }}</p>
-
         <div class="flex items-center gap-2 mt-4 text-xs text-slate-500 border-t border-slate-100 pt-3">
           <i class="fa-regular fa-user"></i>
-          <span>{{ materia.docenteResponsable.persona.nombre }} {{ materia.docenteResponsable.persona.apellido }}</span>
+          <span>{{ materia.docente }}</span>
         </div>
       </div>
     </div>
