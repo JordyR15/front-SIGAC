@@ -20,70 +20,69 @@
         <span class="text-sm font-semibold">Inicio</span>
       </a>
 
-      <!-- SECCIÓN: ESTUDIANTE NORMAL (Visible si rol es Estudiante y NO es ayudante) -->
+      <!-- SECCIÓN: ESTUDIANTE NORMAL -->
       <ng-container *ngIf="rol === 'Estudiante' && !esAyudante">
         <a routerLink="/estudiante/materias" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
           <i class="fa-solid fa-book-open text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Mis Materias</span>
         </a>
-        <a routerLink="/estudiante/horarios" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/estudiante/horarios" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-calendar-days text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Horarios</span>
         </a>
-        <a routerLink="/estudiante/mi-perfil" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/estudiante/mi-perfil" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-user text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Mi Perfil</span>
         </a>
       </ng-container>
 
-      <!-- SECCIÓN: AYUDANTE (Visible solo si es Ayudante) -->
+      <!-- SECCIÓN: AYUDANTE -->
       <ng-container *ngIf="esAyudante">
-        <!-- El ayudante también ve materias, pero con opciones extra -->
         <a routerLink="/ayudante/materias" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
           <i class="fa-solid fa-book-open text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Mis Materias</span>
         </a>
-        <a routerLink="/ayudante/horarios" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/ayudante/horarios" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-calendar-days text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Horarios</span>
         </a>
-        <a routerLink="/ayudante/mi-perfil" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/ayudante/mi-perfil" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-user text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Mi Perfil</span>
         </a>
 
-        <!-- Gestión de Ayudantía (Solo para ayudantes) -->
+        <!-- Gestión de Ayudantía -->
         <div class="my-4 border-t border-slate-200 mx-2"></div>
         <p class="px-3 pb-2 pt-4 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">Gestión de Ayudantía</p>
 
-        <a routerLink="/ayudante/postulacion" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/ayudante/postulacion" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-pen-to-square text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Postulación</span>
         </a>
-        <a routerLink="/ayudante/bitacora" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/ayudante/bitacora" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-book text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Bitácora</span>
         </a>
-        <a routerLink="/ayudante/informes" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/ayudante/informes" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-file-lines text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Informes</span>
         </a>
       </ng-container>
 
-      <!-- SECCIÓN: ADMINISTRADOR (Visible solo si es Administrador) -->
+      <!-- SECCIÓN: ADMINISTRADOR -->
       <ng-container *ngIf="rol === 'Administrador'">
         <div class="my-4 border-t border-slate-200 mx-2"></div>
         <p class="px-3 pb-2 pt-4 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">Administración</p>
 
-        <a routerLink="/admin/solicitudes" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/admin/solicitudes" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-list-check text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Solicitudes</span>
         </a>
-        <a routerLink="/admin/asignaciones" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/admin/asignaciones" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-user-plus text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Asignaciones</span>
         </a>
-        <a routerLink="/admin/seguimiento" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/admin/seguimiento" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-eye text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Seguimiento</span>
         </a>

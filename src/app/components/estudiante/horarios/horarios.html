@@ -1,4 +1,5 @@
-<div class="space-y-5">
+<div class="p-6 lg:p-8 space-y-5">
+  <!-- Cabecera -->
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-xl font-bold text-slate-900">Semana Actual — Otoño 2025</h2>
@@ -6,82 +7,97 @@
     </div>
   </div>
 
-  <!-- Leyenda de colores -->
-  <div class="flex items-center gap-4 flex-wrap">
-    <div *ngFor="let materia of materias" class="flex items-center gap-1.5 text-xs text-slate-600">
-      <span class="w-2.5 h-2.5 rounded-sm" [ngClass]="materia.color"></span>
-      {{ materia.nombre }}
+  <!-- Leyenda -->
+  <div class="flex items-center gap-5 flex-wrap">
+    <div *ngFor="let m of materias" class="flex items-center gap-1.5 text-xs text-slate-600">
+      <span class="w-2.5 h-2.5 rounded-sm" [ngClass]="m.dot"></span>
+      {{ m.nombre }}
     </div>
     <div class="flex items-center gap-3 ml-auto">
       <div class="flex items-center gap-1.5 text-xs text-slate-500">
-        <i class="fa-solid fa-wifi text-blue-500 text-[11px]"></i> Virtual
+        <i class="fa-solid fa-wifi text-blue-500"></i> Virtual
       </div>
       <div class="flex items-center gap-1.5 text-xs text-slate-500">
-        <i class="fa-solid fa-location-dot text-emerald-600 text-[11px]"></i> Presencial
+        <i class="fa-solid fa-location-dot text-emerald-600"></i> Presencial
       </div>
     </div>
   </div>
 
-  <!-- Cuadrícula de horarios -->
-  <div class="glass-card rounded-2xl overflow-hidden">
+  <!-- Cuadrícula estable usando CSS Grid nativo -->
+  <div class="glass-card rounded-2xl overflow-hidden border border-slate-200">
     <div class="overflow-x-auto">
-      <div [style.minWidth.px]="60 + 120 * dias.length">
-        <!-- Encabezados de días -->
-        <div class="flex border-b border-slate-200 bg-slate-50/50">
-          <div class="shrink-0 px-3 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wider" style="width: 60px">Hora</div>
-          <div *ngFor="let dia of dias" class="shrink-0 px-3 py-3 text-[10px] font-semibold text-slate-700 uppercase tracking-wider text-center border-l border-slate-200" style="width: 120px">
-            {{ dia }}
-          </div>
+      <!-- Grid container -->
+      <div class="grid"
+           [style.gridTemplateColumns]="'60px repeat(' + dias.length + ', 1fr)'"
+           [style.minWidth.px]="60 + 120 * dias.length">
+
+        <!-- Fila de encabezados -->
+        <div class="sticky top-0 z-10 bg-slate-50/95 border-b border-slate-200 p-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-center">
+          Hora
+        </div>
+        <div *ngFor="let d of dias"
+             class="sticky top-0 z-10 bg-slate-50/95 border-b border-slate-200 border-l border-slate-100 p-3 text-[10px] font-semibold text-slate-700 uppercase tracking-wider flex items-center justify-center">
+          {{ d }}
         </div>
 
-        <!-- Cuadrícula -->
-        <div class="flex relative" [style.height.px]="horas.length * alturaCelda">
-          <!-- Columna de horas -->
-          <div class="shrink-0 relative" style="width: 60px">
-            <div *ngFor="let hora of horas; let i = index"
-                 class="border-b border-slate-100 flex items-start px-2 pt-1"
-                 [style.position.absolute]="'absolute'"
-                 [style.top.px]="i * alturaCelda"
-                 [style.left.px]="0"
-                 [style.right.px]="0"
-                 [style.height.px]="alturaCelda">
-              <span class="text-[10px] text-slate-400 font-medium">{{ hora }}</span>
-            </div>
+        <!-- Filas de horas (Grid dinámico) -->
+        <ng-container *ngFor="let hora of horas; let rowIndex = index">
+          <!-- Columna de la hora -->
+          <div class="border-b border-slate-100 p-2 text-xs text-slate-400 font-medium flex items-start justify-center h-[90px]">
+            {{ hora }}
           </div>
 
-          <!-- Columnas de días -->
-          <div *ngFor="let dia of dias" class="shrink-0 relative border-l border-slate-200" style="width: 120px">
-            <!-- Líneas de fondo -->
-            <div *ngFor="let hora of horas; let i = index"
-                 class="border-b border-slate-100"
-                 [style.position.absolute]="'absolute'"
-                 [style.top.px]="i * alturaCelda"
-                 [style.left.px]="0"
-                 [style.right.px]="0"
-                 [style.height.px]="alturaCelda">
-            </div>
+          <!-- Columnas de días para esta hora -->
+          <div *ngFor="let dia of dias"
+               class="border-b border-slate-100 border-l border-slate-100/50 relative h-[90px] p-1.5">
 
-            <!-- ✅ AHORA USAMOS EL MÉTODO DEL TS -->
-            <div *ngFor="let clase of getClasesPorDia(dia)"
-                 class="rounded-lg p-2 text-left hover:shadow-md transition-all cursor-pointer"
-                 [style.position.absolute]="'absolute'"
-                 [style.top.px]="getTop(clase.horaInicio) + 2"
-                 [style.left.px]="4"
-                 [style.right.px]="4"
-                 [style.height.px]="getHeight(clase.horaInicio, clase.horaFin)"
-                 [ngClass]="[getColor(clase.materiaId)?.color, getColor(clase.materiaId)?.borde]">
-              <div class="flex items-center gap-1 mb-0.5">
-                <i class="fa-solid text-[9px]"
-                   [ngClass]="clase.tipo === 'virtual' ? 'fa-wifi text-blue-500' : 'fa-location-dot text-emerald-600'"></i>
-                <span class="text-[10px] font-bold truncate" [ngClass]="getColor(clase.materiaId)?.texto">
-                  {{ getColor(clase.materiaId)?.nombre }}
-                </span>
+            <!-- Buscar si hay una clase que empiece en esta hora exacta -->
+            <ng-container *ngFor="let clase of getClasesPorDia(dia)">
+              <div *ngIf="clase.horaInicio === hora"
+                   (click)="abrirDetalle(clase)"
+                   class="absolute inset-1.5 rounded-xl p-2.5 text-left hover:shadow-lg transition-all cursor-pointer overflow-hidden flex flex-col justify-center"
+                   [ngClass]="[getColor(clase.materiaId)?.color, getColor(clase.materiaId)?.borde]">
+
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fa-solid text-sm"
+                     [ngClass]="clase.tipo === 'virtual' ? 'fa-wifi text-blue-600' : 'fa-location-dot text-emerald-600'"></i>
+                  <span class="text-sm font-bold truncate" [ngClass]="getColor(clase.materiaId)?.texto">
+            {{ getColor(clase.materiaId)?.nombre }}
+          </span>
+                </div>
+                <p class="text-xs text-slate-600 font-medium">{{ clase.horaInicio }} – {{ clase.horaFin }}</p>
+                <p class="text-[11px] text-slate-500 mt-0.5" *ngIf="clase.tipo === 'presencial'">Aula {{ clase.aula }}</p>
+                <p class="text-[11px] text-slate-500 mt-0.5" *ngIf="clase.tipo === 'virtual'">{{ clase.plataforma }}</p>
               </div>
-              <p class="text-[9px] text-slate-500 truncate">{{ clase.horaInicio }} – {{ clase.horaFin }}</p>
-              <p class="text-[9px] text-slate-400 truncate" *ngIf="clase.tipo === 'presencial'">Aula {{ clase.aula }}</p>
-              <p class="text-[9px] text-slate-400 truncate" *ngIf="clase.tipo === 'virtual'">{{ clase.plataforma }}</p>
-            </div>
+            </ng-container>
+
           </div>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Detalles (Se mantiene igual) -->
+<div *ngIf="claseSeleccionada" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" (click)="cerrarDetalle()">
+  <div class="glass-card rounded-2xl p-6 w-full max-w-sm" (click)="$event.stopPropagation()">
+    <div class="flex items-start justify-between mb-4">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center" [ngClass]="[getColor(claseSeleccionada.materiaId)?.color, getColor(claseSeleccionada.materiaId)?.texto]">
+        <i class="fa-solid" [ngClass]="claseSeleccionada.tipo === 'virtual' ? 'fa-laptop' : 'fa-building'"></i>
+      </div>
+      <button (click)="cerrarDetalle()" class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-colors">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <h3 class="font-bold text-slate-900 text-lg leading-tight">{{ getColor(claseSeleccionada.materiaId)?.nombre }}</h3>
+    <p class="text-sm text-slate-500 mt-0.5">{{ claseSeleccionada.dia }} · {{ claseSeleccionada.horaInicio }} – {{ claseSeleccionada.horaFin }}</p>
+    <div class="mt-4 space-y-3">
+      <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+        <i class="fa-solid" [ngClass]="claseSeleccionada.tipo === 'virtual' ? 'fa-wifi text-blue-500' : 'fa-location-dot text-emerald-600'"></i>
+        <div>
+          <p class="text-xs font-semibold text-slate-700">{{ claseSeleccionada.tipo === 'virtual' ? 'Clase Virtual' : 'Clase Presencial' }}</p>
+          <p class="text-xs text-slate-500" *ngIf="claseSeleccionada.tipo === 'presencial'">{{ claseSeleccionada.edificio }} · Aula {{ claseSeleccionada.aula }} · Piso {{ claseSeleccionada.piso }}</p>
+          <p class="text-xs text-slate-500" *ngIf="claseSeleccionada.tipo === 'virtual'">{{ claseSeleccionada.plataforma }}</p>
         </div>
       </div>
     </div>
