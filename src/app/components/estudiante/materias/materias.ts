@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { HttpClient } from '@angular/common/http'; // <-- Ya importado
 
 @Component({
   selector: 'app-materias',
@@ -9,6 +10,7 @@ import { RouterModule } from '@angular/router';
   templateUrl: './materias.html'
 })
 export class MateriasComponent {
+  // Datos mock (seguirán usándose hasta que el backend responda)
   materias = [
     {
       id: 101,
@@ -25,4 +27,11 @@ export class MateriasComponent {
       docente: 'Dr. Marcus Thorne'
     }
   ];
+
+  constructor(private http: HttpClient) {} // Inyectamos HttpClient
+
+  // Este método se llamará cuando el backend esté listo
+  cargarMaterias() {
+    // this.http.get('/api/estudiante/materias').subscribe(data => this.materias = data);
+  }
 }

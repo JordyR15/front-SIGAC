@@ -30,8 +30,7 @@ export class LoginComponent {
     this.authService.login(this.credentials).subscribe({
       next: (user) => {
         this.isLoading = false;
-        // El backend ya nos devolvió el rol, podemos usarlo si queremos hacer algo específico
-        console.log('Usuario logueado con rol:', user.rol);
+        // Redirige al dashboard o a la página principal
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {

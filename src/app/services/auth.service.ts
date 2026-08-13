@@ -2,24 +2,24 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 
-// DTOs mapeados desde C# (LoginController.cs devuelve UserDto con Rol)
 export interface LoginDto {
   username: string;
   password: string;
 }
 
 export interface UserDto {
+  id: number;
   username: string;
   token: string;
-  rol: string; // <-- AGREGADO
+  rol: string;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private apiUrl = 'http://localhost:5000/api/login';
-
+  // ⚠️ CAMBIA EL PUERTO SEGÚN DONDE CORRA TU BACKEND (5000, 7123, etc.)
+  private apiUrl = 'http://localhost:5291/api/login';
   constructor(private http: HttpClient) {}
 
   login(credentials: LoginDto): Observable<UserDto> {
@@ -27,8 +27,8 @@ export class AuthService {
       tap((response: UserDto) => {
         if (response && response.token) {
           localStorage.setItem('token', response.token);
+          localStorage.setItem('rol', response.rol);
           localStorage.setItem('username', response.username);
-          localStorage.setItem('rol', response.rol); // <-- GUARDAMOS EL ROL
         }
       })
     );
@@ -36,8 +36,8 @@ export class AuthService {
 
   logout(): void {
     localStorage.removeItem('token');
-    localStorage.removeItem('username');
     localStorage.removeItem('rol');
+    localStorage.removeItem('username');
   }
 
   getToken(): string | null {
