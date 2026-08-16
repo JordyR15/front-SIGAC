@@ -38,10 +38,7 @@
 
       <!-- SECCIÓN: AYUDANTE / DOCENTE -->
       <ng-container *ngIf="esAyudante || rol === 'Docente'">
-        <a routerLink="/ayudante/dashboard" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
-          <i class="fa-solid fa-gauge-high text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Mi Panel</span>
-        </a>
+
         <a routerLink="/ayudante/materias" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
           <i class="fa-solid fa-book-open text-sm w-5 text-center"></i>
           <span class="text-sm font-medium">Mis Materias</span>

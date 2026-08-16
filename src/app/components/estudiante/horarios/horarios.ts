@@ -19,6 +19,13 @@ export class HorariosComponent {
 
   // ✅ 1. Horarios ocupados (Aqui deberias filtrar solo las clases del docente/ayudante)
   // Por ahora es un mock. En el futuro vendrá del backend.
+  clasesEstudiante = [
+    { dia: 'Lunes', horaInicio: '10:00', horaFin: '12:00', materia: 'Cálculo Avanzado', plataforma: 'Zoom' },
+    { dia: 'Miércoles', horaInicio: '08:00', horaFin: '10:00', materia: 'Mecánica Cuántica', aula: 'Aula 301' },
+    { dia: 'Viernes', horaInicio: '14:00', horaFin: '16:00', materia: 'Redes Neuronales', plataforma: 'Meet' }
+  ];
+
+  // HORARIOS OCUPADOS (Solo para el ayudante/docente. Pueden ser suyas o de otros)
   horariosOcupados = [
     { dia: 'Lunes', horaInicio: '10:00', horaFin: '12:00', materia: 'Cálculo Avanzado', plataforma: 'Zoom', esMiClase: true },
     { dia: 'Miércoles', horaInicio: '08:00', horaFin: '10:00', materia: 'Mecánica Cuántica', aula: 'Aula 301', esMiClase: false },
@@ -32,6 +39,11 @@ export class HorariosComponent {
 
   constructor(private router: Router) {}
 
+
+  // Obtener la clase del estudiante en una celda (para el rol Estudiante)
+  getClaseEstudiante(dia: string, hora: string) {
+    return this.clasesEstudiante.find(c => c.dia === dia && c.horaInicio === hora);
+  }
   // Verificar si una hora está ocupada
   isHoraOcupada(dia: string, hora: string): boolean {
     return this.horariosOcupados.some(c => c.dia === dia && c.horaInicio === hora);

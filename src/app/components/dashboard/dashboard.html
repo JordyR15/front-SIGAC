@@ -1,7 +1,7 @@
 <!-- ========================================================= -->
 <!-- VISTA PARA ESTUDIANTE (Gráfico + Materias)                -->
 <!-- ========================================================= -->
-<div *ngIf="rol === 'Estudiante'" class="space-y-6">
+<div *ngIf="rol === 'Estudiante' && !esAyudante" class="space-y-6">
   <!-- LEAD CARD (Gráfico) -->
   <section class="glass-card rounded-2xl p-5 md:p-6">
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
@@ -76,7 +76,7 @@
 <!-- ========================================================= -->
 <!-- VISTA PARA AYUDANTE / DOCENTE (KPIs + Próximas Clases)    -->
 <!-- ========================================================= -->
-<div *ngIf="rol !== 'Estudiante'" class="space-y-6">
+<div *ngIf="rol !== 'Estudiante' || esAyudante" class="space-y-6">
   <div>
     <h2 class="text-2xl font-bold text-slate-900">Panel de Gestión</h2>
     <p class="text-slate-500 text-sm mt-1">Seguimiento de tus clases y ayudantías.</p>

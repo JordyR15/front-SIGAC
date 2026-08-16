@@ -27,13 +27,24 @@
           <div *ngFor="let d of dias" class="border-b border-slate-100 border-l border-slate-100/50 relative h-[60px] p-1">
 
             <!-- Lógica para mostrar Clases Ocupadas -->
-            <ng-container *ngIf="getClaseEnCelda(d, h) as clase">
+            <!-- PARA ESTUDIANTE: Usa 'clasesEstudiante' -->
+            <ng-container *ngIf="!esAyudante && getClaseEstudiante(d, h) as clase">
+              <div class="absolute inset-1 rounded-lg bg-blue-100 border border-blue-200 p-1.5 text-left cursor-default">
+                <div class="flex items-center gap-1 mb-0.5">
+                  <span class="text-[10px] font-bold truncate text-blue-700">{{ clase.materia }}</span>
+                </div>
+                <p class="text-[9px] text-slate-500">{{ clase.plataforma || 'Aula ' + clase.aula }}</p>
+              </div>
+            </ng-container>
+
+            <!-- PARA AYUDANTE/DOCENTE: Usa 'horariosOcupados' (con el nombre o 'Ocupado') -->
+            <ng-container *ngIf="esAyudante && getClaseEnCelda(d, h) as clase">
               <div class="absolute inset-1 rounded-lg p-1.5 text-left cursor-default flex flex-col justify-center"
                    [ngClass]="clase.esMiClase ? 'bg-blue-100 border border-blue-200' : 'bg-slate-100 border border-slate-200'">
                 <div class="flex items-center gap-1 mb-0.5">
-                  <span class="text-[10px] font-bold truncate" [ngClass]="clase.esMiClase ? 'text-blue-700' : 'text-slate-500'">
-                    {{ clase.esMiClase ? clase.materia : 'Ocupado' }}
-                  </span>
+      <span class="text-[10px] font-bold truncate" [ngClass]="clase.esMiClase ? 'text-blue-700' : 'text-slate-500'">
+        {{ clase.esMiClase ? clase.materia : 'Ocupado' }}
+      </span>
                 </div>
                 <p class="text-[9px] text-slate-500" *ngIf="clase.esMiClase">
                   {{ clase.plataforma || 'Aula ' + clase.aula }}
