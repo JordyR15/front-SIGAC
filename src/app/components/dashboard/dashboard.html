@@ -1,4 +1,7 @@
-<div class="space-y-6">
+<!-- ========================================================= -->
+<!-- VISTA PARA ESTUDIANTE (Gráfico + Materias)                -->
+<!-- ========================================================= -->
+<div *ngIf="rol === 'Estudiante'" class="space-y-6">
   <!-- LEAD CARD (Gráfico) -->
   <section class="glass-card rounded-2xl p-5 md:p-6">
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
@@ -14,46 +17,39 @@
     <div id="trajectory-chart" class="h-[300px]"></div>
   </section>
 
-  <!-- KPI ROW (Datos simulados para visualización, se conectarán a C# después) -->
+  <!-- KPI ROW -->
   <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
     <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
-      <div class="w-11 h-11 rounded-xl bg-accent/5 border border-accent/10 flex items-center justify-center text-accent shrink-0"><i class="fa-solid fa-award text-xl"></i></div>
+      <div class="w-11 h-11 rounded-xl bg-accent/5 border border-accent/10 flex items-center justify-center text-accent"><i class="fa-solid fa-award text-xl"></i></div>
       <div>
         <p class="text-xs text-slate-500">Promedio Acumulado</p>
-        <div class="flex items-baseline gap-2 mt-0.5">
-          <span class="text-2xl font-bold text-slate-900">4.84</span>
-          <span class="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">+0.12</span>
-        </div>
+        <p class="text-2xl font-bold text-slate-900">4.84 <span class="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">+0.12</span></p>
       </div>
     </div>
     <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
-      <div class="w-11 h-11 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600 shrink-0"><i class="fa-solid fa-graduation-cap text-xl"></i></div>
+      <div class="w-11 h-11 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600"><i class="fa-solid fa-graduation-cap text-xl"></i></div>
       <div>
         <p class="text-xs text-slate-500">Créditos Aprobados</p>
-        <div class="flex items-baseline gap-2 mt-0.5">
-          <span class="text-2xl font-bold text-slate-900">114 <span class="text-base text-slate-400 font-medium">/ 120</span></span>
-        </div>
+        <p class="text-2xl font-bold text-slate-900">114 <span class="text-base text-slate-400 font-medium">/ 120</span></p>
       </div>
     </div>
     <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
-      <div class="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0"><i class="fa-solid fa-calendar-check text-xl"></i></div>
+      <div class="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600"><i class="fa-solid fa-calendar-check text-xl"></i></div>
       <div>
         <p class="text-xs text-slate-500">Asistencia Total</p>
-        <div class="flex items-baseline gap-2 mt-0.5">
-          <span class="text-2xl font-bold text-slate-900">96.4<span class="text-base text-slate-400 font-medium">%</span></span>
-        </div>
+        <p class="text-2xl font-bold text-slate-900">96.4<span class="text-base text-slate-400 font-medium">%</span></p>
       </div>
     </div>
   </section>
 
-  <!-- DATA TABLE SECTION (Ahora usa las propiedades de los DTOs) -->
+  <!-- DATA TABLE (Materias en curso) -->
   <section class="glass-card rounded-2xl overflow-hidden">
     <div class="px-5 md:px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
       <h2 class="text-base font-semibold text-slate-900">Materias en Curso</h2>
-      <button class="text-xs text-accent hover:underline flex items-center gap-1.5 transition-colors font-medium">Ver Historial</button>
+      <button class="text-xs text-accent hover:underline">Ver Historial</button>
     </div>
     <div class="overflow-x-auto">
-      <table class="w-full text-sm min-w-[640px]">
+      <table class="w-full text-sm">
         <thead>
         <tr class="text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
           <th class="text-left font-semibold px-5 md:px-6 py-3">Materia</th>
@@ -64,38 +60,64 @@
         </tr>
         </thead>
         <tbody class="divide-y divide-slate-200">
-        <!-- ✅ NG FOR ALINEADO CON LOS DTOS DE C# -->
-        <tr *ngFor="let materia of materias" class="hover:bg-slate-50 transition-colors">
-          <td class="px-5 md:px-6 py-4">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
-                <i class="fa-solid fa-square-root-variable text-sm"></i>
-              </div>
-              <!-- Accede a la propiedad anidada Catedra.Nombre -->
-              <span class="font-medium text-slate-900">{{ materia.catedra.nombre }}</span>
-            </div>
-          </td>
-          <!-- Accede a la propiedad anidada Catedra.Docente.Username -->
-          <td class="px-4 py-4 text-slate-500 hidden sm:table-cell">{{ materia.catedra.docente.username }}</td>
-          <td class="px-4 py-4 text-right font-semibold text-slate-900">
-            {{ materia.promedioActual }} <span class="text-slate-400 text-xs">({{ (materia.promedioActual * 20) | number:'1.0-0' }}%)</span>
-          </td>
-          <td class="px-4 py-4">
-            <div class="flex items-center gap-2">
-              <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                <div class="h-full bg-violet-500 rounded-full" [style.width]="(materia.promedioActual * 20) + '%'"></div>
-              </div>
-              <span class="text-xs text-slate-400 w-8 text-right">{{ (materia.promedioActual * 20) | number:'1.0-0' }}%</span>
-            </div>
-          </td>
-          <td class="px-5 md:px-6 py-4 text-right">
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 text-xs font-medium text-violet-600 border border-violet-100">
-                                Top 5%
-                            </span>
-          </td>
+        <tr *ngFor="let m of materiasEstudiante" class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 md:px-6 py-4"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-violet-50 text-violet-600"><i class="fa-solid fa-square-root-variable text-sm"></i></div><span class="font-medium text-slate-900">{{ m.catedra.nombre }}</span></div></td>
+          <td class="px-4 py-4 text-slate-500 hidden sm:table-cell">{{ m.catedra.docente.username }}</td>
+          <td class="px-4 py-4 text-right font-semibold text-slate-900">{{ m.promedioActual }} <span class="text-slate-400 text-xs">({{ (m.promedioActual * 20) | number:'1.0-0' }}%)</span></td>
+          <td class="px-4 py-4"><div class="flex items-center gap-2"><div class="flex-1 h-1.5 rounded-full bg-slate-100"><div class="h-full bg-violet-500 rounded-full" [style.width]="(m.promedioActual * 20) + '%'"></div></div><span class="text-xs text-slate-400 w-8 text-right">{{ (m.promedioActual * 20) | number:'1.0-0' }}%</span></div></td>
+          <td class="px-5 md:px-6 py-4 text-right"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 text-xs font-medium text-violet-600 border border-violet-100">Top 5%</span></td>
         </tr>
         </tbody>
       </table>
     </div>
+  </section>
+</div>
+
+<!-- ========================================================= -->
+<!-- VISTA PARA AYUDANTE / DOCENTE (KPIs + Próximas Clases)    -->
+<!-- ========================================================= -->
+<div *ngIf="rol !== 'Estudiante'" class="space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold text-slate-900">Panel de Gestión</h2>
+    <p class="text-slate-500 text-sm mt-1">Seguimiento de tus clases y ayudantías.</p>
+  </div>
+
+  <!-- KPIs -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl bg-accent/5 flex items-center justify-center text-accent"><i class="fa-solid fa-users text-xl"></i></div>
+      <div><p class="text-xs text-slate-500">Estudiantes a cargo</p><p class="text-2xl font-bold text-slate-900">{{ dashboardAyudante.estudiantes }}</p></div>
+    </div>
+    <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600"><i class="fa-solid fa-calendar-check text-xl"></i></div>
+      <div><p class="text-xs text-slate-500">Clases impartidas</p><p class="text-2xl font-bold text-slate-900">{{ dashboardAyudante.clasesImpartidas }}</p></div>
+    </div>
+    <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600"><i class="fa-solid fa-star text-xl"></i></div>
+      <div><p class="text-xs text-slate-500">Promedio de asistencia</p><p class="text-2xl font-bold text-slate-900">{{ dashboardAyudante.promedioAsistencia }}%</p></div>
+    </div>
+  </section>
+
+  <!-- Próximas Clases -->
+  <section class="glass-card rounded-2xl p-6 border border-slate-200">
+    <h3 class="text-lg font-semibold text-slate-900 mb-4">Próximas Clases</h3>
+    <div class="space-y-3">
+      <div *ngFor="let clase of dashboardAyudante.proximasClases" class="border border-slate-200 rounded-xl p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+        <div><p class="text-sm font-semibold text-slate-900">{{ clase.titulo }}</p><p class="text-xs text-slate-500">{{ clase.descripcion }}</p></div>
+        <a [routerLink]="clase.ruta" class="text-xs text-accent hover:underline">Gestionar →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Acciones Rápidas -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <a routerLink="/ayudante/gestion-ayudantia" class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer border border-slate-200">
+      <div class="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center text-accent"><i class="fa-solid fa-pen-to-square text-xl"></i></div>
+      <div><p class="text-sm font-semibold text-slate-900">Gestión de Ayudantía</p><p class="text-xs text-slate-500">Postulación, Bitácora e Informes</p></div>
+    </a>
+    <a routerLink="/docente/gestion-clases" class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer border border-slate-200">
+      <div class="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600"><i class="fa-solid fa-calendar-days text-xl"></i></div>
+      <div><p class="text-sm font-semibold text-slate-900">Gestión de Clases</p><p class="text-xs text-slate-500">Crea y administra tus clases</p></div>
+    </a>
   </section>
 </div>

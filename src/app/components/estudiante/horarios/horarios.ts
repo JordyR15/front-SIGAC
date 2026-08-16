@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-horarios',
@@ -9,107 +10,91 @@ import { FormsModule } from '@angular/forms';
   templateUrl: './horarios.html'
 })
 export class HorariosComponent {
-  // Datos fijos
+  rol = localStorage.getItem('rol') || 'Estudiante';
+  esAyudante = this.rol === 'Ayudante' || this.rol === 'Docente';
+
   dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
   horas = ['08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
-  alturaCelda = 60; // px
-  anchoColumna = 120; // px
-  anchoTiempo = 56; // px
+  alturaCelda = 60;
 
-  // Simulación de roles
-  rol: 'estudiante' | 'ayudante' = 'estudiante';
-  canEdit = this.rol !== 'estudiante';
-
-  // Simulación: ID del docente logueado (para filtrar en ayudante)
-  docenteIdLogueado = 1;
-
-  // Materias (para la leyenda)
-  materias = [
-    { id: 1, nombre: 'Cálculo Avanzado', color: 'bg-blue-100', borde: 'border-blue-300', texto: 'text-blue-700', dot: 'bg-blue-500' },
-    { id: 2, nombre: 'Mecánica Cuántica', color: 'bg-emerald-100', borde: 'border-emerald-300', texto: 'text-emerald-700', dot: 'bg-emerald-500' },
-    { id: 3, nombre: 'Redes Neuronales', color: 'bg-purple-100', borde: 'border-purple-300', texto: 'text-purple-700', dot: 'bg-purple-500' }
+  // ✅ 1. Horarios ocupados (Aqui deberias filtrar solo las clases del docente/ayudante)
+  // Por ahora es un mock. En el futuro vendrá del backend.
+  horariosOcupados = [
+    { dia: 'Lunes', horaInicio: '10:00', horaFin: '12:00', materia: 'Cálculo Avanzado', plataforma: 'Zoom', esMiClase: true },
+    { dia: 'Miércoles', horaInicio: '08:00', horaFin: '10:00', materia: 'Mecánica Cuántica', aula: 'Aula 301', esMiClase: false },
+    { dia: 'Viernes', horaInicio: '14:00', horaFin: '16:00', materia: 'Redes Neuronales', plataforma: 'Meet', esMiClase: false }
   ];
 
-  // Horarios (con docenteId añadido)
-  horarios = [
-    { id: 1, dia: 'Lunes', materiaId: 1, horaInicio: '10:00', horaFin: '12:00', tipo: 'virtual', plataforma: 'Zoom', link: 'https://zoom.us/j/123', docenteId: 1 },
-    { id: 2, dia: 'Miércoles', materiaId: 2, horaInicio: '08:00', horaFin: '10:00', tipo: 'presencial', aula: 'Aula 301', edificio: 'Edificio de Ciencias', piso: '3', docenteId: 2 },
-    { id: 3, dia: 'Viernes', materiaId: 3, horaInicio: '14:00', horaFin: '16:00', tipo: 'virtual', plataforma: 'Meet', link: 'https://meet.google.com/abc', docenteId: 1 }
-  ];
+  // ✅ 2. Variables para la selección (Ahora guardamos día + hora)
+  // Usamos un Set de strings con formato "dia|hora"
+  seleccionadas = new Set<string>();
+  diaSeleccionado: string = 'Lunes';
 
-  // Estado para el modal de detalles
-  claseSeleccionada: any = null;
+  constructor(private router: Router) {}
 
-  // Estado para el formulario de añadir clase
-  showAddForm = false;
-  newClase: any = {
-    materiaId: 1,
-    dia: 'Lunes',
-    horaInicio: '08:00',
-    horaFin: '10:00',
-    tipo: 'presencial',
-    plataforma: '',
-    link: '',
-    edificio: '',
-    aula: '',
-    piso: ''
-  };
-
-  // Helpers de posición
-  getTop(horaInicio: string): number {
-    const index = this.horas.indexOf(horaInicio);
-    return index * this.alturaCelda;
+  // Verificar si una hora está ocupada
+  isHoraOcupada(dia: string, hora: string): boolean {
+    return this.horariosOcupados.some(c => c.dia === dia && c.horaInicio === hora);
   }
 
-  getHeight(horaInicio: string, horaFin: string): number {
-    const inicio = this.horas.indexOf(horaInicio);
-    const fin = this.horas.indexOf(horaFin);
-    return (fin - inicio) * this.alturaCelda - 4;
+  // Obtener la clase en una celda (si la hay)
+  getClaseEnCelda(dia: string, hora: string) {
+    return this.horariosOcupados.find(c => c.dia === dia && c.horaInicio === hora);
   }
 
-  // Obtener color de la materia
-  getColor(materiaId: number) {
-    return this.materias.find(m => m.id === materiaId);
-  }
+  // ✅ 3. Alternar selección de una hora (solo ayudante, en un día específico)
+  toggleHora(dia: string, hora: string) {
+    if (!this.esAyudante) return;
+    if (this.isHoraOcupada(dia, hora)) return;
 
-  // Filtrar horarios por día y por rol
-  getClasesPorDia(dia: string) {
-    let clases = this.horarios.filter(c => c.dia === dia);
-    if (this.rol === 'ayudante') {
-      clases = clases.filter(c => c.docenteId === this.docenteIdLogueado);
+    const key = `${dia}|${hora}`;
+    if (this.seleccionadas.has(key)) {
+      this.seleccionadas.delete(key);
+    } else {
+      this.seleccionadas.add(key);
     }
-    return clases;
   }
 
-  // Abrir modal de detalles
-  abrirDetalle(clase: any) {
-    this.claseSeleccionada = clase;
+  // Ir a Gestión de Clases pasando los datos por Query Params
+  crearClase() {
+    if (this.seleccionadas.size === 0) {
+      alert('Selecciona al menos una hora.');
+      return;
+    }
+
+    // Extraer todos los días únicos seleccionados y las horas
+    const diasSeleccionados = new Set<string>();
+    const horasSeleccionadasSet = new Set<string>();
+
+    this.seleccionadas.forEach(key => {
+      const [dia, hora] = key.split('|');
+      diasSeleccionados.add(dia);
+      horasSeleccionadasSet.add(hora);
+    });
+
+    // Ordenar horas
+    const horasOrdenadas = Array.from(horasSeleccionadasSet)
+      .sort((a, b) => this.horas.indexOf(a) - this.horas.indexOf(b));
+
+    const horaInicio = horasOrdenadas[0];
+    const horaFin = horasOrdenadas[horasOrdenadas.length - 1];
+
+    // Navegar a Gestión de Clases con los parámetros
+    this.router.navigate(['/docente/gestion-clases'], {
+      queryParams: {
+        dias: Array.from(diasSeleccionados).join(','), // Ej: "Lunes,Miércoles"
+        horaInicio: horaInicio,
+        horaFin: horaFin
+      }
+    });
   }
 
-  cerrarDetalle() {
-    this.claseSeleccionada = null;
+  // Helpers para la cuadrícula
+  getTop(hora: string): number {
+    return this.horas.indexOf(hora) * this.alturaCelda;
   }
 
-  // Guardar nueva clase
-  guardarClase() {
-    const nuevaClase = { ...this.newClase, id: Date.now(), docenteId: this.docenteIdLogueado };
-    this.horarios.push(nuevaClase);
-    this.showAddForm = false;
-    this.resetForm();
-  }
-
-  resetForm() {
-    this.newClase = {
-      materiaId: 1,
-      dia: 'Lunes',
-      horaInicio: '08:00',
-      horaFin: '10:00',
-      tipo: 'presencial',
-      plataforma: '',
-      link: '',
-      edificio: '',
-      aula: '',
-      piso: ''
-    };
+  getHeight(inicio: string, fin: string): number {
+    return (this.horas.indexOf(fin) - this.horas.indexOf(inicio)) * this.alturaCelda - 4;
   }
 }
