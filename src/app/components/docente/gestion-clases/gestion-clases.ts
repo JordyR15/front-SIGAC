@@ -44,6 +44,7 @@ export class GestionClasesComponent {
     aulaPresencial: '',
     pisoPresencial: ''
   };
+  Math = Math;
 
   // 2. Lista de materias simuladas
   materias = [
@@ -135,10 +136,7 @@ export class GestionClasesComponent {
     };
   }
 
-  // Método para abrir el modal de asistencia
-  abrirAsistencia(claseId: number) {
-    this.claseAsistenciaId = claseId;
-  }
+
 
   // Método para cerrar el modal de asistencia
   cerrarAsistencia() {
@@ -186,5 +184,31 @@ export class GestionClasesComponent {
   contarTotal(clase: any): number {
     if (!clase || !clase.estudiantes) return 0;
     return clase.estudiantes.length;
+  }
+
+  // Método para calcular el porcentaje de asistencia de un estudiante en una materia específica
+  calcularPorcentajeAsistencia(estudianteId: number, materiaId: number): string {
+    // Filtramos todas las clases de esta materia
+    const clasesDeMateria = this.clasesCreadas.filter(c => c.materiaId === materiaId);
+    if (clasesDeMateria.length === 0) return '0%';
+
+    let presentes = 0;
+    for (const clase of clasesDeMateria) {
+      const estudiante = clase.estudiantes.find(e => e.id === estudianteId);
+      if (estudiante && estudiante.presente) {
+        presentes++;
+      }
+    }
+    return Math.round((presentes / clasesDeMateria.length) * 100) + '%';
+  }
+
+  // Modificamos abrirAsistencia para que todos los estudiantes salgan como "Presente" por defecto
+  abrirAsistencia(claseId: number) {
+    this.claseAsistenciaId = claseId;
+    const clase = this.clasesCreadas.find(c => c.id === claseId);
+    if (clase) {
+      // Marcamos a todos como presentes (true) al abrir el modal
+      clase.estudiantes = clase.estudiantes.map(e => ({ ...e, presente: true }));
+    }
   }
 }
