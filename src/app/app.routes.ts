@@ -15,6 +15,7 @@ import { AyudanteMateriasComponent } from './components/ayudante/materias/materi
 import { PostulacionComponent } from './components/estudiante/postulacion/postulacion';
 import { BitacoraComponent } from './components/estudiante/bitacora/bitacora';
 import { InformesComponent } from './components/estudiante/informes/informes';
+import { GestionClasesComponent } from './components/docente/gestion-clases/gestion-clases';
 
 // Administrador
 import { SolicitudesComponent } from './components/administrador/solicitudes/solicitudes';
@@ -43,6 +44,8 @@ export const routes: Routes = [
       { path: 'ayudante/bitacora', component: BitacoraComponent },
       { path: 'ayudante/informes', component: InformesComponent },
       { path: 'ayudante/postulacion', component: PostulacionComponent },
+      { path: 'docente/gestion-clases', component: GestionClasesComponent },
+
 
       // ADMINISTRADOR
       { path: 'admin/solicitudes', component: SolicitudesComponent },
