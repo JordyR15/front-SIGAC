@@ -1,13 +1,15 @@
-<div class="p-6 lg:p-8 space-y-5">
+<!-- Contenedor principal con padding reducido en móvil -->
+<div class="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-5">
+
   <!-- Banner de la materia -->
-  <div class="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-center gap-5">
-    <div class="w-14 h-14 rounded-2xl text-blue-700 bg-white/70 flex items-center justify-center shrink-0 shadow-sm">
+  <div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+    <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl text-blue-700 bg-white/70 flex items-center justify-center shrink-0 shadow-sm">
       <i class="fa-solid fa-book-open text-2xl"></i>
     </div>
     <div class="flex-1 min-w-0">
-      <h2 class="font-bold text-slate-900 text-xl leading-tight">{{ materia.nombre }}</h2>
-      <p class="text-sm text-slate-600 mt-0.5">{{ materia.docente }} · {{ materia.codigo }}</p>
-      <div class="flex items-center gap-4 mt-2 text-xs text-slate-500">
+      <h2 class="font-bold text-slate-900 text-lg md:text-xl leading-tight truncate">{{ materia.nombre }}</h2>
+      <p class="text-xs md:text-sm text-slate-600 mt-0.5 truncate">{{ materia.docente }} · {{ materia.codigo }}</p>
+      <div class="flex flex-wrap items-center gap-2 md:gap-4 mt-2 text-xs text-slate-500">
         <span class="flex items-center gap-1"><i class="fa-regular fa-user"></i> {{ materia.estudiantes }} estudiantes</span>
         <span class="flex items-center gap-1"><i class="fa-solid fa-award"></i> {{ materia.creditos }} créditos</span>
         <span class="flex items-center gap-1"><i class="fa-solid fa-chart-simple"></i> Semana {{ materia.semana }}/{{ materia.totalSemanas }}</span>
@@ -17,95 +19,69 @@
 
   <!-- Tabs -->
   <div class="glass-card rounded-2xl overflow-hidden">
-    <div class="flex border-b border-slate-100 bg-slate-50/50">
-      <button (click)="tabActual = 'recursos'" class="flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2" [ngClass]="tabActual === 'recursos' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-800'">
+    <!-- Pestañas con scroll horizontal en móvil -->
+    <div class="flex overflow-x-auto border-b border-slate-100 bg-slate-50/50 snap-x snap-mandatory">
+      <button (click)="tabActual = 'recursos'" class="flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap" [ngClass]="tabActual === 'recursos' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-800'">
         <i class="fa-regular fa-file-lines"></i> Recursos
       </button>
-      <button (click)="tabActual = 'actividades'" class="flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2" [ngClass]="tabActual === 'actividades' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-800'">
+      <button (click)="tabActual = 'actividades'" class="flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap" [ngClass]="tabActual === 'actividades' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-800'">
         <i class="fa-regular fa-clipboard"></i> Actividades
       </button>
-      <button (click)="tabActual = 'asistencia'" class="flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2" [ngClass]="tabActual === 'asistencia' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-800'">
+      <button (click)="tabActual = 'asistencia'" class="flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap" [ngClass]="tabActual === 'asistencia' ? 'border-accent text-accent' : 'border-transparent text-slate-500 hover:text-slate-800'">
         <i class="fa-regular fa-users"></i> Asistencia
       </button>
     </div>
 
-    <!-- Pestaña: Recursos -->
-    <div *ngIf="tabActual === 'recursos'" class="p-5 space-y-2.5">
-
-      <!-- FLECHAS DE NAVEGACIÓN ENTRE TEMAS -->
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-slate-900">
-          {{ temas[indiceTemaActual].nombre }}
-          <span class="text-sm font-normal text-slate-400 ml-2">
-            ({{ indiceTemaActual + 1 }} de {{ temas.length }})
-          </span>
-        </h3>
-        <div class="flex items-center gap-2">
-          <button (click)="irAlTemaAnterior()"
-                  [disabled]="indiceTemaActual === 0"
-                  class="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            <i class="fa-solid fa-chevron-left"></i>
-          </button>
-          <button (click)="irAlTemaSiguiente()"
-                  [disabled]="indiceTemaActual === temas.length - 1"
-                  class="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-        </div>
-      </div>
-
-      <div *ngIf="canEdit" class="flex justify-end mb-3">
-        <button (click)="showAddRecurso = !showAddRecurso" class="flex items-center gap-2 text-xs font-semibold text-white bg-accent hover:bg-accent-dim px-3.5 py-2 rounded-lg transition-colors">
-          <i class="fa-solid fa-plus"></i> Añadir recurso
-        </button>
-      </div>
-
-      <!-- Formulario de nuevo recurso -->
-      <div *ngIf="showAddRecurso && canEdit" class="border border-accent-200 bg-accent-50/30 rounded-xl p-4 space-y-3">
-        <p class="text-sm font-semibold text-slate-800">Nuevo recurso</p>
-        <div class="grid grid-cols-2 gap-3">
-          <select [(ngModel)]="nuevoRecurso.tipo" class="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-accent/20 outline-none">
-            <option>PDF</option>
-            <option>Video</option>
-            <option>Enlace</option>
-            <option>Ejercicio</option>
-          </select>
-          <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-            <input type="checkbox" [(ngModel)]="nuevoRecurso.esencial" class="rounded" />
-            Marcar como esencial
-          </label>
-        </div>
-        <input [(ngModel)]="nuevoRecurso.nombre" placeholder="Nombre del recurso..." class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/20 outline-none" />
-        <div class="flex gap-2">
-          <button (click)="agregarRecurso()" class="px-4 py-2 text-xs font-semibold bg-accent text-white rounded-lg hover:bg-accent-dim transition-colors">Guardar</button>
-          <button (click)="showAddRecurso = false" class="px-4 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">Cancelar</button>
-        </div>
-      </div>
-
-      <!-- Recursos del tema actual -->
-      <div *ngFor="let r of temas[indiceTemaActual].recursos" class="flex items-center gap-3 p-3.5 rounded-xl border transition-colors" [ngClass]="r.visto ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200/80'">
-        <span class="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" [ngClass]="{'bg-blue-100 text-blue-600': r.tipo === 'PDF', 'bg-red-100 text-red-600': r.tipo === 'Video', 'bg-emerald-100 text-emerald-600': r.tipo === 'Enlace', 'bg-amber-100 text-amber-600': r.tipo === 'Ejercicio'}">
-          <i class="fa-solid" [ngClass]="{'fa-file-pdf': r.tipo === 'PDF', 'fa-circle-play': r.tipo === 'Video', 'fa-link': r.tipo === 'Enlace', 'fa-pen-to-square': r.tipo === 'Ejercicio'}"></i>
-        </span>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <p class="text-sm font-medium leading-tight" [ngClass]="r.visto ? 'text-slate-400 line-through' : 'text-slate-800'">{{ r.nombre }}</p>
-            <span *ngIf="r.esencial" class="flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
-              <i class="fa-solid fa-star text-[8px]"></i> Esencial
-            </span>
+    <!-- Contenido de los tabs -->
+    <div class="p-4 md:p-5 space-y-4">
+      <!-- RECURSOS -->
+      <div *ngIf="tabActual === 'recursos'" class="space-y-3">
+        <!-- Flechas de navegación (con espacio entre ellas) -->
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 class="text-base md:text-lg font-bold text-slate-900 truncate">
+            {{ temas[indiceTemaActual].nombre }}
+            <span class="text-sm font-normal text-slate-400 ml-2">({{ indiceTemaActual + 1 }} de {{ temas.length }})</span>
+          </h3>
+          <div class="flex gap-1">
+            <button (click)="irAlTemaAnterior()" [disabled]="indiceTemaActual === 0" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors disabled:opacity-50">
+              <i class="fa-solid fa-chevron-left text-xs"></i>
+            </button>
+            <button (click)="irAlTemaSiguiente()" [disabled]="indiceTemaActual === temas.length - 1" class="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors disabled:opacity-50">
+              <i class="fa-solid fa-chevron-right text-xs"></i>
+            </button>
           </div>
-          <p class="text-[11px] text-slate-400 mt-0.5">{{ r.tipo }}</p>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <button *ngIf="canEdit" (click)="toggleEsencial(r.id)" class="w-7 h-7 rounded-lg hover:bg-amber-50 flex items-center justify-center text-slate-400 hover:text-amber-500 transition-colors">
-            <i class="fa-solid fa-star text-[14px]" [ngClass]="r.esencial ? 'text-amber-500' : ''"></i>
+        <!-- Botón de añadir recurso (si aplica) -->
+        <div *ngIf="canEdit" class="flex justify-end mb-2">
+          <button (click)="showAddRecurso = !showAddRecurso" class="flex items-center gap-2 text-xs font-semibold text-white bg-accent hover:bg-accent-dim px-3 py-1.5 rounded-lg transition-colors">
+            <i class="fa-solid fa-plus"></i> Añadir recurso
           </button>
-          <button (click)="toggleVisto(r.id)" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors" [ngClass]="r.visto ? 'bg-emerald-50 text-emerald-600' : 'hover:bg-slate-100 text-slate-400'">
-            <i class="fa-solid" [ngClass]="r.visto ? 'fa-eye-slash' : 'fa-eye'"></i>
-          </button>
+        </div>
+        <!-- Grid de recursos (1 columna en móvil, 2 en escritorio) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div *ngFor="let r of temas[indiceTemaActual].recursos" class="flex items-center gap-3 p-3 rounded-xl border transition-colors" [ngClass]="r.visto ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200/80'">
+            <span class="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg flex items-center justify-center" [ngClass]="{'bg-blue-100 text-blue-600': r.tipo === 'PDF', 'bg-red-100 text-red-600': r.tipo === 'Video', 'bg-emerald-100 text-emerald-600': r.tipo === 'Enlace', 'bg-amber-100 text-amber-600': r.tipo === 'Ejercicio'}">
+              <i class="fa-solid text-sm" [ngClass]="{'fa-file-pdf': r.tipo === 'PDF', 'fa-circle-play': r.tipo === 'Video', 'fa-link': r.tipo === 'Enlace', 'fa-pen-to-square': r.tipo === 'Ejercicio'}"></i>
+            </span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1 flex-wrap">
+                <p class="text-sm font-medium leading-tight truncate" [ngClass]="r.visto ? 'text-slate-400 line-through' : 'text-slate-800'">{{ r.nombre }}</p>
+                <span *ngIf="r.esencial" class="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Esencial</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">{{ r.tipo }}</p>
+            </div>
+            <!-- Botones de acción -->
+            <div class="flex gap-1 shrink-0">
+              <button *ngIf="canEdit" (click)="toggleEsencial(r.id)" class="w-7 h-7 rounded-lg hover:bg-amber-50 flex items-center justify-center text-slate-400 hover:text-amber-500">
+                <i class="fa-solid fa-star text-xs" [ngClass]="r.esencial ? 'text-amber-500' : ''"></i>
+              </button>
+              <button (click)="toggleVisto(r.id)" class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors" [ngClass]="r.visto ? 'bg-emerald-50 text-emerald-600' : 'hover:bg-slate-100 text-slate-400'">
+                <i class="fa-solid" [ngClass]="r.visto ? 'fa-eye-slash' : 'fa-eye'"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
     <!-- Pestaña: Actividades -->
     <div *ngIf="tabActual === 'actividades'" class="p-5 space-y-3">
