@@ -1,7 +1,7 @@
 import { Component, OnInit, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Router, NavigationEnd } from '@angular/router'; // <-- Importa Router y NavigationEnd
-import { filter } from 'rxjs/operators'; // <-- Importa filter
+import { RouterModule, Router, NavigationEnd } from '@angular/router';
+import { filter } from 'rxjs/operators';
 
 declare const Plotly: any;
 
@@ -13,11 +13,10 @@ declare const Plotly: any;
   styleUrls: ['./dashboard.css']
 })
 export class DashboardComponent implements OnInit, AfterViewInit {
-  // 1. Obtenemos el rol del usuario
   rol = localStorage.getItem('rol') || 'Estudiante';
   esAyudante = localStorage.getItem('rol') === 'Ayudante';
 
-  // 2. Datos del Estudiante (los que ya tenías)
+  // --- Datos del Estudiante ---
   materiasEstudiante = [
     {
       id: 1,
@@ -42,7 +41,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     }
   ];
 
-  // 3. Datos del Ayudante / Docente (Nuevos KPIs)
+  // --- Datos del Ayudante / Docente ---
   dashboardAyudante = {
     estudiantes: 25,
     clasesImpartidas: 8,
@@ -53,14 +52,20 @@ export class DashboardComponent implements OnInit, AfterViewInit {
     ]
   };
 
+  // --- Datos del Administrador ---
+  dashboardAdmin = {
+    materias: 12,
+    docentes: 8,
+    estudiantes: 240,
+    ayudantiasActivas: 5
+  };
+
   constructor(private router: Router) {}
 
   ngOnInit(): void {
-    // Suscribirse a los cambios de ruta
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
       .subscribe(() => {
-        // Si la ruta actual es /dashboard y es estudiante, renderiza el gráfico
         if (this.router.url === '/dashboard' && this.rol === 'Estudiante' && !this.esAyudante) {
           this.renderChart();
         }

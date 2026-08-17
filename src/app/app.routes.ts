@@ -11,13 +11,19 @@ import { HorariosComponent } from './components/estudiante/horarios/horarios';
 import { AyudanteMateriasComponent } from './components/ayudante/materias/materias';
 import { GestionClasesComponent } from './components/docente/gestion-clases/gestion-clases';
 import { GestionAyudantiaComponent } from './components/ayudante/gestion-ayudantia/gestion-ayudantia';
-import { CrearMateriaComponent } from './components/administrador/crear-materia/crear-materia';
 import { GestionEstudiantesComponent } from './components/docente/gestion-estudiantes/gestion-estudiantes';
 
 // Administrador
 import { SolicitudesComponent } from './components/administrador/solicitudes/solicitudes';
 import { AsignacionesComponent } from './components/administrador/asignaciones/asignaciones';
 import { SeguimientoComponent } from './components/administrador/seguimiento/seguimiento';
+import { CrearMateriaComponent } from './components/administrador/crear-materia/crear-materia';
+import { MateriasAdminComponent } from './components/administrador/materias-admin/materias-admin';
+import { OcupacionHorariosComponent } from './components/administrador/ocupacion-horarios/ocupacion-horarios';
+import { CrearClaseComponent } from './components/administrador/crear-clase/crear-clase';
+import { ClasesAdminComponent } from './components/administrador/clases-admin/clases-admin';
+import { AyudantiasAdminComponent } from './components/administrador/ayudantias-admin/ayudantias-admin';
+
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -42,7 +48,6 @@ export const routes: Routes = [
       { path: 'docente/gestion-clases', component: GestionClasesComponent },
       { path: 'ayudante/gestion-ayudantia', component: GestionAyudantiaComponent },
       { path: 'docente/gestion-estudiantes', component: GestionEstudiantesComponent },
-      { path: 'docente/crear-materia', component: CrearMateriaComponent },
 
 
 
@@ -50,6 +55,14 @@ export const routes: Routes = [
       { path: 'admin/solicitudes', component: SolicitudesComponent },
       { path: 'admin/asignaciones', component: AsignacionesComponent },
       { path: 'admin/seguimiento', component: SeguimientoComponent },
+      { path: 'admin/crear-materia', component: CrearMateriaComponent },
+      { path: 'admin/materias', component: MateriasAdminComponent },
+      { path: 'admin/ocupacion-horarios', component: OcupacionHorariosComponent },
+      { path: 'admin/crear-clase', component: CrearClaseComponent },
+      { path: 'admin/clases', component: ClasesAdminComponent },
+      { path: 'admin/ayudantias', component: AyudantiasAdminComponent },
+
+
     ]
   }
 ];

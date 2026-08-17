@@ -74,9 +74,55 @@
 </div>
 
 <!-- ========================================================= -->
+<!-- VISTA PARA ADMINISTRADOR (KPIs + Acciones Rápidas)        -->
+<!-- ========================================================= -->
+<div *ngIf="rol === 'Administrador'" class="space-y-6">
+  <div>
+    <h2 class="text-2xl font-bold text-slate-900">Panel de Administración</h2>
+    <p class="text-slate-500 text-sm mt-1">Vista general del sistema académico.</p>
+  </div>
+
+  <!-- KPIs -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-book-open text-xl"></i></div>
+      <div><p class="text-xs text-slate-500">Materias</p><p class="text-2xl font-bold text-slate-900">{{ dashboardAdmin.materias }}</p></div>
+    </div>
+    <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center"><i class="fa-solid fa-user-tie text-xl"></i></div>
+      <div><p class="text-xs text-slate-500">Docentes</p><p class="text-2xl font-bold text-slate-900">{{ dashboardAdmin.docentes }}</p></div>
+    </div>
+    <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-users text-xl"></i></div>
+      <div><p class="text-xs text-slate-500">Estudiantes</p><p class="text-2xl font-bold text-slate-900">{{ dashboardAdmin.estudiantes }}</p></div>
+    </div>
+    <div class="glass-card rounded-2xl p-5 flex items-center gap-4">
+      <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><i class="fa-solid fa-chalkboard-user text-xl"></i></div>
+      <div><p class="text-xs text-slate-500">Ayudantías activas</p><p class="text-2xl font-bold text-slate-900">{{ dashboardAdmin.ayudantiasActivas }}</p></div>
+    </div>
+  </section>
+
+  <!-- Acciones rápidas -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <a routerLink="/admin/materias" class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer border border-slate-200">
+      <div class="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center text-accent"><i class="fa-solid fa-list text-xl"></i></div>
+      <div><p class="text-sm font-semibold text-slate-900">Ver Materias</p><p class="text-xs text-slate-500">Listado completo de materias y ayudantías</p></div>
+    </a>
+    <a routerLink="/admin/gestion-estudiantes" class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer border border-slate-200">
+      <div class="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600"><i class="fa-solid fa-user-plus text-xl"></i></div>
+      <div><p class="text-sm font-semibold text-slate-900">Gestión de Estudiantes</p><p class="text-xs text-slate-500">Añadir estudiantes a materias</p></div>
+    </a>
+    <a routerLink="/admin/ocupacion-horarios" class="glass-card rounded-2xl p-5 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer border border-slate-200">
+      <div class="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><i class="fa-solid fa-clock text-xl"></i></div>
+      <div><p class="text-sm font-semibold text-slate-900">Ocupación Horarios</p><p class="text-xs text-slate-500">Marcar horas ocupadas por la institución</p></div>
+    </a>
+  </section>
+</div>
+
+<!-- ========================================================= -->
 <!-- VISTA PARA AYUDANTE / DOCENTE (KPIs + Próximas Clases)    -->
 <!-- ========================================================= -->
-<div *ngIf="rol !== 'Estudiante' || esAyudante" class="space-y-6">
+<div *ngIf="rol === 'Ayudante' || rol === 'Docente'" class="space-y-6">
   <div>
     <h2 class="text-2xl font-bold text-slate-900">Panel de Gestión</h2>
     <p class="text-slate-500 text-sm mt-1">Seguimiento de tus clases y ayudantías.</p>

@@ -18,8 +18,9 @@ export interface UserDto {
   providedIn: 'root'
 })
 export class AuthService {
-  // ⚠️ CAMBIA EL PUERTO SEGÚN DONDE CORRA TU BACKEND (5000, 7123, etc.)
+  // ✅ PUERTO CORRECTO (5291)
   private apiUrl = 'http://localhost:5291/api/login';
+
   constructor(private http: HttpClient) {}
 
   login(credentials: LoginDto): Observable<UserDto> {
@@ -29,6 +30,7 @@ export class AuthService {
           localStorage.setItem('token', response.token);
           localStorage.setItem('rol', response.rol);
           localStorage.setItem('username', response.username);
+          localStorage.setItem('userId', response.id.toString());
         }
       })
     );
@@ -38,6 +40,7 @@ export class AuthService {
     localStorage.removeItem('token');
     localStorage.removeItem('rol');
     localStorage.removeItem('username');
+    localStorage.removeItem('userId');
   }
 
   getToken(): string | null {
@@ -46,5 +49,10 @@ export class AuthService {
 
   getRol(): string | null {
     return localStorage.getItem('rol');
+  }
+
+  getUserId(): number | null {
+    const id = localStorage.getItem('userId');
+    return id ? parseInt(id, 10) : null;
   }
 }
