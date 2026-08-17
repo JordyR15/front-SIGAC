@@ -11,6 +11,8 @@ import { HorariosComponent } from './components/estudiante/horarios/horarios';
 import { AyudanteMateriasComponent } from './components/ayudante/materias/materias';
 import { GestionClasesComponent } from './components/docente/gestion-clases/gestion-clases';
 import { GestionAyudantiaComponent } from './components/ayudante/gestion-ayudantia/gestion-ayudantia';
+import { CrearMateriaComponent } from './components/administrador/crear-materia/crear-materia';
+import { GestionEstudiantesComponent } from './components/docente/gestion-estudiantes/gestion-estudiantes';
 
 // Administrador
 import { SolicitudesComponent } from './components/administrador/solicitudes/solicitudes';
@@ -39,6 +41,10 @@ export const routes: Routes = [
       { path: 'ayudante/mi-perfil', component: MiPerfilComponent },
       { path: 'docente/gestion-clases', component: GestionClasesComponent },
       { path: 'ayudante/gestion-ayudantia', component: GestionAyudantiaComponent },
+      { path: 'docente/gestion-estudiantes', component: GestionEstudiantesComponent },
+      { path: 'docente/crear-materia', component: CrearMateriaComponent },
+
+
 
       // ADMINISTRADOR
       { path: 'admin/solicitudes', component: SolicitudesComponent },
