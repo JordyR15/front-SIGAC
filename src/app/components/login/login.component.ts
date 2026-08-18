@@ -18,19 +18,12 @@ export class LoginComponent {
 
   constructor(private authService: AuthService, private router: Router) {}
 
-  onLogin(): void {
-    if (!this.credentials.username || !this.credentials.password) {
-      this.errorMessage = 'Por favor ingrese usuario y contraseña.';
-      return;
-    }
-
+  onLogin() {
+    if (!this.credentials.username || !this.credentials.password) return;
     this.isLoading = true;
-    this.errorMessage = '';
-
     this.authService.login(this.credentials).subscribe({
-      next: (user) => {
+      next: () => {
         this.isLoading = false;
-        // Redirige al dashboard o a la página principal
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {
@@ -38,7 +31,7 @@ export class LoginComponent {
         if (err.status === 401) {
           this.errorMessage = 'Usuario o contraseña incorrectos.';
         } else {
-          this.errorMessage = 'Ocurrió un error de conexión con el servidor.';
+          this.errorMessage = 'Error de conexión con el servidor.';
         }
       }
     });
