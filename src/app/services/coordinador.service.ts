@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE } from '../api';
 
 export interface SolicitudAyudantiaDto {
   ayudantiaId: number;
@@ -23,7 +24,7 @@ export interface GestionEstadoAyudantiaDto {
   providedIn: 'root'
 })
 export class CoordinadorService {
-  private apiUrl = 'http://localhost:5291/api/coordinador';
+  private apiUrl = `${API_BASE}/api/coordinador`;
 
   constructor(private http: HttpClient) {}
 

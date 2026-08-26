@@ -5,8 +5,8 @@ import { RouterOutlet } from '@angular/router';
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet],
-  templateUrl: './app.html',  // <-- Debe decir ./app.html
-  styleUrl: './app.css'       // <-- Debe decir ./app.css
+  templateUrl: './app.html',
+  styleUrls: ['./app.css']
 })
 export class AppComponent {
   title = 'front-SIGAC';

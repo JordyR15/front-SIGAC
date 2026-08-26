@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE } from '../api';
 
 export interface CreateClaseDto {
   nombre: string;
@@ -65,8 +66,8 @@ export interface AsistenciaDto {
   providedIn: 'root'
 })
 export class ClaseService {
-  private apiUrl = 'http://localhost:5291/api/clase';
-  private sesionApiUrl = 'http://localhost:5291/api/clasesesion';
+  private apiUrl = `${API_BASE}/api/clase`;
+  private sesionApiUrl = `${API_BASE}/api/clasesesion`;
 
   constructor(private http: HttpClient) {}
 

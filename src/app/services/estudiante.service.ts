@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE } from '../api';
 
 export interface PostulacionAyudantiaDto {
   catedraId: number;
@@ -31,7 +32,7 @@ export interface HistorialAyudantiaDto {
   providedIn: 'root'
 })
 export class EstudianteService {
-  private apiUrl = 'http://localhost:5291/api/estudiante';
+  private apiUrl = `${API_BASE}/api/estudiante`;
 
   constructor(private http: HttpClient) {}
 

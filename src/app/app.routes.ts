@@ -26,13 +26,13 @@ import { AyudantiasAdminComponent } from './components/administrador/ayudantias-
 
 
 export const routes: Routes = [
+  { path: '', redirectTo: 'login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
   {
     path: '',
     component: LayoutComponent,
     children: [
       { path: 'dashboard', component: DashboardComponent },
-      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 
       // ESTUDIANTE / AYUDANTE / DOCENTE
       { path: 'estudiante/materias', component: MateriasComponent },
@@ -64,5 +64,6 @@ export const routes: Routes = [
 
 
     ]
-  }
+  },
+  { path: '**', redirectTo: 'login' }
 ];

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE } from '../api';
 
 export interface EvaluacionDto {
   id?: number;
@@ -45,7 +46,7 @@ export interface BitacoraDto {
   providedIn: 'root'
 })
 export class DocenteService {
-  private apiUrl = 'http://localhost:5291/api/docente';
+  private apiUrl = `${API_BASE}/api/docente`;
 
   constructor(private http: HttpClient) {}
 

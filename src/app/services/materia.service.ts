@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE } from '../api';
 
 export interface CreateRecursoDto {
   titulo: string;
@@ -49,7 +50,7 @@ export interface MarkRecursoAsSeenDto {
   providedIn: 'root'
 })
 export class MateriaService {
-  private apiUrl = 'http://localhost:5291/api/materia';
+  private apiUrl = `${API_BASE}/api/materia`;
 
   constructor(private http: HttpClient) {}
 
