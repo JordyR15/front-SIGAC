@@ -19,17 +19,14 @@ export class LoginComponent {
   constructor(private authService: AuthService, private router: Router) {}
 
   onLogin() {
-    if (!this.credentials.username || !this.credentials.password) return;
-    this.isLoading = true;
     this.authService.login(this.credentials).subscribe({
-      next: () => {
-        this.isLoading = false;
+      next: (user) => {
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {
-        this.isLoading = false;
         if (err.status === 401) {
           this.errorMessage = 'Usuario o contraseña incorrectos.';
+          this.router.navigate(['/login']);
         } else {
           this.errorMessage = 'Error de conexión con el servidor.';
         }

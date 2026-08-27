@@ -32,6 +32,7 @@ export class AuthService {
   private registerUrl = `${API_BASE}/api/login/register`;
   private personaUrl = `${API_BASE}/api/persona`;
 
+
   constructor(private http: HttpClient) {}
 
   login(credentials: LoginDto): Observable<UserDto> {
