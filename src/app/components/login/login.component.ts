@@ -107,17 +107,22 @@ export class LoginComponent implements OnInit {
   }
 
   onLogin() {
+<<<<<<< HEAD
     this.isLoading = true;
     this.errorMessage = '';
     this.authService.login(this.credentials).subscribe({
       next: (user) => {
         this.isLoading = false;
+=======
+    this.authService.login(this.credentials).subscribe({
+      next: (user) => {
+>>>>>>> 2a01521b428953a8e18219a16df5623c42a6605c
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {
-        this.isLoading = false;
         if (err.status === 401) {
           this.errorMessage = 'Usuario o contraseña incorrectos.';
+          this.router.navigate(['/login']);
         } else {
           this.errorMessage = `Error de conexión con el backend (${this.currentBackendUrl}). Verifica que el servidor de Visual Studio esté iniciado.`;
         }
