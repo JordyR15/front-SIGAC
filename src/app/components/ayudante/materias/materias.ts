@@ -1,6 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
+import { MateriaDto, MateriaService } from '../../../services/materia.service';
 
 @Component({
   selector: 'app-ayudante-materias',
@@ -8,13 +10,28 @@ import { RouterModule } from '@angular/router';
   imports: [CommonModule, RouterModule],
   templateUrl: './materias.html'
 })
-export class AyudanteMateriasComponent {
-  materias = [
-    { id: 101, nombre: 'Cálculo Avanzado', codigo: 'MAT-301', docente: 'Dra. Evelyn Vance' },
-    { id: 102, nombre: 'Mecánica Cuántica', codigo: 'FIS-401', docente: 'Dr. Marcus Thorne' }
-  ];
+export class AyudanteMateriasComponent implements OnInit, OnDestroy {
+  materias: MateriaDto[] = [];
+  private sub?: Subscription;
 
-  agregarRecurso(materiaId: number) {
-    console.log('Añadir recurso a materia:', materiaId);
+  constructor(
+    private materiaService: MateriaService,
+    private router: Router
+  ) {}
+
+  ngOnInit() {
+    this.sub = this.materiaService.materias$.subscribe(list => {
+      this.materias = list;
+    });
+    this.materiaService.refreshMaterias().subscribe();
+  }
+
+  ngOnDestroy() {
+    this.sub?.unsubscribe();
+  }
+
+  irAGestionRecursos(materiaId: number, event: Event) {
+    event.stopPropagation();
+    this.router.navigate(['/ayudante/materia', materiaId]);
   }
 }

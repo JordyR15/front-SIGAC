@@ -1,7 +1,9 @@
-import { Component, OnInit, AfterViewInit } from '@angular/core';
+import { Component, OnInit, AfterViewInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router, NavigationEnd } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
+import { MateriaService } from '../../services/materia.service';
 
 declare const Plotly: any;
 
@@ -12,9 +14,10 @@ declare const Plotly: any;
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.css']
 })
-export class DashboardComponent implements OnInit, AfterViewInit {
+export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   rol = localStorage.getItem('rol') || 'Estudiante';
   esAyudante = localStorage.getItem('rol') === 'Ayudante';
+  private sub?: Subscription;
 
   // --- Datos del Estudiante ---
   materiasEstudiante = [
@@ -54,15 +57,29 @@ export class DashboardComponent implements OnInit, AfterViewInit {
 
   // --- Datos del Administrador ---
   dashboardAdmin = {
-    materias: 12,
+    materias: 3,
     docentes: 8,
     estudiantes: 240,
     ayudantiasActivas: 5
   };
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private materiaService: MateriaService
+  ) {}
 
   ngOnInit(): void {
+    this.sub = this.materiaService.materias$.subscribe(list => {
+      this.dashboardAdmin.materias = list.length;
+      this.materiasEstudiante = list.map((m, idx) => ({
+        id: idx + 1,
+        catedraId: m.id,
+        catedra: { id: m.id, nombre: m.nombre, docente: { username: m.docente || 'Docente' } },
+        promedioActual: 4.8,
+        alertaRendimiento: false
+      }));
+    });
+
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
       .subscribe(() => {
@@ -70,6 +87,10 @@ export class DashboardComponent implements OnInit, AfterViewInit {
           this.renderChart();
         }
       });
+  }
+
+  ngOnDestroy(): void {
+    this.sub?.unsubscribe();
   }
 
   ngAfterViewInit(): void {

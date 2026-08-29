@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { HttpClient } from '@angular/common/http'; // <-- Ya importado
+import { Subscription } from 'rxjs';
+import { MateriaDto, MateriaService } from '../../../services/materia.service';
 
 @Component({
   selector: 'app-materias',
@@ -9,29 +10,21 @@ import { HttpClient } from '@angular/common/http'; // <-- Ya importado
   imports: [CommonModule, RouterModule],
   templateUrl: './materias.html'
 })
-export class MateriasComponent {
-  // Datos mock (seguirán usándose hasta que el backend responda)
-  materias = [
-    {
-      id: 101,
-      nombre: 'Cálculo Avanzado',
-      descripcion: 'Derivadas parciales, integrales múltiples y ecuaciones diferenciales.',
-      codigo: 'MAT-301',
-      docente: 'Dra. Evelyn Vance'
-    },
-    {
-      id: 102,
-      nombre: 'Mecánica Cuántica',
-      descripcion: 'Principios fundamentales de la mecánica cuántica y su aplicación.',
-      codigo: 'FIS-401',
-      docente: 'Dr. Marcus Thorne'
-    }
-  ];
+export class MateriasComponent implements OnInit, OnDestroy {
+  materias: MateriaDto[] = [];
+  private sub?: Subscription;
 
-  constructor(private http: HttpClient) {} // Inyectamos HttpClient
+  constructor(private materiaService: MateriaService) {}
 
-  // Este método se llamará cuando el backend esté listo
-  cargarMaterias() {
-    // this.http.get('/api/estudiante/materias').subscribe(data => this.materias = data);
+  ngOnInit() {
+    this.sub = this.materiaService.materias$.subscribe(list => {
+      this.materias = list;
+    });
+    this.materiaService.refreshMaterias().subscribe();
+  }
+
+  ngOnDestroy() {
+    this.sub?.unsubscribe();
   }
 }
+

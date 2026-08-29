@@ -4,6 +4,18 @@
     <p class="text-slate-500 text-sm mt-1">Revisa las postulaciones pendientes de aprobación.</p>
   </div>
 
+  <!-- Success Alert -->
+  <div *ngIf="successMessage" class="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl flex items-center gap-2.5">
+    <i class="fa-solid fa-circle-check text-emerald-500"></i>
+    <span>{{ successMessage }}</span>
+  </div>
+
+  <!-- Error Alert -->
+  <div *ngIf="errorMessage" class="p-3.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl flex items-center gap-2.5">
+    <i class="fa-solid fa-circle-exclamation text-red-500"></i>
+    <span>{{ errorMessage }}</span>
+  </div>
+
   <section class="glass-card rounded-2xl overflow-hidden">
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
@@ -20,11 +32,16 @@
           <td class="px-5 md:px-6 py-4 font-medium text-slate-900">{{ s.nombreEstudiante }}</td>
           <td class="px-4 py-4 text-slate-500">{{ s.nombreCatedra }}</td>
           <td class="px-4 py-4 text-center">
-            <span class="px-2.5 py-1 rounded-full bg-amber-50 text-xs font-medium text-amber-600 border border-amber-100">Pendiente</span>
+            <span class="px-2.5 py-1 rounded-full bg-amber-50 text-xs font-medium text-amber-600 border border-amber-100">{{ s.estado }}</span>
           </td>
           <td class="px-5 md:px-6 py-4 text-right space-x-2">
-            <button (click)="aprobar(s.ayudantiaId)" class="text-xs bg-accent text-white px-3 py-1 rounded-lg hover:bg-accent-dim transition-colors">Aprobar</button>
-            <button (click)="rechazar(s.ayudantiaId)" class="text-xs bg-red-50 text-red-600 px-3 py-1 rounded-lg hover:bg-red-100 transition-colors">Rechazar</button>
+            <button (click)="aprobar(s.ayudantiaId)" [disabled]="isLoading" class="text-xs bg-accent text-white px-3 py-1.5 rounded-lg hover:bg-accent-dim transition-colors disabled:opacity-50 font-medium">Aprobar</button>
+            <button (click)="rechazar(s.ayudantiaId)" [disabled]="isLoading" class="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 font-medium">Rechazar</button>
+          </td>
+        </tr>
+        <tr *ngIf="solicitudes.length === 0">
+          <td colspan="4" class="px-6 py-8 text-center text-slate-500">
+            No hay solicitudes pendientes en este momento.
           </td>
         </tr>
         </tbody>

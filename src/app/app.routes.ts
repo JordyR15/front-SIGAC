@@ -23,6 +23,7 @@ import { OcupacionHorariosComponent } from './components/administrador/ocupacion
 import { CrearClaseComponent } from './components/administrador/crear-clase/crear-clase';
 import { ClasesAdminComponent } from './components/administrador/clases-admin/clases-admin';
 import { AyudantiasAdminComponent } from './components/administrador/ayudantias-admin/ayudantias-admin';
+import { ReportesComponent } from './components/administrador/reportes/reportes';
 
 
 export const routes: Routes = [
@@ -48,8 +49,7 @@ export const routes: Routes = [
       { path: 'docente/gestion-clases', component: GestionClasesComponent },
       { path: 'ayudante/gestion-ayudantia', component: GestionAyudantiaComponent },
       { path: 'docente/gestion-estudiantes', component: GestionEstudiantesComponent },
-
-
+      { path: 'docente/gestion-estudiantes/:id', component: GestionEstudiantesComponent },
 
       // ADMINISTRADOR
       { path: 'admin/solicitudes', component: SolicitudesComponent },
@@ -61,6 +61,9 @@ export const routes: Routes = [
       { path: 'admin/crear-clase', component: CrearClaseComponent },
       { path: 'admin/clases', component: ClasesAdminComponent },
       { path: 'admin/ayudantias', component: AyudantiasAdminComponent },
+      { path: 'admin/gestion-estudiantes', component: GestionEstudiantesComponent },
+      { path: 'admin/gestion-estudiantes/:id', component: GestionEstudiantesComponent },
+      { path: 'admin/reportes', component: ReportesComponent },
 
 
     ]

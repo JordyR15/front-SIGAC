@@ -1,7 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
+import { MateriaService, MateriaDto, RecursoDto, ActividadDto, RegistroAsistenciaDto } from '../../../services/materia.service';
 
 @Component({
   selector: 'app-materia-detalle',
@@ -9,169 +11,279 @@ import { FormsModule } from '@angular/forms';
   imports: [CommonModule, RouterModule, FormsModule],
   templateUrl: './materia-detalle.html'
 })
-export class MateriaDetalleComponent implements OnInit {
+export class MateriaDetalleComponent implements OnInit, OnDestroy {
   materiaId: number = 0;
-
   indiceTemaActual: number = 0;
-
   tabActual: 'recursos' | 'actividades' | 'asistencia' = 'recursos';
 
-  // Leemos el rol del localStorage
-  esAyudante: boolean = localStorage.getItem('rol') === 'Ayudante';
-  canEdit = this.esAyudante;
+  rol: string = 'Estudiante';
+  esAyudante: boolean = false;
+  esDocente: boolean = false;
+  esAdmin: boolean = false;
+  canEdit: boolean = false;
 
-  // Simulación de datos de la materia
-  materia = {
-    id: 0,
+  materia: MateriaDto = {
+    id: 101,
     nombre: 'Cálculo Avanzado',
-    docente: 'Dra. Evelyn Vance',
     codigo: 'MAT-301',
-    estudiantes: 25,
+    descripcion: 'Derivadas parciales e integrales múltiples.',
+    docente: 'Dra. Evelyn Vance',
     creditos: 4,
     semana: 8,
-    totalSemanas: 16
+    totalSemanas: 16,
+    estudiantes: []
   };
 
-  // ✅ CREAMOS EL ARRAY 'temas' AQUÍ (con los recursos que ya tenías)
-  temas = [
-    {
-      nombre: 'Tema 1: Introducción al Cálculo',
-      recursos: [
-        { id: 1, nombre: 'Guía de Estudio - Tema 1', tipo: 'PDF', esencial: true, visto: false },
-        { id: 2, nombre: 'Video Explicativo', tipo: 'Video', esencial: false, visto: false },
-        { id: 3, nombre: 'Simulador de Integrales', tipo: 'Enlace', esencial: true, visto: false }
-      ]
-    },
-    {
-      nombre: 'Tema 2: Integrales Múltiples',
-      recursos: [
-        { id: 4, nombre: 'Ejercicios Resueltos', tipo: 'PDF', esencial: false, visto: false }
-      ]
-    }
-  ];
+  temas: string[] = ['Tema 1: Fundamentos y Conceptos Iniciales'];
+  recursosDeMateria: RecursoDto[] = [];
+  actividadesDeMateria: ActividadDto[] = [];
+  registrosAsistencia: RegistroAsistenciaDto[] = [];
 
-  // Actividades
-  actividades = [
-    { id: 1, nombre: 'Tarea 1', tipo: 'Tarea', fechaEntrega: '2026-08-20', estado: 'pendiente', descripcion: 'Resolver ejercicios del capítulo 3' },
-    { id: 2, nombre: 'Quiz 1', tipo: 'Quiz', fechaEntrega: '2026-08-15', estado: 'calificado', nota: 4.5 },
-    { id: 3, nombre: 'Proyecto Final', tipo: 'Proyecto', fechaEntrega: '2026-09-10', estado: 'pendiente', descripcion: 'Desarrollar una API REST' }
-  ];
-
-  // Asistencia
-  registrosAsistencia = [
-    {
-      fecha: '2026-08-11',
-      tema: 'Introducción al Cálculo',
-      asistentes: [
-        { nombre: 'Alejandro García', email: 'a.garcia@uni.edu', presente: true },
-        { nombre: 'María López', email: 'm.lopez@uni.edu', presente: false },
-        { nombre: 'Carlos Ruiz', email: 'c.ruiz@uni.edu', presente: true }
-      ]
-    }
-  ];
-
-  // Formularios
   showAddRecurso = false;
   showAddActividad = false;
   showAddClase = false;
+  showAddTema = false;
+
+  newTemaNombre = '';
   newClaseTema = '';
 
-  nuevoRecurso = { nombre: '', tipo: 'PDF', esencial: false };
-  nuevaActividad = { nombre: '', tipo: 'Taller', fechaEntrega: '', descripcion: '' };
+  nuevoRecurso = {
+    nombre: '',
+    tipo: 'PDF',
+    esencial: false,
+    url: 'https://ejemplo.edu/recurso.pdf',
+    descripcion: '',
+    temaNombre: ''
+  };
 
-  constructor(private route: ActivatedRoute) {}
+  nuevaActividad = {
+    nombre: '',
+    tipo: 'Taller',
+    fechaEntrega: '',
+    descripcion: ''
+  };
+
+  private subs: Subscription[] = [];
+
+  constructor(
+    private route: ActivatedRoute,
+    private materiaService: MateriaService
+  ) {}
 
   ngOnInit() {
+    this.detectarRol();
+
     this.route.params.subscribe(params => {
-      this.materiaId = +params['id'];
-      // ✅ Inicializamos el índice en el último tema
-      this.indiceTemaActual = this.temas.length - 1;
+      if (params['id']) {
+        this.materiaId = Number(params['id']);
+      } else {
+        this.materiaId = 101;
+      }
+      this.cargarDatosMateria();
     });
+
+    // Suscribirse a cambios en recursos
+    this.subs.push(
+      this.materiaService.recursos$.subscribe(allRecursos => {
+        this.recursosDeMateria = allRecursos.filter(r => Number(r.materiaId) === Number(this.materiaId));
+      })
+    );
+
+    // Suscribirse a cambios en actividades
+    this.subs.push(
+      this.materiaService.actividades$.subscribe(allActs => {
+        this.actividadesDeMateria = allActs.filter(a => Number(a.materiaId) === Number(this.materiaId));
+      })
+    );
+
+    // Suscribirse a cambios en asistencia
+    this.subs.push(
+      this.materiaService.asistencias$.subscribe(allAsist => {
+        this.registrosAsistencia = allAsist.filter(a => Number(a.materiaId) === Number(this.materiaId));
+      })
+    );
+
+    // Suscribirse a materias para sincronizar datos del banner
+    this.subs.push(
+      this.materiaService.materias$.subscribe(() => {
+        const found = this.materiaService.getMateriaById(this.materiaId);
+        if (found) {
+          this.materia = found;
+        }
+      })
+    );
   }
 
-  // Navegación entre temas
+  ngOnDestroy() {
+    this.subs.forEach(s => s.unsubscribe());
+  }
+
+  detectarRol() {
+    if (typeof window !== 'undefined') {
+      this.rol = localStorage.getItem('rol') || 'Estudiante';
+      this.esAyudante = this.rol === 'Ayudante';
+      this.esDocente = this.rol === 'Docente';
+      this.esAdmin = this.rol === 'Administrador' || this.rol === 'Admin';
+      this.canEdit = this.esAyudante || this.esDocente || this.esAdmin;
+    }
+  }
+
+  cargarDatosMateria() {
+    const found = this.materiaService.getMateriaById(this.materiaId);
+    if (found) {
+      this.materia = found;
+    } else {
+      this.materia = {
+        id: this.materiaId,
+        nombre: `Materia #${this.materiaId}`,
+        codigo: `MAT-${this.materiaId}`,
+        docente: 'Docente Asignado',
+        creditos: 4,
+        semana: 1,
+        totalSemanas: 16,
+        estudiantes: []
+      };
+    }
+
+    this.temas = this.materiaService.getTemasByMateria(this.materiaId);
+    if (this.indiceTemaActual >= this.temas.length) {
+      this.indiceTemaActual = 0;
+    }
+    this.nuevoRecurso.temaNombre = this.temas[this.indiceTemaActual] || 'Tema 1: Fundamentos';
+
+    // Cargar listas iniciales
+    this.recursosDeMateria = this.materiaService.getRecursosSnapshot().filter(r => Number(r.materiaId) === Number(this.materiaId));
+  }
+
+  get temaActualNombre(): string {
+    return this.temas[this.indiceTemaActual] || 'Tema Principal';
+  }
+
+  get recursosDelTemaActual(): RecursoDto[] {
+    const temaActual = this.temaActualNombre;
+    return this.recursosDeMateria.filter(r => !r.temaNombre || r.temaNombre === temaActual);
+  }
+
   irAlTemaAnterior() {
     if (this.indiceTemaActual > 0) {
       this.indiceTemaActual--;
+      this.nuevoRecurso.temaNombre = this.temaActualNombre;
     }
   }
 
   irAlTemaSiguiente() {
     if (this.indiceTemaActual < this.temas.length - 1) {
       this.indiceTemaActual++;
+      this.nuevoRecurso.temaNombre = this.temaActualNombre;
     }
   }
 
+  seleccionarTema(index: number) {
+    this.indiceTemaActual = index;
+    this.nuevoRecurso.temaNombre = this.temaActualNombre;
+  }
+
+  agregarNuevoTema() {
+    if (!this.newTemaNombre.trim()) return;
+    this.temas = this.materiaService.addTemaToMateria(this.materiaId, this.newTemaNombre);
+    this.indiceTemaActual = this.temas.length - 1;
+    this.nuevoRecurso.temaNombre = this.temaActualNombre;
+    this.newTemaNombre = '';
+    this.showAddTema = false;
+  }
+
   toggleVisto(id: number) {
-    // Actualizamos el recurso dentro del tema actual
-    const tema = this.temas[this.indiceTemaActual];
-    tema.recursos = tema.recursos.map(r => r.id === id ? { ...r, visto: !r.visto } : r);
+    this.materiaService.marcarRecursoComoVisto(id).subscribe();
   }
 
   toggleEsencial(id: number) {
-    // Actualizamos el recurso dentro del tema actual
-    const tema = this.temas[this.indiceTemaActual];
-    tema.recursos = tema.recursos.map(r => r.id === id ? { ...r, esencial: !r.esencial } : r);
+    this.materiaService.toggleRecursoEsencial(id);
   }
 
-  toggleAsistencia(registroIndex: number, estudianteIndex: number) {
-    const reg = this.registrosAsistencia[registroIndex];
-    reg.asistentes[estudianteIndex].presente = !reg.asistentes[estudianteIndex].presente;
-  }
-
-  agregarClase() {
-    if (!this.newClaseTema.trim()) return;
-    const hoy = new Date().toISOString().split('T')[0];
-    this.registrosAsistencia.unshift({
-      fecha: hoy,
-      tema: this.newClaseTema,
-      asistentes: [
-        { nombre: 'Alejandro García', email: 'a.garcia@uni.edu', presente: false },
-        { nombre: 'María López', email: 'm.lopez@uni.edu', presente: false },
-        { nombre: 'Carlos Ruiz', email: 'c.ruiz@uni.edu', presente: false }
-      ]
-    });
-    this.newClaseTema = '';
-    this.showAddClase = false;
+  eliminarRecurso(id: number) {
+    if (confirm('¿Estás seguro de eliminar este recurso educativo?')) {
+      this.materiaService.deleteRecurso(id);
+    }
   }
 
   agregarRecurso() {
     if (!this.nuevoRecurso.nombre.trim()) return;
-    // Agregamos el recurso al tema actual
-    const tema = this.temas[this.indiceTemaActual];
-    tema.recursos.push({
-      id: Date.now(),
-      nombre: this.nuevoRecurso.nombre,
+
+    this.materiaService.addRecurso(this.materiaId, {
+      titulo: this.nuevoRecurso.nombre,
+      descripcion: this.nuevoRecurso.descripcion || `Recurso de ${this.nuevoRecurso.tipo}`,
+      url: this.nuevoRecurso.url || 'https://ejemplo.edu/recurso.pdf',
       tipo: this.nuevoRecurso.tipo,
-      esencial: this.nuevoRecurso.esencial,
-      visto: false
+      esEsencial: this.nuevoRecurso.esencial,
+      materiaId: this.materiaId,
+      temaNombre: this.nuevoRecurso.temaNombre || this.temaActualNombre
+    }).subscribe(() => {
+      this.nuevoRecurso = {
+        nombre: '',
+        tipo: 'PDF',
+        esencial: false,
+        url: 'https://ejemplo.edu/recurso.pdf',
+        descripcion: '',
+        temaNombre: this.temaActualNombre
+      };
+      this.showAddRecurso = false;
     });
-    this.nuevoRecurso = { nombre: '', tipo: 'PDF', esencial: false };
-    this.showAddRecurso = false;
   }
 
   agregarActividad() {
     if (!this.nuevaActividad.nombre.trim() || !this.nuevaActividad.fechaEntrega) return;
-    this.actividades.push({
-      id: Date.now(),
-      nombre: this.nuevaActividad.nombre,
-      tipo: this.nuevaActividad.tipo,
+
+    this.materiaService.addActividad(this.materiaId, {
+      titulo: this.nuevaActividad.nombre,
+      descripcion: this.nuevaActividad.descripcion || 'Sin descripción',
       fechaEntrega: this.nuevaActividad.fechaEntrega,
-      estado: 'pendiente',
-      descripcion: this.nuevaActividad.descripcion
+      tipo: this.nuevaActividad.tipo,
+      materiaId: this.materiaId
+    }).subscribe(() => {
+      this.nuevaActividad = { nombre: '', tipo: 'Taller', fechaEntrega: '', descripcion: '' };
+      this.showAddActividad = false;
     });
-    this.nuevaActividad = { nombre: '', tipo: 'Taller', fechaEntrega: '', descripcion: '' };
-    this.showAddActividad = false;
   }
 
-  // Helper para contar asistentes presentes
+  marcarActividadEntregada(actividadId: number) {
+    this.materiaService.updateActividadEstado(actividadId, 'entregada');
+  }
+
+  calificarActividad(actividadId: number) {
+    const notaPrompt = prompt('Introduce la calificación numérica para el estudiante (ej. 4.8):', '5.0');
+    if (notaPrompt !== null) {
+      const notaNum = parseFloat(notaPrompt);
+      if (!isNaN(notaNum)) {
+        this.materiaService.updateActividadEstado(actividadId, 'calificada', notaNum);
+      }
+    }
+  }
+
+  eliminarActividad(actividadId: number) {
+    if (confirm('¿Deseas eliminar esta actividad del curso?')) {
+      this.materiaService.deleteActividad(actividadId);
+    }
+  }
+
+  agregarClase() {
+    if (!this.newClaseTema.trim()) return;
+    this.materiaService.addRegistroAsistencia(this.materiaId, this.newClaseTema, this.materia.estudiantes);
+    this.newClaseTema = '';
+    this.showAddClase = false;
+  }
+
+  toggleAsistencia(registroId: number, estudianteIndex: number) {
+    this.materiaService.toggleAsistencia(registroId, estudianteIndex);
+  }
+
   contarPresentes(asistentes: any[]): number {
+    if (!asistentes) return 0;
     return asistentes.filter(a => a.presente).length;
   }
 
-  // Helper para formatear fecha
   formatearFecha(fecha: string): string {
+    if (!fecha) return '';
     const d = new Date(fecha);
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return isNaN(d.getTime()) ? fecha : d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 }

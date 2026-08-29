@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { API_BASE } from '../api';
+import { getApiBase } from '../api';
 
 export interface EvaluacionDto {
   id?: number;
@@ -46,9 +46,9 @@ export interface BitacoraDto {
   providedIn: 'root'
 })
 export class DocenteService {
-  private apiUrl = `${API_BASE}/api/docente`;
-
   constructor(private http: HttpClient) {}
+
+  private get apiUrl() { return `${getApiBase()}/api/docente`; }
 
   registrarEvaluacionDiagnostica(catedraId: number, dto: EvaluacionDto): Observable<EvaluacionDto> {
     return this.http.post<EvaluacionDto>(`${this.apiUrl}/catedras/${catedraId}/evaluacion-diagnostica`, dto);

@@ -5,6 +5,18 @@
   </div>
 
   <section class="glass-card rounded-2xl p-6 max-w-2xl">
+    <!-- Success Alert -->
+    <div *ngIf="successMessage" class="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl flex items-center gap-2.5">
+      <i class="fa-solid fa-circle-check text-emerald-500"></i>
+      <span>{{ successMessage }}</span>
+    </div>
+
+    <!-- Error Alert -->
+    <div *ngIf="errorMessage" class="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl flex items-center gap-2.5">
+      <i class="fa-solid fa-circle-exclamation text-red-500"></i>
+      <span>{{ errorMessage }}</span>
+    </div>
+
     <form (ngSubmit)="guardarCambios()" class="space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>

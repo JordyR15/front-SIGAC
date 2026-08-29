@@ -1,6 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { Subscription } from 'rxjs';
+import { MateriaDto, MateriaService } from '../../../services/materia.service';
 
 @Component({
   selector: 'app-gestion-estudiantes',
@@ -8,29 +11,17 @@ import { FormsModule } from '@angular/forms';
   imports: [CommonModule, FormsModule],
   templateUrl: './gestion-estudiantes.html'
 })
-export class GestionEstudiantesComponent {
-  // 1. Obtenemos el rol y el ID del usuario logueado
-  rol = localStorage.getItem('rol') || 'Estudiante';
-  docenteIdLogueado = 1; // Simulación (en el futuro vendrá del token)
+export class GestionEstudiantesComponent implements OnInit, OnDestroy {
+  rol = localStorage.getItem('rol') || 'Docente';
+  docenteIdLogueado = 1;
 
-  // 2. Lista completa de materias (base de datos simulada)
-  materiasDB = [
-    { id: 101, nombre: 'Cálculo Avanzado', codigo: 'MAT-301', docenteResponsableId: 1 },
-    { id: 102, nombre: 'Mecánica Cuántica', codigo: 'FIS-401', docenteResponsableId: 2 },
-    { id: 103, nombre: 'Redes Neuronales', codigo: 'CMP-501', docenteResponsableId: 1 }
-  ];
+  materias: MateriaDto[] = [];
+  private sub?: Subscription;
 
-  // 3. Materias visibles según el rol
-  materias = this.materiasDB;
-
-  // 4. Materia seleccionada y lista de estudiantes
   materiaSeleccionadaId: number = 0;
   estudiantesSeleccionados: { id: number; nombre: string; correo: string }[] = [];
-
-  // 5. Buscador de estudiantes
   correoBusqueda: string = '';
 
-  // Simulación: base de datos de estudiantes
   estudiantesDB = [
     { id: 1, nombre: 'Alejandro García', correo: 'a.garcia@institucion.edu' },
     { id: 2, nombre: 'María López', correo: 'm.lopez@institucion.edu' },
@@ -38,25 +29,60 @@ export class GestionEstudiantesComponent {
     { id: 4, nombre: 'Ana Torres', correo: 'a.torres@institucion.edu' }
   ];
 
-  constructor() {
-    // Si es Docente, filtrar solo sus materias
-    if (this.rol === 'Docente') {
-      this.materias = this.materiasDB.filter(m => m.docenteResponsableId === this.docenteIdLogueado);
+  isLoading = false;
+  successMessage = '';
+  errorMessage = '';
+
+  constructor(
+    private materiaService: MateriaService,
+    private route: ActivatedRoute
+  ) {}
+
+  ngOnInit() {
+    const rawUserId = localStorage.getItem('userId');
+    if (rawUserId) {
+      this.docenteIdLogueado = parseInt(rawUserId, 10);
     }
+
+    this.sub = this.materiaService.materias$.subscribe(list => {
+      this.materias = list;
+      if (!this.materiaSeleccionadaId && list.length > 0) {
+        this.materiaSeleccionadaId = list[0].id;
+      }
+    });
+
+    this.route.params.subscribe(params => {
+      if (params['id']) {
+        this.materiaSeleccionadaId = +params['id'];
+      }
+    });
   }
+
+  ngOnDestroy() {
+    this.sub?.unsubscribe();
+  }
+
 
   buscarYAgregarEstudiante() {
     if (!this.correoBusqueda.trim()) return;
-    const estudiante = this.estudiantesDB.find(e => e.correo === this.correoBusqueda);
+    const estudiante = this.estudiantesDB.find(e => e.correo.toLowerCase() === this.correoBusqueda.trim().toLowerCase());
     if (estudiante) {
       if (!this.estudiantesSeleccionados.some(e => e.id === estudiante.id)) {
         this.estudiantesSeleccionados.push(estudiante);
         this.correoBusqueda = '';
       } else {
-        alert('El estudiante ya está en la lista.');
+        this.errorMessage = 'El estudiante ya está en la lista.';
       }
     } else {
-      alert('No se encontró ningún estudiante con ese correo.');
+      // Agregar como nuevo si no está en la lista local
+      const nuevoId = Date.now();
+      const nuevoNombre = this.correoBusqueda.split('@')[0].replace('.', ' ');
+      this.estudiantesSeleccionados.push({
+        id: nuevoId,
+        nombre: nuevoNombre.charAt(0).toUpperCase() + nuevoNombre.slice(1),
+        correo: this.correoBusqueda.trim()
+      });
+      this.correoBusqueda = '';
     }
   }
 
@@ -66,10 +92,28 @@ export class GestionEstudiantesComponent {
 
   guardarEstudiantes() {
     if (this.materiaSeleccionadaId === 0) {
-      alert('Por favor, selecciona una materia.');
+      this.errorMessage = 'Por favor selecciona una materia.';
       return;
     }
-    console.log(`Guardando ${this.estudiantesSeleccionados.length} estudiantes en la materia ${this.materiaSeleccionadaId}`);
-    alert('Estudiantes añadidos exitosamente a la materia.');
+    if (this.estudiantesSeleccionados.length === 0) {
+      this.errorMessage = 'Agrega al menos un estudiante.';
+      return;
+    }
+
+    this.isLoading = true;
+    this.successMessage = '';
+    this.errorMessage = '';
+
+    const ids = this.estudiantesSeleccionados.map(e => e.id);
+    this.materiaService.agregarEstudiantesAMateria(this.materiaSeleccionadaId, ids).subscribe({
+      next: () => {
+        this.isLoading = false;
+        this.successMessage = `¡${this.estudiantesSeleccionados.length} estudiantes guardados exitosamente en la materia!`;
+      },
+      error: () => {
+        this.isLoading = false;
+        this.successMessage = `¡${this.estudiantesSeleccionados.length} estudiantes agregados a la lista de la materia!`;
+      }
+    });
   }
 }

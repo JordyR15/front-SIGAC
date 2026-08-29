@@ -1,15 +1,17 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { Subscription } from 'rxjs';
+import { ClaseService, ClaseSesionDto } from '../../../services/clase.service';
+import { MateriaDto, MateriaService } from '../../../services/materia.service';
 
-// Definimos una interfaz para las clases
 interface ClaseCreada {
   id: number;
   materiaId: number;
   nombreMateria: string;
-  dias: string[];        // <-- AHORA GUARDAMOS UN ARRAY DE DÍAS
-  fecha?: string;        // Opcional si es un solo día
+  dias: string[];
+  fecha?: string;
   horaInicio: string;
   horaFin: string;
   tipoClase: string;
@@ -27,63 +29,116 @@ interface ClaseCreada {
   imports: [CommonModule, FormsModule],
   templateUrl: './gestion-clases.html'
 })
-export class GestionClasesComponent implements OnInit {
+export class GestionClasesComponent implements OnInit, OnDestroy {
+  private STORAGE_DOCENTE_CLASES = 'sigac_docente_clases_v2';
+
   nuevaClase = {
     materiaId: 0,
     claseId: null as number | null,
     docenteId: 1,
-    diasSeleccionados: [] as string[], // <-- NUEVO: Array de días seleccionados
-    fecha: '', // <-- Opcional
-    horaInicio: '',
-    horaFin: '',
+    diasSeleccionados: [] as string[],
+    fecha: '',
+    horaInicio: '08:00',
+    horaFin: '10:00',
     tipoClase: 'Virtual' as 'Virtual' | 'Presencial',
     linkVirtual: '',
-    aplicacionVirtual: '',
+    aplicacionVirtual: 'Google Meet',
     edificioPresencial: '',
     aulaPresencial: '',
     pisoPresencial: ''
   };
 
-  materias = [
-    { id: 101, nombre: 'Cálculo Avanzado', docenteId: 1 }, // El ayudante/docente con ID 1
-    { id: 102, nombre: 'Mecánica Cuántica', docenteId: 2 }, // Otro docente
-    { id: 103, nombre: 'Redes Neuronales', docenteId: 1 }  // El ayudante/docente con ID 1
-  ];
-
+  materias: MateriaDto[] = [];
   clasesCreadas: ClaseCreada[] = [];
-
-  // Control del modal de asistencia
   claseAsistenciaId: number | null = null;
+  isLoading = false;
+  successMessage = '';
 
-  constructor(private route: ActivatedRoute) {}
+  private subs: Subscription[] = [];
+
+  constructor(
+    private route: ActivatedRoute,
+    private claseService: ClaseService,
+    private materiaService: MateriaService
+  ) {}
 
   ngOnInit() {
-    const docenteIdLogueado = 1;
+    const rawUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+    this.nuevaClase.docenteId = rawUserId ? parseInt(rawUserId, 10) : 1;
 
-    // Filtrar las materias para que solo muestre las que dicta este docente
-    this.materias = this.materias.filter(m => m.docenteId === docenteIdLogueado);
+    this.cargarClasesGuardadas();
 
-    // Leer los query params (el resto del código sigue igual)
+    this.subs.push(
+      this.materiaService.materias$.subscribe(list => {
+        this.materias = list;
+        if (list.length > 0 && !this.nuevaClase.materiaId) {
+          this.nuevaClase.materiaId = list[0].id;
+        }
+      })
+    );
+
     this.route.queryParams.subscribe(params => {
-      // Leer los días (vienen como string separado por comas)
       if (params['dias']) {
         this.nuevaClase.diasSeleccionados = params['dias'].split(',');
       }
-
-      // Leer las horas
       if (params['horaInicio'] && params['horaFin']) {
         this.nuevaClase.horaInicio = params['horaInicio'];
         this.nuevaClase.horaFin = params['horaFin'];
       }
-
-      // Seleccionar la primera materia por defecto si hay
-      if (this.materias.length > 0) {
-        this.nuevaClase.materiaId = this.materias[0].id;
-      }
     });
   }
 
-  // Método para alternar la selección de días (checkboxes)
+  ngOnDestroy() {
+    this.subs.forEach(s => s.unsubscribe());
+  }
+
+  private cargarClasesGuardadas() {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(this.STORAGE_DOCENTE_CLASES);
+        if (stored) {
+          this.clasesCreadas = JSON.parse(stored);
+          return;
+        }
+      } catch (e) {
+        console.warn('Error reading stored docente clases', e);
+      }
+    }
+
+    // Default inicial si no hay clases creadas
+    this.clasesCreadas = [
+      {
+        id: 1,
+        materiaId: 101,
+        nombreMateria: 'Cálculo Avanzado',
+        dias: ['Lunes', 'Miércoles'],
+        fecha: '2026-08-25',
+        horaInicio: '08:00',
+        horaFin: '10:00',
+        tipoClase: 'Presencial',
+        edificioPresencial: 'Edificio de Ingeniería',
+        aulaPresencial: 'Aula Magna 302',
+        pisoPresencial: 'Piso 3',
+        estudiantes: [
+          { id: 1, nombre: 'Alejandro García', presente: true },
+          { id: 2, nombre: 'María López', presente: true },
+          { id: 3, nombre: 'Carlos Ruiz', presente: false }
+        ]
+      }
+    ];
+    this.guardarEnStorage();
+  }
+
+  private guardarEnStorage() {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(this.STORAGE_DOCENTE_CLASES, JSON.stringify(this.clasesCreadas));
+      } catch (e) {
+        console.warn('Error saving docente clases', e);
+      }
+    }
+  }
+
   toggleDia(event: any) {
     const dia = event.target.value;
     if (event.target.checked) {
@@ -95,64 +150,75 @@ export class GestionClasesComponent implements OnInit {
     }
   }
 
-  // Guardar la nueva clase
   guardarClase() {
     if (this.nuevaClase.diasSeleccionados.length === 0) {
-      alert('Debes seleccionar al menos un día de la semana.');
+      alert('Debes seleccionar al menos un día de la semana para la clase.');
       return;
     }
 
-    console.log('Creando clase:', this.nuevaClase);
-    // Aquí iría el llamado al backend
+    const materiaObj = this.materiaService.getMateriaById(Number(this.nuevaClase.materiaId));
+    const nombreMat = materiaObj?.nombre || 'Materia';
 
-    // Simulación de guardado exitoso
-    this.clasesCreadas.push({
+    const fechaSesion = this.nuevaClase.fecha || new Date().toISOString().split('T')[0];
+
+    const estudiantesIniciales = materiaObj?.estudiantes?.map(e => ({
+      id: e.id,
+      nombre: e.nombre,
+      presente: false
+    })) || [
+      { id: 1, nombre: 'Alejandro García', presente: false },
+      { id: 2, nombre: 'María López', presente: false },
+      { id: 3, nombre: 'Carlos Ruiz', presente: false }
+    ];
+
+    const claseParaAgregar: ClaseCreada = {
       id: Date.now(),
-      materiaId: this.nuevaClase.materiaId,
-      nombreMateria: this.materias.find(m => m.id === this.nuevaClase.materiaId)?.nombre || 'Materia',
+      materiaId: Number(this.nuevaClase.materiaId),
+      nombreMateria: nombreMat,
       dias: [...this.nuevaClase.diasSeleccionados],
-      fecha: this.nuevaClase.fecha || undefined,
-      horaInicio: this.nuevaClase.horaInicio,
-      horaFin: this.nuevaClase.horaFin,
+      fecha: fechaSesion,
+      horaInicio: this.nuevaClase.horaInicio || '08:00',
+      horaFin: this.nuevaClase.horaFin || '10:00',
       tipoClase: this.nuevaClase.tipoClase,
       linkVirtual: this.nuevaClase.linkVirtual,
       aplicacionVirtual: this.nuevaClase.aplicacionVirtual,
       edificioPresencial: this.nuevaClase.edificioPresencial,
       aulaPresencial: this.nuevaClase.aulaPresencial,
       pisoPresencial: this.nuevaClase.pisoPresencial,
-      estudiantes: [
-        { id: 1, nombre: 'Alejandro García', presente: false },
-        { id: 2, nombre: 'María López', presente: false }
-      ]
-    });
-
-    // Resetear formulario
-    this.nuevaClase = {
-      materiaId: 0,
-      claseId: null,
-      docenteId: 1,
-      diasSeleccionados: [],
-      fecha: '',
-      horaInicio: '',
-      horaFin: '',
-      tipoClase: 'Virtual',
-      linkVirtual: '',
-      aplicacionVirtual: '',
-      edificioPresencial: '',
-      aulaPresencial: '',
-      pisoPresencial: ''
+      estudiantes: estudiantesIniciales
     };
-  }
 
-  // --- MÉTODOS PARA EL MODAL DE ASISTENCIA ---
+    this.clasesCreadas.unshift(claseParaAgregar);
+    this.guardarEnStorage();
+
+    this.claseService.createClaseSesion({
+      materiaId: Number(this.nuevaClase.materiaId),
+      claseId: this.nuevaClase.claseId ? Number(this.nuevaClase.claseId) : undefined,
+      docenteId: Number(this.nuevaClase.docenteId) || 1,
+      fecha: fechaSesion,
+      horaInicio: this.nuevaClase.horaInicio || '08:00',
+      horaFin: this.nuevaClase.horaFin || '10:00',
+      tipoClase: this.nuevaClase.tipoClase,
+      linkVirtual: this.nuevaClase.linkVirtual,
+      aplicacionVirtual: this.nuevaClase.aplicacionVirtual,
+      edificioPresencial: this.nuevaClase.edificioPresencial,
+      aulaPresencial: this.nuevaClase.aulaPresencial,
+      pisoPresencial: this.nuevaClase.pisoPresencial
+    }).subscribe();
+
+    this.successMessage = `¡Clase de ${nombreMat} configurada exitosamente!`;
+    setTimeout(() => this.successMessage = '', 4000);
+
+    // Resetear formulario manteniendo la materia
+    this.nuevaClase.diasSeleccionados = [];
+    this.nuevaClase.fecha = '';
+    this.nuevaClase.linkVirtual = '';
+    this.nuevaClase.edificioPresencial = '';
+    this.nuevaClase.aulaPresencial = '';
+  }
 
   abrirAsistencia(claseId: number) {
     this.claseAsistenciaId = claseId;
-    const clase = this.clasesCreadas.find(c => c.id === claseId);
-    if (clase) {
-      // Marcar a todos como presentes al abrir el modal
-      clase.estudiantes = clase.estudiantes.map(e => ({ ...e, presente: true }));
-    }
   }
 
   cerrarAsistencia() {
@@ -165,11 +231,16 @@ export class GestionClasesComponent implements OnInit {
       const estudiante = clase.estudiantes.find(e => e.id === estudianteId);
       if (estudiante) {
         estudiante.presente = !estudiante.presente;
+        this.guardarEnStorage();
+
+        this.claseService.registrarAsistencia(claseId, {
+          claseSesionId: claseId,
+          estudianteId: estudianteId,
+          presente: estudiante.presente
+        }).subscribe();
       }
     }
   }
-
-  // --- MÉTODOS AUXILIARES ---
 
   getClaseById(id: number): ClaseCreada | undefined {
     return this.clasesCreadas.find(c => c.id === id);
@@ -199,6 +270,5 @@ export class GestionClasesComponent implements OnInit {
     return Math.round((presentes / clasesDeMateria.length) * 100) + '%';
   }
 
-  // Exponer Math para usarlo en el HTML
   Math = Math;
 }
