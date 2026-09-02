@@ -42,14 +42,6 @@ export interface PersonaDto {
   providedIn: 'root'
 })
 export class AuthService {
-<<<<<<< HEAD
-=======
-  private loginUrl = `${API_BASE}/api/login/login`;
-  private registerUrl = `${API_BASE}/api/login/register`;
-  private personaUrl = `${API_BASE}/api/persona`;
-
-
->>>>>>> 2a01521b428953a8e18219a16df5623c42a6605c
   constructor(private http: HttpClient) {}
 
   private get loginUrl() { return `${getApiBase()}/api/Login/login`; }

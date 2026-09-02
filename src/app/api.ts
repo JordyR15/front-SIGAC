@@ -28,9 +28,3 @@ export function setApiBase(url: string): void {
 
 export const API_BASE = getApiBase();
 
-<<<<<<< HEAD
-=======
-  // Default to backend used in your curl examples
-  return 'http://localhost:5291';
-})();
->>>>>>> 2a01521b428953a8e18219a16df5623c42a6605c
