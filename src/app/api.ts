@@ -6,9 +6,11 @@ export function getApiBase(): string {
     const env = (window as any).__env__;
     if (env && env.API_BASE) return env.API_BASE.trim().replace(/\/+$/, '');
 
-    // Default when running locally in browser (e.g. IntelliJ / VSCode on localhost:4200 or :3000)
+    // En desarrollo, el Angular proxy expone /api en el mismo origen (localhost:3000),
+    // así evitamos CORS y redirects en preflight. Si se usa un backend externo, la
+    // URL se puede guardar manualmente en localStorage.
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://localhost:5291';
+      return '';
     }
   }
 

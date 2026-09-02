@@ -25,7 +25,7 @@ export class LoginComponent implements OnInit {
   constructor(private authService: AuthService, private router: Router) {}
 
   ngOnInit() {
-    this.currentBackendUrl = getApiBase();
+    this.currentBackendUrl = getApiBase() || 'http://localhost:3000/api';
     this.customBackendUrl = this.currentBackendUrl;
   }
 
@@ -48,8 +48,8 @@ export class LoginComponent implements OnInit {
   }
 
   restablecerBackendLocal() {
-    setApiBase('http://localhost:5291');
-    this.currentBackendUrl = getApiBase();
+    setApiBase('');
+    this.currentBackendUrl = 'http://localhost:3000/api';
     this.customBackendUrl = this.currentBackendUrl;
     this.showBackendConfig = false;
   }

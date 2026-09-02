@@ -44,9 +44,20 @@ export interface PersonaDto {
 export class AuthService {
   constructor(private http: HttpClient) {}
 
-  private get loginUrl() { return `${getApiBase()}/api/Login/login`; }
-  private get registerUrl() { return `${getApiBase()}/api/Login/register`; }
-  private get personaUrl() { return `${getApiBase()}/api/persona`; }
+  private get loginUrl() {
+    const base = getApiBase();
+    return base ? `${base}/api/Login/login` : '/api/Login/login';
+  }
+
+  private get registerUrl() {
+    const base = getApiBase();
+    return base ? `${base}/api/Login/register` : '/api/Login/register';
+  }
+
+  private get personaUrl() {
+    const base = getApiBase();
+    return base ? `${base}/api/persona` : '/api/persona';
+  }
 
   login(credentials: LoginDto): Observable<UserDto> {
     return this.http.post<UserDto>(this.loginUrl, credentials).pipe(
