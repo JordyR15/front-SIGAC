@@ -164,4 +164,16 @@ export class EvaluacionTribunalComponent implements OnInit {
       }
     });
   }
+
+  finalizarYaprobarAyudantia(): void {
+    this.mensajeExito = 'Ayudantía finalizada y aprobada por el jurado.';
+    this.mensajeError = '';
+    if (this.presentacionSeleccionada) {
+      this.presentacionSeleccionada.estado = 'Aprobada';
+    }
+    if (this.resultadoActual) {
+      this.resultadoActual.estadoFinal = 'Aprobado';
+    }
+    this.tabActiva = 'resultado';
+  }
 }

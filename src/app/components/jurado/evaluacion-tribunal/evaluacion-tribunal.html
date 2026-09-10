@@ -326,6 +326,14 @@
               <i class="fa-solid fa-spinner fa-spin" *ngIf="isSubmitting"></i>
               <span>{{ isSubmitting ? 'Registrando en Acta...' : 'Emitir y Firmar Calificación' }}</span>
             </button>
+            <button
+              type="button"
+              (click)="finalizarYaprobarAyudantia()"
+              class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center gap-2"
+            >
+              <i class="fa-solid fa-check-double"></i>
+              <span>Finalizar y Aprobar Ayudantía</span>
+            </button>
           </div>
 
         </form>

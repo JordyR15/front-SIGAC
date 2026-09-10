@@ -222,8 +222,21 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
     this.coordinadorService.getSolicitudesAyudantia().subscribe({
       next: (data) => {
         this.isLoadingSolicitudes = false;
+        const pendientesLocales = JSON.parse(localStorage.getItem('sigac_convocatorias_pendientes') || '[]');
+        const solicitudesLocales = pendientesLocales.length > 0 ? pendientesLocales.map((item: any) => ({
+          ayudantiaId: Number(item.id || item.ayudantiaId || Date.now()),
+          estudianteId: Number(item.estudianteId || 1),
+          nombreEstudiante: item.nombreEstudiante || 'Estudiante',
+          catedraId: Number(item.catedraId || item.materiaId || item.id || 101),
+          nombreCatedra: item.nombreMateria || item.nombreCatedra || 'Cátedra sin nombre',
+          estado: item.estado || 'Pendiente',
+          promedio: 4.8,
+          fecha: item.fecha || new Date().toISOString().split('T')[0]
+        })) : [];
         if (data && data.length > 0) {
           this.solicitudes = data;
+        } else if (solicitudesLocales.length > 0) {
+          this.solicitudes = solicitudesLocales;
         } else {
           this.solicitudes = this.obtenerSolicitudesDemo();
         }
@@ -299,13 +312,27 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
 
   aprobarSolicitud(s: SolicitudAyudantiaDto): void {
     s.estado = 'Asignada';
+    const publicadas = JSON.parse(localStorage.getItem('sigac_convocatorias_publicadas') || '[]');
+    const yaExiste = publicadas.some((item: any) => Number(item.ayudantiaId || item.id) === Number(s.ayudantiaId) || item.nombreCatedra === s.nombreCatedra);
+    if (!yaExiste) {
+      publicadas.unshift({
+        ayudantiaId: s.ayudantiaId,
+        id: s.ayudantiaId,
+        nombreEstudiante: s.nombreEstudiante,
+        nombreCatedra: s.nombreCatedra,
+        catedraId: s.catedraId,
+        estado: 'Publicada',
+        fecha: s.fecha || new Date().toISOString().split('T')[0]
+      });
+      localStorage.setItem('sigac_convocatorias_publicadas', JSON.stringify(publicadas));
+    }
     this.coordinadorService.asignarAyudante({ ayudantiaId: s.ayudantiaId }).subscribe({
       next: () => {
-        this.mostrarMensajeExito(`Solicitud de ${s.nombreEstudiante} para "${s.nombreCatedra}" aprobada exitosamente.`);
+        this.mostrarMensajeExito(`Solicitud de ${s.nombreEstudiante} para "${s.nombreCatedra}" aprobada y publicada.`);
         this.actualizarMetricasReporte();
       },
       error: () => {
-        this.mostrarMensajeExito(`Solicitud de ${s.nombreEstudiante} marcada como aprobada.`);
+        this.mostrarMensajeExito(`Solicitud de ${s.nombreEstudiante} marcada como aprobada y publicada.`);
         this.actualizarMetricasReporte();
       }
     });

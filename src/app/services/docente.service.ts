@@ -130,6 +130,18 @@ export class DocenteService {
     );
   }
 
+  getCronogramaByCatedra(catedraId: number): Observable<CronogramaActividadDto[]> {
+    return this.http.get<CronogramaActividadDto[]>(`${getApiBase()}/api/Cronograma/${catedraId}`).pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  crearCronogramaActividad(dto: Omit<CronogramaActividadDto, 'id'>): Observable<CronogramaActividadDto> {
+    return this.http.post<CronogramaActividadDto>(`${getApiBase()}/api/Cronograma`, dto).pipe(
+      catchError(() => of({ id: Date.now(), ...dto }))
+    );
+  }
+
   reprogramarCronograma(catedraId: number, dto: CronogramaActividadDto): Observable<CronogramaActividadDto> {
     return this.http.put<CronogramaActividadDto>(`${this.apiUrl}/catedras/${catedraId}/cronograma`, dto).pipe(
       catchError(() => of(dto))

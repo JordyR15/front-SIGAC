@@ -35,19 +35,19 @@ function checkBackend(host, port) {
 
 const PROXY_CONFIG = {
   '/api': {
-    target: 'http://127.0.0.1:5291',
+    target: 'http://127.0.0.1:5001',
     secure: false,
     changeOrigin: true,
     bypass: async (req, res) => {
-      const isUp = await checkBackend('127.0.0.1', 5291);
+      const isUp = await checkBackend('127.0.0.1', 5001);
       if (!isUp) {
-        // Backend no está en ejecución en 127.0.0.1:5291.
+        // Backend no está en ejecución en 127.0.0.1:5001.
         // Respondemos 503 limpio en formato JSON para que los servicios de Angular
-        // ejecuten su fallback local sin emitir errores de conexión ECONNREFUSED en Vite.
+        // ejecuten su fallback local sin emitir errores de conexión ECONNREFUSED.
         res.writeHead(503, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           status: 503,
-          message: 'Backend local no disponible en 127.0.0.1:5291. Modo local activo.',
+          message: 'Backend local no disponible en 127.0.0.1:5001. Modo local activo.',
           offline: true
         }));
         return false;

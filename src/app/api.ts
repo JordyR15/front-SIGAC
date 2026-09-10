@@ -1,6 +1,6 @@
 import { environment } from '../environments/environment';
 
-export const DEFAULT_API_BASE = (environment.apiUrl || 'http://localhost:3000/api').replace(/\/api\/?$/, '');
+export const DEFAULT_API_BASE = (environment.apiUrl || 'http://localhost:5001/api').replace(/\/api\/?$/, '');
 
 export function isModoAutonomo(): boolean {
   if (typeof window !== 'undefined') {
@@ -18,9 +18,9 @@ export function getApiBase(): string {
       if (clean === 'OFFLINE' || clean === 'MOCK' || clean === 'SIN_BACKEND') {
         return '';
       }
-      // Si existía configuración residual anterior a puertos 7050 o 5291, migrar al backend activo (puerto 3000)
-      if (clean.includes(':7050') || clean.includes(':5291')) {
-        const corregido = clean.replace(/:[0-9]+/, ':3000').replace('https://', 'http://');
+      // Solo se acepta el backend principal en puerto 5001.
+      if (clean.includes(':7050') || clean.includes(':5291') || clean.includes(':4200') || clean.includes(':3000')) {
+        const corregido = clean.replace(/:[0-9]+/, ':5001').replace('https://', 'http://');
         localStorage.setItem('API_BASE', corregido);
         return corregido;
       }
@@ -33,7 +33,7 @@ export function getApiBase(): string {
       return env.API_BASE.trim().replace(/\/+$/, '');
     }
 
-    // Valor predeterminado del backend Kestrel en puerto 3000
+    // Valor predeterminado del backend en puerto 5001
     return DEFAULT_API_BASE;
   }
 

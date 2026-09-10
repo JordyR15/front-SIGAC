@@ -1,12 +1,15 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { getApiBase } from '../../../api';
 import { MateriaDto, MateriaService, RecursoDto, ActividadDto, RegistroAsistenciaDto, AsistenteRegistro } from '../../../services/materia.service';
 import { DocenteService, ActividadAyudantiaDto } from '../../../services/docente.service';
 import { EstudianteService, BitacoraItemDto } from '../../../services/estudiante.service';
 import { DocumentosDescargaService } from '../../../services/documentos-descarga.service';
+import { AuthService } from '../../../services/auth.service';
 
 export interface SesionHorarioAyudante {
   id: number;
@@ -124,7 +127,9 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     private estudianteService: EstudianteService,
     private router: Router,
     private route: ActivatedRoute,
-    private descargaService: DocumentosDescargaService
+    private descargaService: DocumentosDescargaService,
+    private authService: AuthService,
+    private http: HttpClient
   ) {}
 
   ngOnInit() {
@@ -138,9 +143,12 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
           }
           this.seleccionarMateria(this.materiaSeleccionadaId);
         }
+        this.sincronizarMateriaAprobadaDesdePublicacion();
       })
     );
     this.materiaService.refreshMaterias().subscribe();
+    this.cargarClasesAyudante();
+    this.sincronizarMateriaAprobadaDesdePublicacion();
 
     // 2. Suscribirse a planificaciones/sílabo
     this.subs.push(
@@ -184,6 +192,74 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.subs.forEach(s => s.unsubscribe());
+  }
+
+  private cargarClasesAyudante(): void {
+    const base = getApiBase();
+    const url = `${base ? base : ''}/api/Ayudante/clases`;
+    this.http.get<any[]>(url).subscribe({
+      next: (clases) => {
+        const lista = Array.isArray(clases) ? clases : (clases && Array.isArray((clases as any).items) ? (clases as any).items : []);
+        if (lista.length === 0) {
+          return;
+        }
+
+        const mapped: MateriaDto[] = lista.map((item: any, index: number) => ({
+          id: Number(item.id ?? item.materiaId ?? item.catedraId ?? item.claseId ?? index + 1),
+          nombre: item.nombre ?? item.nombreMateria ?? item.nombreCatedra ?? item.materia ?? `Cátedra ${index + 1}`,
+          codigo: item.codigo ?? item.codigoMateria ?? item.sigla ?? `AY-${index + 1}`,
+          descripcion: item.descripcion ?? item.descripcionMateria ?? item.detalle ?? 'Cátedra asignada al ayudante.',
+          docente: item.docente ?? item.nombreDocente ?? item.docenteTitular ?? item.profesor ?? 'Docente Titular',
+          docenteResponsableId: Number(item.docenteResponsableId ?? item.docenteId ?? 1),
+          semestre: item.semestre ?? item.periodo ?? '2026-2',
+          grupo: item.grupo ?? item.paralelo ?? 'Grupo A',
+          claseId: Number(item.claseId ?? item.id ?? item.catedraId ?? index + 1),
+          claseNombre: item.claseNombre ?? item.nombreClase ?? item.clase ?? 'Ingeniería de Software',
+          estudiantes: Array.isArray(item.estudiantes) ? item.estudiantes : [],
+          ayudantes: Array.isArray(item.ayudantes) ? item.ayudantes : [localStorage.getItem('username') || 'Ayudante']
+        }));
+
+        this.materias = mapped;
+        this.materiaSeleccionadaId = mapped[0].id;
+        this.seleccionarMateria(mapped[0].id);
+      },
+      error: () => {
+        // Si el backend no responde, se mantiene el estado local para la demo.
+      }
+    });
+  }
+
+  private sincronizarMateriaAprobadaDesdePublicacion(): void {
+    const rol = localStorage.getItem('rol');
+    if (rol !== 'Ayudante' && !this.authService.hasRole('Ayudante')) {
+      return;
+    }
+
+    try {
+      const publicadas = JSON.parse(localStorage.getItem('sigac_convocatorias_publicadas') || '[]');
+      const materiaAprobada = publicadas[0];
+      if (!materiaAprobada || !materiaAprobada.nombreCatedra) {
+        return;
+      }
+
+      const existe = this.materias.some(m => Number(m.id) === Number(materiaAprobada.catedraId || materiaAprobada.materiaId || 101));
+      if (!existe) {
+        const nuevaMateria: MateriaDto = {
+          id: Number(materiaAprobada.catedraId || materiaAprobada.materiaId || 101),
+          nombre: materiaAprobada.nombreCatedra,
+          codigo: `AY-${Date.now().toString().slice(-4)}`,
+          docente: 'Docente Titular',
+          semestre: '2026-2',
+          descripcion: 'Materia aprobada oficialmente para ayudantía de cátedra.',
+          ayudantes: ['Ayudante de Cátedra']
+        };
+        this.materias = [nuevaMateria, ...this.materias];
+        this.materiaSeleccionadaId = nuevaMateria.id;
+        this.seleccionarMateria(nuevaMateria.id);
+      }
+    } catch (e) {
+      console.warn('No se pudieron sincronizar las materias aprobadas del ayudante.', e);
+    }
   }
 
   // ==================== NAVEGACIÓN Y SELECCIÓN ====================

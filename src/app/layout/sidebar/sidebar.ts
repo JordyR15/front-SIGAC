@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
@@ -12,6 +12,7 @@ import { AuthService } from '../../services/auth.service';
 })
 export class SidebarComponent implements OnInit {
   public authService = inject(AuthService);
+  private router = inject(Router);
 
   @Input() menuAbierto: boolean = false;
 
@@ -39,6 +40,15 @@ export class SidebarComponent implements OnInit {
     }
   }
 
+  private normalizeRol(valor: string | null | undefined): string {
+    return (valor || '').trim().toLowerCase();
+  }
+
+  esAyudanteRol(): boolean {
+    const current = this.normalizeRol(this.authService.getRole() || this.authService.currentUser?.rol || this.rolPrincipal);
+    return current.includes('ayudante') || this.hasRole('Ayudante') || this.hasRole('AYUDANTE') || this.normalizeRol(this.rolPrincipal).includes('ayudante');
+  }
+
   hasRole(role: string): boolean {
     return this.authService.hasRole(role);
   }
@@ -49,5 +59,10 @@ export class SidebarComponent implements OnInit {
 
   cerrarMenu(): void {
     this.menuAbierto = false;
+  }
+
+  cerrarSesion(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
   }
 }

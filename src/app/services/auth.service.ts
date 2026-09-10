@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+import { catchError, map, tap } from 'rxjs/operators';
 import { API_BASE, getApiBase } from '../api';
 
 export interface LoginDto {
@@ -15,7 +15,10 @@ export interface UserDto {
   id: number;
   username: string;
   token: string;
+  accessToken?: string;
+  access_token?: string;
   rol?: string;
+  role?: string;
   roles?: string[];
   Roles?: string[];
   nombre?: string;
@@ -65,149 +68,78 @@ export class AuthService {
     return base ? `${base}/api/Persona` : '/api/Persona';
   }
 
+  private guardarSesionDesdeRespuesta(res: any, fallbackUsername?: string): void {
+    const token = res?.token || res?.Token || res?.accessToken || res?.access_token || res?.AccessToken || null;
+    if (token) {
+      localStorage.setItem('token', token);
+      localStorage.setItem('accessToken', token);
+    }
+
+    const rolesArray: string[] = res?.roles || res?.Roles || (res?.rol ? [res.rol] : res?.Rol ? [res.Rol] : []);
+    const rolPrincipal = res?.rol || res?.Rol || (rolesArray.length > 0 ? rolesArray[0] : 'Estudiante');
+    localStorage.setItem('rol', rolPrincipal);
+    if (rolesArray.length > 0) {
+      localStorage.setItem('roles', JSON.stringify(rolesArray));
+    }
+
+    const username = res?.username || res?.Username || fallbackUsername || 'usuario';
+    const estudianteId = res?.estudianteId ?? res?.EstudianteId;
+    const personaId = res?.personaId ?? res?.PersonaId;
+    const id = estudianteId ?? res?.id ?? res?.Id ?? res?.userId ?? res?.UserId ?? personaId;
+    const nombre = res?.nombre || res?.Nombre || '';
+    const apellido = res?.apellido || res?.Apellido || '';
+    const correo = res?.correo || res?.Correo || res?.email || res?.Email || (fallbackUsername && fallbackUsername.includes('@') ? fallbackUsername : `${fallbackUsername || username}@uteq.edu.ec`);
+
+    localStorage.setItem('username', username);
+    if (id !== undefined && id !== null) {
+      localStorage.setItem('userId', String(id));
+    }
+    if (estudianteId !== undefined && estudianteId !== null) {
+      localStorage.setItem('estudianteId', String(estudianteId));
+    } else if ((rolPrincipal === 'Estudiante' || rolPrincipal === 'Ayudante') && id && Number(id) !== 1) {
+      localStorage.setItem('estudianteId', String(id));
+    }
+    if (nombre) localStorage.setItem('nombre', nombre);
+    if (apellido) localStorage.setItem('apellido', apellido);
+    if (correo) localStorage.setItem('correo', correo);
+  }
+
   login(credentials: LoginDto): Observable<UserDto> {
-    // Limpiar datos residuales de sesiones previas para garantizar integridad
     this.limpiarDatosResidualesSesion();
 
     const rawId = (credentials.username || credentials.email || credentials.correo || '').trim();
-    const isEmail = rawId.includes('@');
 
-    // El backend ASP.NET Core acepta inicio de sesión tanto con nombre de usuario como con correo institucional
     const payload = {
       username: rawId,
-      email: isEmail ? rawId : (credentials.email || rawId),
-      correo: isEmail ? rawId : (credentials.correo || rawId),
       password: credentials.password
     };
 
     return this.http.post<any>(this.loginUrl, payload).pipe(
       tap((res: any) => {
-        if (res && (res.token || res.Token)) {
-          const token = res.token || res.Token;
-          localStorage.setItem('token', token);
-
-          const rolesArray: string[] = res.roles || res.Roles || (res.rol ? [res.rol] : res.Rol ? [res.Rol] : []);
-          const rolPrincipal = res.rol || res.Rol || (rolesArray.length > 0 ? rolesArray[0] : 'Estudiante');
-          localStorage.setItem('rol', rolPrincipal);
-          if (rolesArray.length > 0) {
-            localStorage.setItem('roles', JSON.stringify(rolesArray));
-          }
-
-          const username = res.username || res.Username || rawId;
-          const estudianteId = res.estudianteId ?? res.EstudianteId;
-          const personaId = res.personaId ?? res.PersonaId;
-          const id = estudianteId ?? res.id ?? res.Id ?? res.userId ?? res.UserId ?? personaId;
-          const nombre = res.nombre || res.Nombre || '';
-          const apellido = res.apellido || res.Apellido || '';
-          const correo = res.correo || res.Correo || res.email || res.Email || (isEmail ? rawId : `${rawId}@uteq.edu.ec`);
-
-          localStorage.setItem('username', username);
-          if (id !== undefined && id !== null) {
-            localStorage.setItem('userId', id.toString());
-          }
-          if (estudianteId !== undefined && estudianteId !== null) {
-            localStorage.setItem('estudianteId', estudianteId.toString());
-          } else if ((rolPrincipal === 'Estudiante' || rolPrincipal === 'Ayudante') && id && Number(id) !== 1) {
-            localStorage.setItem('estudianteId', id.toString());
-          }
-          if (nombre) localStorage.setItem('nombre', nombre);
-          if (apellido) localStorage.setItem('apellido', apellido);
-          if (correo) localStorage.setItem('correo', correo);
+        if (res && (res.token || res.Token || res.accessToken || res.AccessToken)) {
+          this.guardarSesionDesdeRespuesta(res, rawId);
         }
       }),
-      catchError((err) => {
-        // Si el backend rechazó explícitamente las credenciales (401/403/400), propagar el error a la interfaz
-        if (err.status === 401 || err.status === 403) {
-          return throwError(() => err);
-        }
-
-        console.warn('Servidor backend offline o no alcanzable. Verificando cuentas de prueba oficiales...', rawId);
-
-        // Mapeo de cuentas oficiales de prueba en backend para desarrollo offline
-        const u = rawId.toLowerCase();
-        let rol = 'Estudiante';
-        let roles = ['Estudiante'];
-        let nombre = 'Estudiante';
-        let apellido = 'Prueba';
-        let id = 1;
-
-        if (u === 'admin' || u === 'admin@uteq.edu.ec') {
-          rol = 'Administrador';
-          roles = ['Administrador'];
-          nombre = 'Administrador';
-          apellido = 'del Sistema';
-          id = 100;
-        } else if (u === 'coordinador' || u === 'coordinador@uteq.edu.ec') {
-          rol = 'Coordinador';
-          roles = ['Docente', 'Coordinador'];
-          nombre = 'Coordinador';
-          apellido = 'de Carrera';
-          id = 101;
-        } else if (u === 'docente' || u === 'docente@uteq.edu.ec') {
-          rol = 'Docente';
-          roles = ['Docente'];
-          nombre = 'Docente';
-          apellido = 'Titular';
-          id = 102;
-        } else if (u === 'estudiante' || u === 'estudiante@uteq.edu.ec') {
-          rol = 'Estudiante';
-          roles = ['Estudiante'];
-          nombre = 'Alejandro';
-          apellido = 'García';
-          id = 103;
-        } else if (u === 'ayudante' || u === 'ayudante@uteq.edu.ec') {
-          rol = 'Ayudante';
-          roles = ['Estudiante', 'Ayudante'];
-          nombre = 'Ayudante';
-          apellido = 'de Cátedra';
-          id = 104;
-        } else if (u === 'jurado' || u === 'jurado@uteq.edu.ec') {
-          rol = 'Jurado';
-          roles = ['Docente', 'Tribunal', 'Jurado'];
-          nombre = 'Miembro';
-          apellido = 'Tribunal';
-          id = 105;
-        } else if (u === 'decano' || u === 'decano@uteq.edu.ec') {
-          rol = 'Decano';
-          roles = ['Decano', 'Tribunal', 'Jurado'];
-          nombre = 'Decano';
-          apellido = 'de Facultad';
-          id = 106;
-        } else if (u.includes('adm')) {
-          rol = 'Administrador';
-          roles = ['Administrador'];
-        } else if (u.includes('coord')) {
-          rol = 'Coordinador';
-          roles = ['Docente', 'Coordinador'];
-        } else if (u.includes('doc')) {
-          rol = 'Docente';
-          roles = ['Docente'];
-        } else if (u.includes('ayu')) {
-          rol = 'Ayudante';
-          roles = ['Estudiante', 'Ayudante'];
-        }
-
-        const mockUser: UserDto = {
-          id,
-          username: rawId,
-          token: 'jwt-uteq-' + Date.now(),
-          rol,
-          roles,
-          nombre,
-          apellido,
-          correo: isEmail ? rawId : `${rawId}@uteq.edu.ec`
+      map((res: any) => {
+        const user: UserDto = {
+          id: Number(res?.id ?? res?.Id ?? 0),
+          username: String(res?.username ?? res?.Username ?? rawId),
+          token: String(res?.token ?? res?.Token ?? res?.accessToken ?? res?.access_token ?? ''),
+          rol: String(res?.rol ?? res?.Rol ?? res?.role ?? res?.Role ?? 'Usuario'),
+          roles: Array.isArray(res?.roles) ? res.roles : (Array.isArray(res?.Roles) ? res.Roles : []),
+          nombre: String(res?.nombre ?? res?.Nombre ?? ''),
+          apellido: String(res?.apellido ?? res?.Apellido ?? ''),
+          correo: String(res?.correo ?? res?.Correo ?? res?.email ?? res?.Email ?? rawId)
         };
 
-        localStorage.setItem('token', mockUser.token);
-        localStorage.setItem('rol', rol);
-        localStorage.setItem('roles', JSON.stringify(roles));
-        localStorage.setItem('username', mockUser.username);
-        localStorage.setItem('userId', mockUser.id.toString());
-        localStorage.setItem('nombre', mockUser.nombre || '');
-        localStorage.setItem('apellido', mockUser.apellido || '');
-        localStorage.setItem('correo', mockUser.correo || '');
+        if (!user.token) {
+          throw new Error('No se recibió token JWT válido del backend.');
+        }
 
-        return of(mockUser);
+        return user;
+      }),
+      catchError((err) => {
+        return throwError(() => err);
       })
     );
   }
@@ -217,17 +149,13 @@ export class AuthService {
    * Solicitar código o enlace de recuperación con { email: string }
    */
   forgotPassword(email: string): Observable<any> {
-    const base = getApiBase();
-    const primaryUrl = base ? `${base}/api/Login/forgot-password` : '/api/Login/forgot-password';
-    const altUrl = base ? `${base}/api/Login/recuperar-password` : '/api/Login/recuperar-password';
+   const base = getApiBase();
+   const primaryUrl = base ? `${base}/api/Login/forgot-password` : '/api/Login/forgot-password';
+   const altUrl = base ? `${base}/api/Login/recuperar-password` : '/api/Login/recuperar-password';
 
-    return this.http.post(primaryUrl, { email }).pipe(
-      catchError(() => {
-        return this.http.post(altUrl, { email, correo: email }).pipe(
-          catchError(() => of({ mensaje: 'Instrucciones enviadas exitosamente si el correo está registrado.', success: true }))
-        );
-      })
-    );
+   return this.http.post(primaryUrl, { email }).pipe(
+     catchError(() => this.http.post(altUrl, { email, correo: email }))
+   );
   }
 
   /**
@@ -235,88 +163,47 @@ export class AuthService {
    * Restablecer clave con { email: string, token: string, newPassword: string }
    */
   resetPassword(payload: { email: string; token: string; newPassword: string }): Observable<any> {
-    const base = getApiBase();
-    const url = base ? `${base}/api/Login/reset-password` : '/api/Login/reset-password';
-    return this.http.post(url, payload).pipe(
-      catchError((err) => {
-        if (err.status === 400 || err.status === 404) {
-          return throwError(() => err);
-        }
-        return of({ mensaje: 'Contraseña restablecida exitosamente.', success: true });
-      })
-    );
+   const base = getApiBase();
+   const url = base ? `${base}/api/Login/reset-password` : '/api/Login/reset-password';
+   return this.http.post(url, payload);
   }
 
 
   register(dto: RegisterDto): Observable<UserDto> {
-    return this.http.post<UserDto>(this.registerUrl, dto).pipe(
-      tap((response: UserDto) => {
-        if (response && response.token) {
-          localStorage.setItem('token', response.token);
-          localStorage.setItem('rol', response.rol || '');
-          localStorage.setItem('username', response.username);
-          localStorage.setItem('userId', response.id ? response.id.toString() : '');
-          if (response.nombre) localStorage.setItem('nombre', response.nombre);
-          if (response.apellido) localStorage.setItem('apellido', response.apellido);
-          if (response.correo) localStorage.setItem('correo', response.correo);
-        }
-      }),
-      catchError(() => {
-        const mockUser: UserDto = {
-          id: Date.now(),
-          username: dto.username,
-          token: 'demo-token-' + Date.now(),
-          rol: dto.rol || 'Estudiante',
-          nombre: dto.nombre,
-          apellido: dto.apellido,
-          correo: dto.correo
-        };
-        localStorage.setItem('token', mockUser.token);
-        localStorage.setItem('rol', mockUser.rol || '');
-        localStorage.setItem('username', mockUser.username);
-        localStorage.setItem('userId', mockUser.id.toString());
-        localStorage.setItem('nombre', mockUser.nombre || '');
-        localStorage.setItem('apellido', mockUser.apellido || '');
-        localStorage.setItem('correo', mockUser.correo || '');
-        return of(mockUser);
-      })
-    );
+   return this.http.post<UserDto>(this.registerUrl, dto).pipe(
+     tap((response: UserDto) => {
+       if (response && (response.token || response.accessToken || response.access_token)) {
+         const token = response.token || response.accessToken || response.access_token || '';
+         if (token) {
+           localStorage.setItem('token', token);
+           localStorage.setItem('accessToken', token);
+         }
+         localStorage.setItem('rol', response.rol || '');
+         localStorage.setItem('username', response.username);
+         localStorage.setItem('userId', response.id ? response.id.toString() : '');
+         if (response.nombre) localStorage.setItem('nombre', response.nombre);
+         if (response.apellido) localStorage.setItem('apellido', response.apellido);
+         if (response.correo) localStorage.setItem('correo', response.correo);
+       }
+     })
+   );
   }
 
   getPersona(): Observable<PersonaDto> {
-    return this.http.get<PersonaDto>(this.personaUrl).pipe(
-      catchError(() => of({
-        id: this.getUserId() || 1,
-        nombre: localStorage.getItem('nombre') || 'Carlos',
-        apellido: localStorage.getItem('apellido') || 'Mendoza',
-        correo: localStorage.getItem('correo') || 'carlos.mendoza@universidad.edu',
-        rol: this.getRol() || 'Estudiante',
-        telefono: '+593 99 123 4567',
-        direccion: 'Campus Universitario, Pabellón A',
-        biografia: 'Estudiante activo en la carrera de Ingeniería de Software.'
-      }))
-    );
+   return this.http.get<PersonaDto>(this.personaUrl);
   }
 
   updatePersona(persona: Partial<PersonaDto>): Observable<PersonaDto> {
-    if (persona.nombre) localStorage.setItem('nombre', persona.nombre);
-    if (persona.apellido) localStorage.setItem('apellido', persona.apellido);
-    if (persona.correo) localStorage.setItem('correo', persona.correo);
+   if (persona.nombre) localStorage.setItem('nombre', persona.nombre);
+   if (persona.apellido) localStorage.setItem('apellido', persona.apellido);
+   if (persona.correo) localStorage.setItem('correo', persona.correo);
 
-    return this.http.put<PersonaDto>(this.personaUrl, persona).pipe(
-      catchError(() => of({
-        id: this.getUserId() || 1,
-        nombre: localStorage.getItem('nombre') || 'Carlos',
-        apellido: localStorage.getItem('apellido') || 'Mendoza',
-        correo: localStorage.getItem('correo') || 'carlos.mendoza@universidad.edu',
-        rol: this.getRol() || 'Estudiante',
-        ...persona
-      } as PersonaDto))
-    );
+   return this.http.put<PersonaDto>(this.personaUrl, persona);
   }
 
   logout(): void {
     localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('rol');
     localStorage.removeItem('roles');
     localStorage.removeItem('username');
@@ -325,6 +212,18 @@ export class AuthService {
     localStorage.removeItem('nombre');
     localStorage.removeItem('apellido');
     localStorage.removeItem('correo');
+
+    const llavesSesion = [
+      'sigac_convocatorias_pendientes',
+      'sigac_convocatorias_publicadas',
+      'sigac_ayudantias_publicadas',
+      'sigac_postulaciones_v2',
+      'sigac_bitacoras_v2'
+    ];
+    llavesSesion.forEach(k => localStorage.removeItem(k));
+
+    // No eliminamos las clases/materias creadas ni los docentes persistidos del sistema,
+    // porque esas son entidades de dominio y deben seguir visibles tras logout/re-login.
     this.limpiarDatosResidualesSesion();
   }
 
@@ -334,19 +233,16 @@ export class AuthService {
   limpiarDatosResidualesSesion(): void {
     if (typeof window === 'undefined') return;
     const llavesResiduales = [
-      'sigac_materias_v2',
       'sigac_estudiante_materias_real',
       'sigac_recursos_v2',
       'sigac_actividades_v2',
       'sigac_asistencias_v2',
       'sigac_temas_v2',
-      'sigac_clases_v2',
       'sigac_sesiones_v2',
       'sigac_planificaciones_v2',
       'sigac_ocupaciones_v2',
       'sigac_postulaciones_v2',
-      'sigac_bitacoras_v2',
-      'sigac_docente_clases_v2'
+      'sigac_bitacoras_v2'
     ];
 
     llavesResiduales.forEach(k => {
@@ -371,12 +267,77 @@ export class AuthService {
     } catch {}
   }
 
+  private decodeJwtPayload(token: string): any | null {
+    if (!token || !token.includes('.')) return null;
+    try {
+      const payload = token.split('.')[1];
+      if (!payload) return null;
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.length % 4 === 0 ? normalized : normalized + '='.repeat(4 - (normalized.length % 4));
+      const decoded = atob(padded);
+      return JSON.parse(decodeURIComponent(
+        decoded.split('').map(c => `%${('00' + c.charCodeAt(0).toString(16)).slice(-2)}`).join('')
+      ));
+    } catch {
+      return null;
+    }
+  }
+
+  isTokenValid(): boolean {
+    const token = this.getToken();
+    if (!token) return false;
+
+    const payload = this.decodeJwtPayload(token);
+    if (!payload) {
+      this.logout();
+      return false;
+    }
+
+    const exp = Number(payload.exp);
+    if (Number.isFinite(exp) && Date.now() >= exp * 1000) {
+      this.logout();
+      return false;
+    }
+
+    const nbf = Number(payload.nbf);
+    if (Number.isFinite(nbf) && Date.now() < nbf * 1000) {
+      this.logout();
+      return false;
+    }
+
+    const roleClaims = payload.role || payload.roles || payload.Roles || payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+    if (roleClaims === undefined && !localStorage.getItem('roles') && !localStorage.getItem('rol')) {
+      this.logout();
+      return false;
+    }
+
+    return true;
+  }
+
   getToken(): string | null {
-    return localStorage.getItem('token');
+    return localStorage.getItem('token') || localStorage.getItem('accessToken');
+  }
+
+  getAccessToken(): string | null {
+    return this.getToken();
   }
 
   getRol(): string | null {
     return localStorage.getItem('rol');
+  }
+
+  getRole(): string | null {
+   const directRole = this.getRol();
+   if (directRole) return directRole;
+   const storedRoles = localStorage.getItem('roles');
+   if (!storedRoles) return null;
+   try {
+     const parsed = JSON.parse(storedRoles);
+     if (Array.isArray(parsed) && parsed.length > 0) {
+       return String(parsed[0]).trim();
+     }
+   } catch {}
+   return storedRoles.split(/[;,|]/)[0]?.trim() || null;
   }
 
   /**
@@ -389,20 +350,15 @@ export class AuthService {
   getRoles(): string[] {
     const rolesSet = new Set<string>();
 
+    if (!this.isTokenValid()) {
+      return [];
+    }
+
     // 1. Intentar decodificar claims del token JWT
     const token = this.getToken();
     if (token && token.includes('.')) {
-      try {
-        const payloadBase64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(
-          atob(payloadBase64)
-            .split('')
-            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
-        );
-        const parsed = JSON.parse(jsonPayload);
-
-        // Claims comunes en .NET Web API
+      const parsed = this.decodeJwtPayload(token);
+      if (parsed) {
         const msRoleClaim = parsed['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
         const directRole = parsed['role'] || parsed['roles'] || parsed['Roles'];
 
@@ -417,8 +373,6 @@ export class AuthService {
         } else if (typeof directRole === 'string') {
           rolesSet.add(directRole.trim());
         }
-      } catch (e) {
-        // En tokens simulados o no estándar, continuar con almacenamiento local
       }
     }
 
@@ -441,7 +395,6 @@ export class AuthService {
       mainRol.split(/[,;/|]+/).forEach(r => r && rolesSet.add(r.trim()));
     }
 
-    // Si no hay ninguno, retornar vacío
     return Array.from(rolesSet);
   }
 
@@ -475,7 +428,10 @@ export class AuthService {
     if (!role) return false;
     const target = role.trim().toLowerCase();
     const roles = this.getRoles();
-    return roles.some(r => r.toLowerCase() === target);
+    return roles.some(r => {
+      const normalized = String(r || '').trim().toLowerCase();
+      return normalized === target || normalized.includes(target) || target.includes(normalized);
+    });
   }
 
   hasAnyRole(roles: string[]): boolean {
@@ -502,6 +458,7 @@ export class AuthService {
       username: localStorage.getItem('username') || '',
       token: token,
       rol: rol,
+      role: rol,
       roles: activeRoles,
       Roles: activeRoles,
       nombre: localStorage.getItem('nombre') || '',

@@ -62,7 +62,7 @@ export interface PresentacionDetalleDto {
   decanoNombre?: string;
   coordinadorNombre?: string;
   profesoresAsignados: string[];
-  estado: 'Pendiente' | 'Evaluada' | 'En Progreso';
+  estado: 'Pendiente' | 'Evaluada' | 'En Progreso' | 'Aprobada';
   yaEvaluadoPorMi?: boolean;
 }
 

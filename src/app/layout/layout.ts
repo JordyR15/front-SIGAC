@@ -22,10 +22,11 @@ import { getApiBase, setApiBase, isModoAutonomo } from '../api';
 })
 export class LayoutComponent implements OnInit {
   public authService = inject(AuthService);
-  private router = inject(Router);
+  public router = inject(Router);
 
   rol: string = '';
   esAyudante: boolean = false;
+  esEstudianteNormal: boolean = false;
   menuAbierto: boolean = false;
   username: string = 'Usuario';
 
@@ -46,6 +47,21 @@ export class LayoutComponent implements OnInit {
     if (storedUsername) {
       this.username = storedUsername;
     }
+  }
+
+  normalizeRol(valor: string | null | undefined): string {
+    return (valor || '').trim().toLowerCase();
+  }
+
+  esRolIgual(rolActual: string, nombreRol: string): boolean {
+    return this.normalizeRol(rolActual) === this.normalizeRol(nombreRol);
+  }
+
+  get isAyudante(): boolean {
+    const r = this.normalizeRol(
+      this.authService.getRole() || this.authService.currentUser?.rol || this.authService.currentUser?.role
+    );
+    return r.includes('ayudante');
   }
 
   get userDisplayName(): string {
@@ -73,18 +89,22 @@ export class LayoutComponent implements OnInit {
   actualizarBackend() {
     const base = getApiBase();
     this.backendActual = isModoAutonomo() ? '' : (base || '');
-    this.inputBackendUrl = isModoAutonomo() ? '' : (base || 'http://localhost:5291');
+    this.inputBackendUrl = isModoAutonomo() ? '' : (base || 'http://localhost:5001');
   }
 
   mostrarSeccion(seccion: string): boolean {
-    const rolActual = (this.rol || localStorage.getItem('rol') || 'Estudiante').trim().toLowerCase();
-    const sec = seccion.trim().toLowerCase();
+    const rolActual = this.normalizeRol(this.rol || localStorage.getItem('rol') || 'Estudiante');
+    const sec = this.normalizeRol(seccion);
 
     if (sec === 'jurado' || sec === 'tribunal') {
-      return rolActual === 'jurado' || rolActual === 'tribunal';
+      return rolActual === 'jurado' || rolActual === 'tribunal' || rolActual.includes('jurado') || rolActual.includes('tribunal');
     }
 
-    return rolActual === sec;
+    if (sec === 'ayudante') {
+      return rolActual.includes('ayudante') || this.authService.hasRole('Ayudante') || this.authService.hasRole('AYUDANTE');
+    }
+
+    return rolActual === sec || rolActual.includes(sec) || this.authService.hasRole(seccion);
   }
 
   hasRole(role: string): boolean {
@@ -131,7 +151,11 @@ export class LayoutComponent implements OnInit {
   }
 
   actualizarEstadoAyudante() {
-    this.esAyudante = this.rol === 'Ayudante';
+    this.esAyudante = this.isAyudante || this.esRolIgual(this.rol, 'Ayudante') || this.authService.hasRole('Ayudante') || this.authService.hasRole('AYUDANTE');
+    this.esEstudianteNormal = this.esRolIgual(this.rol, 'Estudiante') && !this.esAyudante;
+    if (this.rol) {
+      this.rol = this.rol.trim();
+    }
   }
 
   activarModoAutonomo() {

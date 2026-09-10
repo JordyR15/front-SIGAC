@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -159,6 +159,10 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     matricula: ''
   };
 
+  mostrarModalSolicitudAyudante = false;
+  motivoSolicitud = '';
+  ayudanteEmail = 'ayudante@uteq.edu.ec';
+
   private subs: Subscription[] = [];
   Math = Math;
 
@@ -170,7 +174,8 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     private materiaService: MateriaService,
     private docenteService: DocenteService,
     private descargaService: DocumentosDescargaService,
-    private directorioService: DirectorioService
+    private directorioService: DirectorioService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -530,6 +535,63 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     this.subTabRecursos = 'actividades';
   }
 
+  abrirModalSolicitudAyudante() {
+    this.motivoSolicitud = `Necesitamos apoyo académico para reforzar tutorías, guías prácticas y revisión de actividades en ${this.materiaSeleccionada?.nombre || 'la cátedra'}.`;
+    this.ayudanteEmail = this.ayudanteEmail || 'ayudante@uteq.edu.ec';
+    this.mostrarModalSolicitudAyudante = true;
+  }
+
+  cerrarModalSolicitudAyudante() {
+    this.mostrarModalSolicitudAyudante = false;
+    this.motivoSolicitud = '';
+  }
+
+  solicitarAyudante() {
+    if (!this.materiaSeleccionada) {
+      return;
+    }
+
+    const email = (this.ayudanteEmail || 'ayudante@uteq.edu.ec').trim();
+    const payload = {
+      catedraId: this.materiaSeleccionada.id,
+      materiaId: this.materiaSeleccionada.id,
+      nombreMateria: this.materiaSeleccionada.nombre,
+      codigoMateria: this.materiaSeleccionada.codigo,
+      docenteId: this.docenteIdLogueado,
+      nombreDocente: this.nombreDocente,
+      motivo: this.motivoSolicitud || 'Se requiere apoyo académico para tutorías y acompañamiento de estudiantes.',
+      estado: 'Pendiente',
+      fecha: new Date().toISOString().split('T')[0]
+    };
+
+    this.http.post(`${getApiBase()}/api/Docente/convocatorias`, payload).pipe(
+      catchError(() => {
+        const pendientes = JSON.parse(localStorage.getItem('sigac_convocatorias_pendientes') || '[]');
+        pendientes.unshift({ ...payload, id: Date.now() });
+        localStorage.setItem('sigac_convocatorias_pendientes', JSON.stringify(pendientes));
+        return of({ success: true, payload });
+      })
+    ).subscribe({
+      next: () => {
+        this.materiaService.asignarAyudanteMateria(this.materiaSeleccionada!.id, email).subscribe({
+          next: (res) => {
+            this.successMessage = res.mensaje || `Solicitud y asignación de ayudante enviada para ${this.materiaSeleccionada?.nombre}.`;
+            this.cerrarModalSolicitudAyudante();
+            setTimeout(() => this.successMessage = '', 3500);
+          },
+          error: () => {
+            this.errorMessage = 'No se pudo completar la asignación del ayudante.';
+            setTimeout(() => this.errorMessage = '', 3500);
+          }
+        });
+      },
+      error: () => {
+        this.errorMessage = 'No se pudo enviar la solicitud de ayudante.';
+        setTimeout(() => this.errorMessage = '', 3500);
+      }
+    });
+  }
+
   // ==========================================
   // CREACIÓN Y PROGRAMACIÓN DE CLASES
   // ==========================================
@@ -568,10 +630,12 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         } else {
           this.cargarClasesLocalesFallback();
         }
+        this.cdr.detectChanges();
       },
       error: () => {
         this.isLoading = false;
         this.cargarClasesLocalesFallback();
+        this.cdr.detectChanges();
       }
     });
   }

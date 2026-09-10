@@ -1,13 +1,15 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
+import { timeout } from 'rxjs/operators';
 import { getApiBase } from '../api';
 
 export interface EstudianteMateria {
   id: number;
   estudianteId?: number;
   nombre: string;
+  nombreCompleto?: string;
   apellido?: string;
   correo?: string;
   username?: string;
@@ -15,6 +17,7 @@ export interface EstudianteMateria {
   asistencia?: number;
   matricula?: string;
   cedula?: string;
+  ci?: string;
   carrera?: string;
   estado?: 'Regular' | 'En Riesgo' | 'Destacado' | 'Retirado' | 'Justificado' | string;
   telefono?: string;
@@ -285,11 +288,13 @@ export class MateriaService {
     const correoUsuario = typeof window !== 'undefined' ? (localStorage.getItem('correo') || '').toLowerCase().trim() : '';
 
     if (rol === 'Docente') {
+      const urlDocenteMaterias = `${getApiBase()}/api/Docente/${userId}/materias`;
       const urlDocenteClases = `${getApiBase()}/api/Docente/clases`;
       const urlClaseDocente = `${getApiBase()}/api/Clase/docente/${userId}`;
       const urlClaseDocenteLower = `${getApiBase()}/api/clase/docente/${userId}`;
 
-      return this.http.get<any>(urlDocenteClases).pipe(
+      return this.http.get<any>(urlDocenteMaterias).pipe(
+        catchError(() => this.http.get<any>(urlDocenteClases)),
         catchError(() => this.http.get<any>(urlClaseDocente)),
         catchError(() => this.http.get<any>(urlClaseDocenteLower)),
         tap((res) => {
@@ -538,20 +543,121 @@ export class MateriaService {
     this.saveStorage(this.STORAGE_MATERIAS, merged);
   }
 
+  private buildAyudantePayload(ayudanteEmail?: string, ayudanteId?: number): { ayudanteEmail?: string; ayudanteId?: number } {
+    const payload: { ayudanteEmail?: string; ayudanteId?: number } = {};
+
+    if (Number.isFinite(Number(ayudanteId)) && Number(ayudanteId) > 0) {
+      payload.ayudanteId = Number(ayudanteId);
+      return payload;
+    }
+
+    const email = (ayudanteEmail || '').trim();
+    if (email) {
+      payload.ayudanteEmail = email;
+    }
+
+    return payload;
+  }
+
+  asignarAyudanteClase(claseId: number, ayudanteEmail?: string, ayudanteId?: number): Observable<{ success: boolean; mensaje: string; fallback?: boolean }> {
+    const payload = this.buildAyudantePayload(ayudanteEmail, ayudanteId);
+    if (!payload.ayudanteEmail && payload.ayudanteId === undefined) {
+      return throwError(() => new Error('Debes ingresar un correo o ID válido del ayudante.'));
+    }
+
+    const urlClase = `${getApiBase()}/api/Clase/${claseId}/ayudante`;
+
+    return this.http.post<{ message?: string }>(urlClase, payload).pipe(
+      timeout(10000),
+      map((res) => ({
+        success: true,
+        mensaje: res?.message || (payload.ayudanteEmail ? `Ayudante asignado: ${payload.ayudanteEmail}` : `Ayudante asignado con ID ${payload.ayudanteId}.`)
+      }))
+    );
+  }
+
+  asignarAyudanteMateria(materiaId: number, ayudanteEmail: string, ayudanteId?: number): Observable<{ success: boolean; mensaje: string; fallback?: boolean }> {
+    const email = (ayudanteEmail || '').trim();
+    const normalizedId = Number(ayudanteId);
+    const payload = this.buildAyudantePayload(email, normalizedId);
+
+    if (!payload.ayudanteEmail && payload.ayudanteId === undefined) {
+      return throwError(() => new Error('Debes ingresar un correo o ID válido del ayudante.'));
+    }
+
+    const claseId = Number(materiaId);
+    const urlClase = `${getApiBase()}/api/Clase/${claseId}/ayudante`;
+    const urlMateria = `${getApiBase()}/api/Materia/${materiaId}/ayudante`;
+
+    return this.http.post<{ message?: string }>(urlClase, payload).pipe(
+      timeout(10000),
+      map((res) => ({
+        success: true,
+        mensaje: res?.message || (payload.ayudanteEmail ? `Ayudante asignado: ${payload.ayudanteEmail}` : `Ayudante asignado con ID ${payload.ayudanteId}.`)
+      })),
+      catchError(() => this.http.post<{ message?: string }>(urlMateria, payload).pipe(
+        timeout(10000),
+        map((res) => ({
+          success: true,
+          mensaje: res?.message || (payload.ayudanteEmail ? `Ayudante asignado: ${payload.ayudanteEmail}` : `Ayudante asignado con ID ${payload.ayudanteId}.`)
+        }))
+      ))
+    );
+  }
+
   // ==================== TEMAS ====================
 
   getTemasByMateria(materiaId: number): string[] {
     const key = `${this.STORAGE_TEMAS}_${materiaId}`;
     const stored = this.loadStorage<string[]>(key, []);
-    return stored || [];
+    const localList = Array.isArray(stored) ? stored : [];
+
+    this.http.get<any[]>(`${getApiBase()}/api/Materia/${materiaId}/temas`).pipe(
+      map((res) => {
+        const list = Array.isArray(res) ? res : [];
+        const mapped = list
+          .map((item: any) => String(item?.titulo ?? item?.nombre ?? '').trim())
+          .filter(Boolean);
+
+        if (mapped.length > 0) {
+          this.saveStorage(key, mapped);
+          return mapped;
+        }
+        return localList;
+      }),
+      catchError(() => of(localList))
+    ).subscribe();
+
+    return localList;
   }
 
   addTemaToMateria(materiaId: number, nombreTema: string): string[] {
     const key = `${this.STORAGE_TEMAS}_${materiaId}`;
     const actuales = this.getTemasByMateria(materiaId);
-    const updated = [...actuales, nombreTema.trim()];
-    this.saveStorage(key, updated);
-    return updated;
+    const titulo = nombreTema.trim();
+    if (!titulo) return actuales;
+
+    const payload = {
+      titulo,
+      descripcion: `Tema creado desde el frontend para materia ${materiaId}.`,
+      orden: actuales.length + 1
+    };
+
+    this.http.post<any>(`${getApiBase()}/api/Materia/${materiaId}/temas`, payload).pipe(
+      map((res) => {
+        const value = String(res?.titulo ?? titulo).trim();
+        const next = Array.from(new Set([...actuales, value])).filter(Boolean);
+        this.saveStorage(key, next);
+        return next;
+      }),
+      catchError(() => {
+        const updated = [...actuales, titulo];
+        this.saveStorage(key, updated);
+        return of(updated);
+      })
+    ).subscribe();
+
+    return [...actuales, titulo];
   }
 
   private ensureDefaultTemasAndContent(materiaId: number, nombreMateria: string) {

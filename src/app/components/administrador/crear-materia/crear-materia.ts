@@ -48,18 +48,33 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.subDocentes = this.adminDocenteService.getDocentes().subscribe(list => {
-      this.docentes = list.map(d => ({
-        id: d.id,
-        nombre: `${d.nombre} ${d.apellido}`.trim() || d.username,
-        correo: d.correo
-      }));
-      // Si el docente preconfigurado docente@uteq.edu.ec existe, preseleccionarlo con su ID
-      const docenteOficial = this.docentes.find(d => (d.correo || '').toLowerCase() === 'docente@uteq.edu.ec');
-      if (docenteOficial) {
-        this.nuevaMateria.docenteResponsableId = docenteOficial.id;
-      } else if (this.docentes.length > 0 && !this.nuevaMateria.docenteResponsableId) {
-        this.nuevaMateria.docenteResponsableId = this.docentes[0].id;
+    this.subDocentes = this.adminDocenteService.getDocentes().subscribe({
+      next: (list) => {
+        const safeList = Array.isArray(list) ? list : [];
+        this.docentes = safeList
+          .filter(Boolean)
+          .map((d: any) => {
+            const id = Number(d?.id ?? d?.M_ID ?? d?.personaId ?? d?.docenteId ?? 0);
+            const nombre = [d?.nombre ?? d?.NOMBRE, d?.apellido ?? d?.APELLIDO].filter(Boolean).join(' ').trim()
+              || d?.username || d?.usuario || d?.nombreCompleto || 'Docente';
+            const correo = d?.correo ?? d?.email ?? d?.CORREO ?? '';
+            return {
+              id,
+              nombre,
+              correo
+            };
+          })
+          .filter(d => d.id > 0);
+
+        const docenteOficial = this.docentes.find(d => (d.correo || '').toLowerCase() === 'docente@uteq.edu.ec');
+        if (docenteOficial) {
+          this.nuevaMateria.docenteResponsableId = docenteOficial.id;
+        } else if (this.docentes.length > 0 && !this.nuevaMateria.docenteResponsableId) {
+          this.nuevaMateria.docenteResponsableId = this.docentes[0].id;
+        }
+      },
+      error: () => {
+        this.docentes = [];
       }
     });
 

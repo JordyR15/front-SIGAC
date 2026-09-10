@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
+import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
+import { catchError, map, tap, timeout } from 'rxjs/operators';
 import { getApiBase } from '../api';
 
 export interface CreateClaseDto {
@@ -82,10 +82,10 @@ export class ClaseService {
   private STORAGE_CLASES = 'sigac_clases_v2';
   private STORAGE_SESIONES = 'sigac_sesiones_v2';
 
-  private clasesSubject = new BehaviorSubject<ClaseDto[]>(this.loadStorage(this.STORAGE_CLASES, CLASES_DEFAULT));
+  private clasesSubject = new BehaviorSubject<ClaseDto[]>([]);
   public clases$ = this.clasesSubject.asObservable();
 
-  private sesionesSubject = new BehaviorSubject<ClaseSesionDto[]>(this.loadStorage(this.STORAGE_SESIONES, SESIONES_DEFAULT));
+  private sesionesSubject = new BehaviorSubject<ClaseSesionDto[]>([]);
   public sesiones$ = this.sesionesSubject.asObservable();
 
   constructor(private http: HttpClient) {}
@@ -121,7 +121,42 @@ export class ClaseService {
 
   // Clase
   getClases(): Observable<ClaseDto[]> {
-    return this.clases$;
+    return this.refreshClases();
+  }
+
+  refreshClases(): Observable<ClaseDto[]> {
+    return this.http.get<any[]>(`${getApiBase()}/api/Clase`).pipe(
+      timeout(10000),
+      map((res) => this.normalizeClasesResponse(res)),
+      tap((list) => this.clasesSubject.next(list)),
+      catchError((err) => {
+        console.error('No se pudieron listar las clases desde el backend:', err);
+        return throwError(() => err);
+      })
+    );
+  }
+
+  private normalizeClasesResponse(res: any): ClaseDto[] {
+    let list: any[] = [];
+    if (Array.isArray(res)) {
+      list = res;
+    } else if (res && Array.isArray(res.clases)) {
+      list = res.clases;
+    } else if (res && Array.isArray(res.items)) {
+      list = res.items;
+    }
+
+    return list.map((item, index) => ({
+      id: Number(item.id ?? item.claseId ?? index + 1),
+      nombre: String(item.nombre ?? item.nombreClase ?? `Clase ${index + 1}`),
+      materiaId: item.materiaId ?? item.materia?.id ?? undefined,
+      materiaIds: Array.isArray(item.materiaIds) ? item.materiaIds : (item.materiaId ? [Number(item.materiaId)] : []),
+      docenteId: item.docenteId ?? item.docente?.id ?? undefined,
+      estudianteIds: Array.isArray(item.estudianteIds) ? item.estudianteIds : (Array.isArray(item.estudiantes) ? item.estudiantes.map((e: any) => Number(e.id ?? e.estudianteId ?? 0)).filter(Boolean) : []),
+      semestre: item.semestre ?? item.periodo ?? '2026-2',
+      descripcion: item.descripcion ?? '',
+      carrera: item.carrera ?? item.programa ?? 'Ingeniería de Software'
+    }));
   }
 
   createClase(dto: CreateClaseDto): Observable<ClaseDto> {
@@ -130,71 +165,67 @@ export class ClaseService {
       : (dto.materiaId ? [Number(dto.materiaId)] : []);
 
     const resolvedMateriaId = Number(dto.materiaId || (matIds.length > 0 ? matIds[0] : 101));
-    const resolvedDocenteId = Number(dto.docenteId || 1);
+    const resolvedDocenteId = dto.docenteId ? Number(dto.docenteId) : undefined;
 
-    const nuevaClase: ClaseDto = {
-      id: Math.floor((Date.now() / 1000) % 2000000000) + 1,
+    const postPayload: any = {
       nombre: dto.nombre.trim(),
-      materiaId: resolvedMateriaId,
-      materiaIds: matIds.length > 0 ? matIds : [resolvedMateriaId],
-      docenteId: resolvedDocenteId,
-      semestre: dto.semestre || '2026-2',
-      descripcion: dto.descripcion?.trim() || '',
-      carrera: dto.carrera || 'Ingeniería',
-      estudianteIds: dto.estudianteIds || [1, 2]
-    };
-
-    const current = this.clasesSubject.value;
-    const updated = [nuevaClase, ...current];
-    this.clasesSubject.next(updated);
-    this.saveStorage(this.STORAGE_CLASES, updated);
-
-    // Payload con materiaId y docenteId válidos (nunca null ni undefined)
-    const postPayload = {
-      nombre: dto.nombre.trim(),
-      materiaId: resolvedMateriaId,
-      docenteId: resolvedDocenteId,
       semestre: dto.semestre || '2026-2',
       carrera: dto.carrera || 'Ingeniería',
-      descripcion: dto.descripcion?.trim() || '',
-      estudianteIds: dto.estudianteIds || [1, 2]
+      descripcion: dto.descripcion?.trim() || ''
     };
 
-    const urlClase = `${getApiBase()}/api/Clase`;
-    const urlClaseLower = `${getApiBase()}/api/clase`;
-    const urlClases = `${getApiBase()}/api/Clases`;
+    if (Number.isFinite(resolvedMateriaId) && resolvedMateriaId > 0) {
+      postPayload.materiaId = resolvedMateriaId;
+    }
+    if (resolvedDocenteId && Number.isFinite(resolvedDocenteId) && resolvedDocenteId > 0) {
+      postPayload.docenteId = resolvedDocenteId;
+    }
+    if (dto.estudianteIds && dto.estudianteIds.length > 0) {
+      postPayload.estudianteIds = dto.estudianteIds;
+    }
 
-    return this.http.post<any>(urlClase, postPayload).pipe(
-      catchError(() => this.http.post<any>(urlClaseLower, postPayload)),
-      catchError(() => this.http.post<any>(urlClases, postPayload)),
-      tap((backendRes) => {
-        if (backendRes && (backendRes.id || backendRes.claseId)) {
-          nuevaClase.id = Number(backendRes.id || backendRes.claseId);
-          this.saveStorage(this.STORAGE_CLASES, this.clasesSubject.value);
-        }
-      }),
+    return this.http.post<any>(`${getApiBase()}/api/Clase`, postPayload).pipe(
+      timeout(10000),
       map((res) => {
-        if (res && (res.id || res.claseId)) {
-          return {
-            ...nuevaClase,
-            id: Number(res.id || res.claseId),
-            materiaId: Number(res.materiaId || resolvedMateriaId),
-            docenteId: Number(res.docenteId || resolvedDocenteId)
-          };
+        const created = {
+          id: Number(res?.id ?? res?.claseId),
+          nombre: String(res?.nombre ?? dto.nombre.trim()),
+          materiaId: Number(res?.materiaId ?? resolvedMateriaId),
+          materiaIds: Array.isArray(res?.materiaIds) ? res.materiaIds : (matIds.length > 0 ? matIds : [resolvedMateriaId]),
+          docenteId: res?.docenteId ? Number(res.docenteId) : (resolvedDocenteId ?? undefined),
+          estudianteIds: Array.isArray(res?.estudianteIds) ? res.estudianteIds : (dto.estudianteIds ?? []),
+          semestre: String(res?.semestre ?? dto.semestre ?? '2026-2'),
+          descripcion: String(res?.descripcion ?? dto.descripcion ?? ''),
+          carrera: String(res?.carrera ?? dto.carrera ?? 'Ingeniería')
+        };
+
+        if (!created.id || Number.isNaN(created.id)) {
+          throw new Error('La respuesta del backend no incluye un identificador de clase válido.');
         }
-        return nuevaClase;
+
+        const current = this.clasesSubject.value;
+        this.clasesSubject.next([created, ...current.filter(c => Number(c.id) !== Number(created.id))]);
+        return created;
       }),
-      catchError(() => of(nuevaClase))
+      catchError((err) => {
+        console.error('No se pudo crear la clase en el backend:', err);
+        return throwError(() => err);
+      })
     );
   }
 
   deleteClase(id: number): Observable<boolean> {
-    const list = this.clasesSubject.value.filter(c => Number(c.id) !== Number(id));
-    this.clasesSubject.next(list);
-    this.saveStorage(this.STORAGE_CLASES, list);
     return this.http.delete(`${this.apiUrl}/${id}`).pipe(
-      map(() => true),
-      catchError(() => of(true))
+      timeout(10000),
+      map(() => {
+        const list = this.clasesSubject.value.filter(c => Number(c.id) !== Number(id));
+        this.clasesSubject.next(list);
+        return true;
+      }),
+      catchError((err) => {
+        console.error('No se pudo eliminar la clase en el backend:', err);
+        return throwError(() => err);
+      })
     );
   }
 
@@ -203,26 +234,11 @@ export class ClaseService {
     if (found) {
       return of(found);
     }
-    return this.http.get<ClaseDto>(`${this.apiUrl}/${id}`).pipe(
-      catchError(() => of(CLASES_DEFAULT[0]))
-    );
+    return this.http.get<ClaseDto>(`${this.apiUrl}/${id}`);
   }
 
   addEstudiantesToClase(claseId: number, estudianteIds: number[]): Observable<any> {
-    const list = this.clasesSubject.value.map(c => {
-      if (Number(c.id) === Number(claseId)) {
-        const currentIds = c.estudianteIds || [];
-        const unique = Array.from(new Set([...currentIds, ...estudianteIds]));
-        return { ...c, estudianteIds: unique };
-      }
-      return c;
-    });
-    this.clasesSubject.next(list);
-    this.saveStorage(this.STORAGE_CLASES, list);
-
-    return this.http.post(`${this.apiUrl}/${claseId}/estudiantes`, estudianteIds).pipe(
-      catchError(() => of({ success: true }))
-    );
+    return this.http.post(`${this.apiUrl}/${claseId}/estudiantes`, estudianteIds);
   }
 
   /**
@@ -230,67 +246,22 @@ export class ClaseService {
    * Elimina un estudiante de la clase
    */
   eliminarEstudiante(claseId: number, estudianteId: number): Observable<any> {
-    const list = this.clasesSubject.value.map(c => {
-      if (Number(c.id) === Number(claseId)) {
-        const currentIds = (c.estudianteIds || []).filter(id => Number(id) !== Number(estudianteId));
-        return { ...c, estudianteIds: currentIds };
-      }
-      return c;
-    });
-    this.clasesSubject.next(list);
-    this.saveStorage(this.STORAGE_CLASES, list);
-
-    return this.http.delete(`${this.apiUrl}/${claseId}/estudiantes/${estudianteId}`).pipe(
-      catchError(() => of({ success: true }))
-    );
+    return this.http.delete(`${this.apiUrl}/${claseId}/estudiantes/${estudianteId}`);
   }
 
   getEstudiantesFromClase(claseId: number): Observable<any> {
-    return this.http.get(`${this.apiUrl}/${claseId}/estudiantes`).pipe(
-      catchError(() => of([]))
-    );
+    return this.http.get(`${this.apiUrl}/${claseId}/estudiantes`);
   }
 
   // Sesiones
   createClaseSesion(dto: CreateClaseSesionDto): Observable<ClaseSesionDto> {
-    const nuevaSesion: ClaseSesionDto = {
-      id: Math.floor((Date.now() / 1000) % 2000000000) + 1,
-      materiaId: Number(dto.materiaId),
-      claseId: dto.claseId ? Number(dto.claseId) : undefined,
-      docenteId: Number(dto.docenteId),
-      fecha: dto.fecha,
-      horaInicio: dto.horaInicio,
-      horaFin: dto.horaFin,
-      tipoClase: dto.tipoClase,
-      linkVirtual: dto.linkVirtual,
-      aplicacionVirtual: dto.aplicacionVirtual,
-      edificioPresencial: dto.edificioPresencial,
-      aulaPresencial: dto.aulaPresencial,
-      pisoPresencial: dto.pisoPresencial
-    };
-
-    const current = this.sesionesSubject.value;
-    const updated = [nuevaSesion, ...current];
-    this.sesionesSubject.next(updated);
-    this.saveStorage(this.STORAGE_SESIONES, updated);
-
-    return this.http.post<ClaseSesionDto>(this.sesionApiUrl, dto).pipe(
-      tap((backendRes) => {
-        if (backendRes && backendRes.id) {
-          nuevaSesion.id = backendRes.id;
-          this.saveStorage(this.STORAGE_SESIONES, this.sesionesSubject.value);
-        }
-      }),
-      catchError(() => of(nuevaSesion))
-    );
+    return this.http.post<ClaseSesionDto>(this.sesionApiUrl, dto);
   }
 
   getClaseSesionById(id: number): Observable<ClaseSesionDto> {
     const found = this.sesionesSubject.value.find(s => Number(s.id) === Number(id));
     if (found) return of(found);
-    return this.http.get<ClaseSesionDto>(`${this.sesionApiUrl}/${id}`).pipe(
-      catchError(() => of(SESIONES_DEFAULT[0]))
-    );
+    return this.http.get<ClaseSesionDto>(`${this.sesionApiUrl}/${id}`);
   }
 
   getSesionesByMateria(materiaId: number): Observable<ClaseSesionDto[]> {
@@ -307,20 +278,14 @@ export class ClaseService {
 
   // Asistencia
   registrarAsistencia(claseSesionId: number, dto: CreateAsistenciaDto): Observable<AsistenciaDto> {
-    return this.http.post<AsistenciaDto>(`${this.sesionApiUrl}/${claseSesionId}/asistencia`, dto).pipe(
-      catchError(() => of({ id: Math.floor((Date.now() / 1000) % 2000000000) + 1, ...dto }))
-    );
+    return this.http.post<AsistenciaDto>(`${this.sesionApiUrl}/${claseSesionId}/asistencia`, dto);
   }
 
   getAsistenciaBySesion(claseSesionId: number): Observable<AsistenciaDto[]> {
-    return this.http.get<AsistenciaDto[]>(`${this.sesionApiUrl}/${claseSesionId}/asistencia`).pipe(
-      catchError(() => of([]))
-    );
+    return this.http.get<AsistenciaDto[]>(`${this.sesionApiUrl}/${claseSesionId}/asistencia`);
   }
 
   getAsistenciaEstudiante(claseSesionId: number): Observable<any> {
-    return this.http.get<any>(`${this.sesionApiUrl}/estudiante/asistencia/${claseSesionId}`).pipe(
-      catchError(() => of({ presente: true }))
-    );
+    return this.http.get<any>(`${this.sesionApiUrl}/estudiante/asistencia/${claseSesionId}`);
   }
 }

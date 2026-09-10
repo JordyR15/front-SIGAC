@@ -162,7 +162,14 @@ export class PostulacionComponent implements OnInit, OnDestroy {
   }
 
   private procesarCatedrasConvocatoria(catedras: CatedraMinimoNotaDto[]) {
-    this.convocatorias = catedras.map(c => {
+    const publicadas = JSON.parse(localStorage.getItem('sigac_convocatorias_publicadas') || '[]');
+    const idsPublicados = new Set<number>(publicadas
+      .map((item: any) => Number(item.catedraId || item.materiaId || item.id || item.catedra || 0))
+      .filter((id: number) => id > 0));
+    const catedrasVisibles = catedras.filter(c => idsPublicados.size === 0 || idsPublicados.has(Number(c.id)));
+    const listaFinal = (catedrasVisibles.length > 0 ? catedrasVisibles : catedras);
+
+    this.convocatorias = listaFinal.map(c => {
       const notaEst = this.expedienteNotasMateria[c.id] ?? 8.5;
       const tienePromedioGeneral = this.cumplePromedioGeneral && this.promedioAcumulado >= this.promedioMinimoExigido;
       const tieneNotaMateria = notaEst >= c.minimoNota;

@@ -67,11 +67,13 @@ export const routes: Routes = [
       { path: 'estudiante/informes', component: InformesAyudantiaComponent },
 
       // AYUDANTE / DOCENTE (Rutas específicas para gestión)
+      { path: 'ayudante/dashboard', component: DashboardComponent },
       { path: 'ayudante/materias', component: AyudanteMateriasComponent },
       { path: 'ayudante/materia/:id', component: MateriaDetalleComponent },
       { path: 'ayudante/horarios', component: HorariosComponent }, // Misma ruta, mismo componente unificado
       { path: 'ayudante/horarios/:claseId', component: HorariosComponent },
       { path: 'ayudante/mi-perfil', component: MiPerfilComponent },
+      { path: 'ayudante/bitacoras', component: GestionAyudantiaComponent },
       { path: 'ayudante/informes', component: InformesAyudantiaComponent },
       { path: 'docente/gestion-clases', component: GestionClasesComponent },
       { path: 'docente/actividades/:actividadId/calificar', component: CalificarActividadDocenteComponent, canActivate: [roleGuard], data: { roles: ['Administrador', 'Coordinador', 'Docente', 'Ayudante'] } },

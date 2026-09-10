@@ -107,8 +107,8 @@ export class AdminDocenteService {
   }
 
   /**
-   * POST /api/login/register (o /api/Login/register)
-   * Registra un nuevo docente asignándole múltiples responsabilidades/roles.
+   * POST /api/Usuarios
+   * Registra un nuevo usuario con roles; usa el endpoint oficial del backend.
    */
   crearDocente(docenteDto: { username: string; password: string; nombre: string; apellido: string; correo: string; roles: string[] }): Observable<any> {
     const nuevo: DocenteItemDto = {
@@ -123,139 +123,103 @@ export class AdminDocenteService {
       titulo: 'Docente Titular'
     };
 
-    // Siempre persistimos localmente para garantizar que no se pierda al reiniciar o desconectar
-    this.guardarDocenteLocal(nuevo);
+   this.guardarDocenteLocal(nuevo);
 
-    const payload = {
-      ...docenteDto,
-      rol: docenteDto.roles[0] || 'Docente',
-      Roles: docenteDto.roles
-    };
+   const payload = {
+     username: docenteDto.username,
+     password: docenteDto.password,
+     nombre: docenteDto.nombre,
+     apellido: docenteDto.apellido,
+     correo: docenteDto.correo,
+     roles: docenteDto.roles
+   };
 
-    return this.http.post(`${this.baseUrl}/api/Login/register`, payload).pipe(
-      catchError(() => {
-        // En caso de que el backend use minúsculas
-        return this.http.post(`${this.baseUrl}/api/login/register`, payload).pipe(
-          catchError(() => {
-            console.warn('Backend offline: registrando docente en almacenamiento local permanente:', docenteDto.username);
-            return of({ success: true, message: 'Docente registrado exitosamente en almacenamiento seguro', docente: nuevo });
-          })
-        );
-      })
-    );
+   return this.http.post(`${this.baseUrl}/api/Usuarios`, payload).pipe(
+     catchError(() => this.http.post(`${this.baseUrl}/api/Login/register`, payload)),
+     catchError(() => {
+       console.warn('Backend offline: registrando docente en almacenamiento local permanente:', docenteDto.username);
+       return of({ success: true, message: 'Docente registrado exitosamente en almacenamiento seguro', docente: nuevo });
+     })
+   );
   }
 
   /**
-   * GET /api/Persona o GET /api/Docente
-   * Obtiene la lista de docentes registrados en el backend con su ID real correspondiente.
+   * GET /api/Usuarios?rol=Docente
+   * Obtiene la lista real de usuarios/docentes del backend.
    */
   getDocentes(): Observable<DocenteItemDto[]> {
-    const urlPersona = `${this.baseUrl}/api/Persona`;
-    const urlDocente = `${this.baseUrl}/api/Docente`;
-    const urlDocenteLower = `${this.baseUrl}/api/docente`;
+   const urlUsuarios = `${this.baseUrl}/api/Usuarios?rol=Docente`;
+   const urlUsuariosBase = `${this.baseUrl}/api/Usuarios`;
+   const urlPersona = `${this.baseUrl}/api/Persona`;
+   const urlDocente = `${this.baseUrl}/api/Docente`;
 
-    return this.http.get<any>(urlPersona).pipe(
-      catchError(() => this.http.get<any>(urlDocente)),
-      catchError(() => this.http.get<any>(urlDocenteLower)),
-      map(data => {
-        let rawList: any[] = [];
-        if (Array.isArray(data)) {
-          rawList = data;
-        } else if (data && Array.isArray(data.docentes)) {
-          rawList = data.docentes;
-        } else if (data && Array.isArray(data.personas)) {
-          rawList = data.personas;
-        } else if (data && Array.isArray(data.items)) {
-          rawList = data.items;
-        }
+   return this.http.get<any[]>(urlUsuarios).pipe(
+     catchError(() => this.http.get<any[]>(urlUsuariosBase)),
+     catchError(() => this.http.get<any[]>(urlPersona)),
+     catchError(() => this.http.get<any[]>(urlDocente)),
+     map((data: any) => {
+       let rawList: any[] = [];
+       if (Array.isArray(data)) {
+         rawList = data;
+       } else if (data && Array.isArray(data.docentes)) {
+         rawList = data.docentes;
+       } else if (data && Array.isArray(data.personas)) {
+         rawList = data.personas;
+       } else if (data && Array.isArray(data.items)) {
+         rawList = data.items;
+       }
 
-        if (rawList.length === 0) {
-          return this.getListaCompletaLocal();
-        }
+       if (rawList.length === 0) {
+         return this.getListaCompletaLocal();
+       }
 
-        // Mapear registros recibidos del backend
-        const docentesBackend: DocenteItemDto[] = [];
+       const mapped = rawList.map((p: any, idx: number) => {
+         const roles = Array.isArray(p.roles)
+           ? p.roles
+           : (Array.isArray(p.Roles) ? p.Roles : (p.rol || p.Rol ? [p.rol || p.Rol] : ['Docente']));
+         const correo = String(p.correo ?? p.email ?? p.CORREO ?? `${(p.username ?? p.usuario ?? `docente.${idx + 1}`).split('@')[0]}@uteq.edu.ec`);
 
-        for (let idx = 0; idx < rawList.length; idx++) {
-          const p = rawList[idx];
-          const correo = (p.correo || p.email || '').toLowerCase().trim();
-          const username = (p.username || (correo ? correo.split('@')[0] : `docente.${p.id || idx + 1}`)).toLowerCase().trim();
-          const rol = (p.rol || '').toLowerCase();
-          const roles: string[] = Array.isArray(p.roles) ? p.roles : (p.rol ? [p.rol] : []);
-          const rolesLower = roles.map((r: string) => r.toLowerCase());
+         return {
+           id: Number(p.id ?? p.M_ID ?? p.docenteId ?? p.personaId ?? idx + 1),
+           username: String(p.username ?? p.usuario ?? p.USERNAME ?? correo.split('@')[0] ?? `docente.${idx + 1}`),
+           nombre: String(p.nombre ?? p.NOMBRE ?? 'Docente'),
+           apellido: String(p.apellido ?? p.APELLIDO ?? ''),
+           correo,
+           roles,
+           activo: p.activo !== false,
+           departamento: p.departamento || 'Facultad de Ingeniería',
+           titulo: p.titulo || 'Docente Titular'
+         } as DocenteItemDto;
+       });
 
-          const esDocente = rol === 'docente' || 
-                            rolesLower.includes('docente') || 
-                            rolesLower.includes('coordinador') ||
-                            correo.includes('docente') || 
-                            username.includes('docente') ||
-                            (!rolesLower.includes('estudiante') && p.nombre);
+       const hasOfficial = mapped.some(d => String(d.correo || '').toLowerCase() === 'docente@uteq.edu.ec' || String(d.username || '').toLowerCase() === 'docente');
+       const result = hasOfficial ? mapped : [
+         {
+           id: 102,
+           username: 'docente',
+           nombre: 'Docente',
+           apellido: 'Titular',
+           correo: 'docente@uteq.edu.ec',
+           roles: ['Docente'],
+           activo: true,
+           departamento: 'Facultad de Ingeniería',
+           titulo: 'Docente Titular'
+         } as DocenteItemDto,
+         ...mapped
+       ];
 
-          if (esDocente || rawList.length <= 4) {
-            const rawId = p.id ?? p.docenteId ?? p.personaId ?? (idx + 1);
-            docentesBackend.push({
-              id: Number(rawId),
-              username: p.username || username,
-              nombre: p.nombre || 'Docente',
-              apellido: p.apellido || '',
-              correo: p.correo || p.email || (username ? `${username}@uteq.edu.ec` : 'docente@uteq.edu.ec'),
-              roles: roles.length > 0 ? roles : ['Docente'],
-              activo: p.activo !== false,
-              departamento: p.departamento || 'Facultad de Ingeniería',
-              titulo: p.titulo || 'Docente Titular'
-            });
-          }
-        }
+       const locales = this.getDocentesGuardadosLocal();
+       const existingIds = new Set(result.map(m => m.id));
+       locales.forEach((loc) => {
+         if (!existingIds.has(loc.id)) {
+           result.push(loc);
+           existingIds.add(loc.id);
+         }
+       });
 
-        // Si no se identificaron docentes en el filtrado, mapear todos
-        const listaFinal: DocenteItemDto[] = docentesBackend.length > 0 ? docentesBackend : rawList.map((p, idx) => ({
-          id: Number(p.id ?? p.docenteId ?? p.personaId ?? idx + 1),
-          username: p.username || (p.correo ? p.correo.split('@')[0] : `docente.${idx + 1}`),
-          nombre: p.nombre || 'Docente',
-          apellido: p.apellido || '',
-          correo: p.correo || p.email || 'docente@uteq.edu.ec',
-          roles: Array.isArray(p.roles) ? p.roles : (p.rol ? [p.rol] : ['Docente']),
-          activo: p.activo !== false,
-          departamento: p.departamento || 'Facultad de Ingeniería',
-          titulo: p.titulo || 'Docente Titular'
-        }));
-
-        // Garantizar que docente@uteq.edu.ec esté siempre presente con su ID
-        const tieneDocenteOficial = listaFinal.some(d =>
-          d.correo.toLowerCase() === 'docente@uteq.edu.ec' || d.username.toLowerCase() === 'docente'
-        );
-
-        if (!tieneDocenteOficial) {
-          const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-          const storedRol = typeof window !== 'undefined' ? localStorage.getItem('rol') : null;
-          const idOficial = (storedRol === 'Docente' && storedUserId) ? Number(storedUserId) : 102;
-
-          listaFinal.unshift({
-            id: idOficial,
-            username: 'docente',
-            nombre: 'Docente',
-            apellido: 'Titular',
-            correo: 'docente@uteq.edu.ec',
-            roles: ['Docente'],
-            activo: true,
-            departamento: 'Facultad de Ingeniería',
-            titulo: 'Docente Titular'
-          });
-        }
-
-        // Combinar con los guardados localmente evitando IDs duplicados
-        const locales = this.getDocentesGuardadosLocal();
-        const existingIds = new Set(listaFinal.map(m => m.id));
-        for (const loc of locales) {
-          if (!existingIds.has(loc.id)) {
-            listaFinal.push(loc);
-            existingIds.add(loc.id);
-          }
-        }
-
-        return listaFinal;
-      }),
-      catchError(() => of(this.getListaCompletaLocal()))
-    );
+       return result;
+     }),
+     catchError(() => of(this.getListaCompletaLocal()))
+   );
   }
 }

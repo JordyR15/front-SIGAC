@@ -344,7 +344,7 @@
                           {{ getIniciales(est.nombre) }}
                         </div>
                         <div class="min-w-0">
-                          <p class="font-bold text-slate-900 hover:text-indigo-600 transition-colors truncate">{{ est.nombre }}</p>
+                          <p class="font-bold text-slate-900 hover:text-indigo-600 transition-colors truncate">{{ est.nombreCompleto || est.nombre || 'Estudiante sin nombre' }}</p>
                           <p class="text-[11px] text-slate-400 truncate">{{ est.correo }}</p>
                           <span class="text-[10px] text-slate-400 font-mono">{{ est.matricula || '2024-IS' }}</span>
                         </div>
@@ -353,7 +353,7 @@
 
                     <!-- Cédula -->
                     <td class="py-3 px-3 font-mono text-[11px] text-slate-500">
-                      {{ est.cedula || '1720000000' }}
+                      {{ est.cedula || est.ci || '1720000000' }}
                     </td>
 
                     <!-- Carrera -->
@@ -469,7 +469,7 @@
                       {{ getIniciales(est.nombre) }}
                     </div>
                     <div class="min-w-0">
-                      <h4 class="font-bold text-slate-900 text-xs leading-snug truncate">{{ est.nombre }}</h4>
+                      <h4 class="font-bold text-slate-900 text-xs leading-snug truncate">{{ est.nombreCompleto || est.nombre || 'Estudiante sin nombre' }}</h4>
                       <p class="text-[11px] text-slate-400 truncate">{{ est.correo }}</p>
                     </div>
                   </div>
@@ -503,7 +503,7 @@
 
                 <div class="text-[11px] text-slate-500 space-y-0.5">
                   <p><span class="text-slate-400 font-medium">Matrícula:</span> {{ est.matricula || '2024-IS' }}</p>
-                  <p><span class="text-slate-400 font-medium">Cédula:</span> {{ est.cedula || '1720000000' }}</p>
+                  <p><span class="text-slate-400 font-medium">Cédula:</span> {{ est.cedula || est.ci || '1720000000' }}</p>
                 </div>
               </div>
 

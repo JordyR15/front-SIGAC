@@ -236,7 +236,7 @@
                   <button *ngIf="s.estado === 'Pendiente' || s.estado === 'Rechazada'"
                           (click)="aprobarSolicitud(s)"
                           class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1">
-                    <i class="fa-solid fa-check"></i> Aprobar
+                    <i class="fa-solid fa-check"></i> Aprobar y Publicar
                   </button>
                   <button *ngIf="s.estado === 'Pendiente' || s.estado === 'Asignada'"
                           (click)="rechazarSolicitud(s)"

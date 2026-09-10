@@ -19,7 +19,8 @@ export const roleGuard = (allowedRoles: string[]): CanActivateFn => {
       ? allowedRoles
       : (route.data?.['roles'] as string[]) || [];
 
-    if (!authService.getToken()) {
+    if (!authService.isTokenValid()) {
+      authService.logout();
       router.navigate(['/login']);
       return false;
     }
@@ -29,7 +30,8 @@ export const roleGuard = (allowedRoles: string[]): CanActivateFn => {
     }
 
     console.warn(`[roleGuard] Acceso denegado a "${state.url}". Requiere uno de:`, rolesRequeridos, 'Roles activos:', authService.getRoles());
-    router.navigate(['/dashboard']);
+    authService.logout();
+    router.navigate(['/login']);
     return false;
   };
 };
@@ -39,7 +41,8 @@ export const roleMatchGuard: CanActivateFn = (route: ActivatedRouteSnapshot, sta
   const router = inject(Router);
   const rolesRequeridos = (route.data?.['roles'] as string[]) || [];
 
-  if (!authService.getToken()) {
+  if (!authService.isTokenValid()) {
+    authService.logout();
     router.navigate(['/login']);
     return false;
   }
@@ -49,6 +52,7 @@ export const roleMatchGuard: CanActivateFn = (route: ActivatedRouteSnapshot, sta
   }
 
   console.warn(`[roleMatchGuard] Acceso denegado a "${state.url}". Requiere:`, rolesRequeridos, 'Roles actuales:', authService.getRoles());
-  router.navigate(['/dashboard']);
+  authService.logout();
+  router.navigate(['/login']);
   return false;
 };
