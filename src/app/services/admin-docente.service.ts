@@ -35,113 +35,33 @@ export class AdminDocenteService {
     return getApiBase();
   }
 
-  private STORAGE_KEY = 'sigac_docentes_creados_v1';
+  // No se utiliza almacenamiento local para docentes: todo debe venir del backend
+  private docentesBase: DocenteItemDto[] = [];
 
-  // Lista base de docentes oficiales del sistema
-  private docentesBase: DocenteItemDto[] = [
-    {
-      id: 102,
-      username: 'docente',
-      nombre: 'Docente',
-      apellido: 'Titular',
-      correo: 'docente@uteq.edu.ec',
-      roles: ['Docente'],
-      activo: true,
-      departamento: 'Facultad de Ingeniería',
-      titulo: 'Docente Titular'
-    },
-    {
-      id: 1,
-      username: 'evance',
-      nombre: 'Dra. Evelyn',
-      apellido: 'Vance',
-      correo: 'e.vance@uteq.edu.ec',
-      roles: ['Docente'],
-      activo: true,
-      departamento: 'Ciencias Exactas',
-      titulo: 'Docente Titular'
-    },
-    {
-      id: 2,
-      username: 'mthorne',
-      nombre: 'Dr. Marcus',
-      apellido: 'Thorne',
-      correo: 'm.thorne@uteq.edu.ec',
-      roles: ['Docente'],
-      activo: true,
-      departamento: 'Física y Química',
-      titulo: 'Docente Asociado'
-    }
-  ];
-
-  private getDocentesGuardadosLocal(): DocenteItemDto[] {
-    if (typeof window === 'undefined') return [];
-    try {
-      const raw = localStorage.getItem(this.STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      console.warn('Error leyendo docentes locales', e);
-    }
-    return [];
-  }
-
-  private guardarDocenteLocal(docente: DocenteItemDto): void {
-    if (typeof window === 'undefined') return;
-    try {
-      const actuales = this.getDocentesGuardadosLocal();
-      const filtrados = actuales.filter(d => d.username.toLowerCase() !== docente.username.toLowerCase());
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify([docente, ...filtrados]));
-    } catch (e) {
-      console.warn('Error guardando docente local', e);
-    }
-  }
-
-  private getListaCompletaLocal(): DocenteItemDto[] {
-    const locales = this.getDocentesGuardadosLocal();
-    const usernames = new Set(locales.map(d => d.username.toLowerCase()));
-    const baseFiltrada = this.docentesBase.filter(d => !usernames.has(d.username.toLowerCase()));
-    return [...locales, ...baseFiltrada];
-  }
+  // Placeholders para compatibilidad: retornan listas vacías
+  private getDocentesGuardadosLocal(): DocenteItemDto[] { return []; }
+  private guardarDocenteLocal(_: DocenteItemDto): void { /* no-op */ }
+  private getListaCompletaLocal(): DocenteItemDto[] { return []; }
 
   /**
    * POST /api/Usuarios
    * Registra un nuevo usuario con roles; usa el endpoint oficial del backend.
    */
-  crearDocente(docenteDto: { username: string; password: string; nombre: string; apellido: string; correo: string; roles: string[] }): Observable<any> {
-    const nuevo: DocenteItemDto = {
-      id: Date.now(),
-      username: docenteDto.username,
-      nombre: docenteDto.nombre,
-      apellido: docenteDto.apellido,
-      correo: docenteDto.correo,
-      roles: docenteDto.roles,
-      activo: true,
-      departamento: 'Facultad de Ingeniería',
-      titulo: 'Docente Titular'
-    };
+   crearDocente(docenteDto: { username: string; password: string; nombre: string; apellido: string; correo: string; roles: string[] }): Observable<any> {
+     const payload = {
+       username: docenteDto.username,
+       password: docenteDto.password,
+       nombre: docenteDto.nombre,
+       apellido: docenteDto.apellido,
+       correo: docenteDto.correo,
+       roles: docenteDto.roles
+     };
 
-   this.guardarDocenteLocal(nuevo);
-
-   const payload = {
-     username: docenteDto.username,
-     password: docenteDto.password,
-     nombre: docenteDto.nombre,
-     apellido: docenteDto.apellido,
-     correo: docenteDto.correo,
-     roles: docenteDto.roles
-   };
-
-   return this.http.post(`${this.baseUrl}/api/Usuarios`, payload).pipe(
-     catchError(() => this.http.post(`${this.baseUrl}/api/Login/register`, payload)),
-     catchError(() => {
-       console.warn('Backend offline: registrando docente en almacenamiento local permanente:', docenteDto.username);
-       return of({ success: true, message: 'Docente registrado exitosamente en almacenamiento seguro', docente: nuevo });
-     })
-   );
-  }
+     // Enviar al endpoint principal; si falla, intentar registro alternativo y propagar error si ambos fallan
+     return this.http.post(`${this.baseUrl}/api/Usuarios`, payload).pipe(
+       catchError(() => this.http.post(`${this.baseUrl}/api/Login/register`, payload))
+     );
+   }
 
   /**
    * GET /api/Usuarios?rol=Docente
@@ -192,34 +112,10 @@ export class AdminDocenteService {
          } as DocenteItemDto;
        });
 
-       const hasOfficial = mapped.some(d => String(d.correo || '').toLowerCase() === 'docente@uteq.edu.ec' || String(d.username || '').toLowerCase() === 'docente');
-       const result = hasOfficial ? mapped : [
-         {
-           id: 102,
-           username: 'docente',
-           nombre: 'Docente',
-           apellido: 'Titular',
-           correo: 'docente@uteq.edu.ec',
-           roles: ['Docente'],
-           activo: true,
-           departamento: 'Facultad de Ingeniería',
-           titulo: 'Docente Titular'
-         } as DocenteItemDto,
-         ...mapped
-       ];
-
-       const locales = this.getDocentesGuardadosLocal();
-       const existingIds = new Set(result.map(m => m.id));
-       locales.forEach((loc) => {
-         if (!existingIds.has(loc.id)) {
-           result.push(loc);
-           existingIds.add(loc.id);
-         }
-       });
-
-       return result;
+       // No se inyectan docentes locales; devolver sólo lo que traiga el backend
+       return mapped;
      }),
-     catchError(() => of(this.getListaCompletaLocal()))
+     catchError(() => of([]))
    );
   }
 }

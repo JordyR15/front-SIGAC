@@ -179,22 +179,7 @@ export class MateriaService {
   constructor(private http: HttpClient) {}
 
   private getInitialMaterias(): MateriaDto[] {
-    if (typeof window !== 'undefined') {
-      const rol = localStorage.getItem('rol');
-      if (rol === 'Estudiante') {
-        const stored = localStorage.getItem(this.STORAGE_MATERIAS_ESTUDIANTE);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) return parsed;
-          } catch {
-            return [];
-          }
-        }
-        return [];
-      }
-    }
-    return this.loadStorage(this.STORAGE_MATERIAS, MATERIAS_DEFAULT);
+    return [];
   }
 
   private get apiUrl() { return `${getApiBase()}/api/Materia`; }
@@ -271,179 +256,68 @@ export class MateriaService {
   }
 
   /**
-   * Refresca las asignaturas inscritas del estudiante.
-   * Utiliza las rutas oficiales del backend en .NET (EstudianteController):
-   * 1. GET /api/Estudiante/mis-materias (cátedras del estudiante autenticado)
-   * 2. Fallback: GET /api/Estudiante/{id}/validacion-malla
-   * 3. Fallback seguro en memoria/localStorage (MATERIAS_DEFAULT) para evitar errores 404.
-   */
-  /**
-   * Obtiene única y exclusivamente las materias reales devueltas por la API
-   * para el estudiante logueado (sin materias de relleno ni fallbacks con materias falsas).
+   * Obtiene las materias desde el backend real, sin localStorage, sin mocks ni datos de relleno.
+   * El frontend debe consultar siempre la API del servidor y no inventar listas locales.
    */
   refreshMaterias(): Observable<MateriaDto[]> {
-    const rol = typeof window !== 'undefined' ? (localStorage.getItem('rol') || 'Estudiante') : 'Estudiante';
-    const userId = typeof window !== 'undefined' ? (Number(localStorage.getItem('userId')) || 1) : 1;
-    const estudianteId = typeof window !== 'undefined' ? (Number(localStorage.getItem('estudianteId')) || userId) : userId;
-    const correoUsuario = typeof window !== 'undefined' ? (localStorage.getItem('correo') || '').toLowerCase().trim() : '';
+   const rol = typeof window !== 'undefined' ? (localStorage.getItem('rol') || 'Estudiante') : 'Estudiante';
+   const userId = typeof window !== 'undefined' ? (Number(localStorage.getItem('userId')) || 0) : 0;
 
-    if (rol === 'Docente') {
-      const urlDocenteMaterias = `${getApiBase()}/api/Docente/${userId}/materias`;
-      const urlDocenteClases = `${getApiBase()}/api/Docente/clases`;
-      const urlClaseDocente = `${getApiBase()}/api/Clase/docente/${userId}`;
-      const urlClaseDocenteLower = `${getApiBase()}/api/clase/docente/${userId}`;
+   if (rol === 'Docente') {
+     const urlDocenteMaterias = `${getApiBase()}/api/Docente/${userId}/materias`;
+     return this.http.get<any[]>(urlDocenteMaterias).pipe(
+       map((res) => {
+         const materiasBackend: any[] = Array.isArray(res) ? res : (res && Array.isArray((res as any).materias) ? (res as any).materias : []);
+         const mapped = materiasBackend.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
+         this.materiasSubject.next(mapped);
+         return mapped;
+       }),
+       catchError(() => {
+         this.materiasSubject.next([]);
+         return of([]);
+       })
+     );
+   }
 
-      return this.http.get<any>(urlDocenteMaterias).pipe(
-        catchError(() => this.http.get<any>(urlDocenteClases)),
-        catchError(() => this.http.get<any>(urlClaseDocente)),
-        catchError(() => this.http.get<any>(urlClaseDocenteLower)),
-        tap((res) => {
-          let clasesBackend: any[] = [];
-          if (Array.isArray(res)) {
-            clasesBackend = res;
-          } else if (res && Array.isArray((res as any).clases)) {
-            clasesBackend = (res as any).clases;
-          } else if (res && Array.isArray((res as any).materias)) {
-            clasesBackend = (res as any).materias;
-          }
+   if (rol === 'Administrador') {
+     const urlMaterias = `${getApiBase()}/api/Materias`;
+     const urlMateria = `${getApiBase()}/api/Materia`;
+     return this.http.get<any[]>(urlMaterias).pipe(
+       catchError(() => this.http.get<any[]>(urlMateria)),
+       map((res) => {
+         const materiasBackend: any[] = Array.isArray(res) ? res : (res && Array.isArray((res as any).materias) ? (res as any).materias : []);
+         const mapped = materiasBackend.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
+         this.materiasSubject.next(mapped);
+         return mapped;
+       }),
+       catchError(() => {
+         this.materiasSubject.next([]);
+         return of([]);
+       })
+     );
+   }
 
-          if (clasesBackend.length > 0) {
-            const mapped = clasesBackend.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
-            const existing = this.materiasSubject.value;
-            const newMap = new Map<number, MateriaDto>();
-            existing.forEach(m => newMap.set(m.id, m));
-            mapped.forEach(m => newMap.set(m.id, m));
-            const merged = Array.from(newMap.values());
-            this.materiasSubject.next(merged);
-            this.saveStorage(this.STORAGE_MATERIAS, merged);
-          }
-        }),
-        map(() => this.materiasSubject.value),
-        catchError(() => of(this.materiasSubject.value))
-      );
-    }
+   if (rol !== 'Estudiante' && rol !== 'Ayudante') {
+     return of([]);
+   }
 
-    if (rol === 'Administrador') {
-      const urlMateria = `${getApiBase()}/api/Materia`;
-      const urlMateriaLower = `${getApiBase()}/api/materia`;
-      const urlMaterias = `${getApiBase()}/api/Materias`;
-
-      return this.http.get<any>(urlMateria).pipe(
-        catchError(() => this.http.get<any>(urlMateriaLower)),
-        catchError(() => this.http.get<any>(urlMaterias)),
-        tap((res) => {
-          let mats: any[] = [];
-          if (Array.isArray(res)) {
-            mats = res;
-          } else if (res && Array.isArray((res as any).materias)) {
-            mats = (res as any).materias;
-          }
-
-          if (mats.length > 0) {
-            const mapped = mats.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
-            const existing = this.materiasSubject.value;
-            const mapById = new Map<number, MateriaDto>();
-            existing.forEach(m => mapById.set(m.id, m));
-            mapped.forEach(m => mapById.set(m.id, m));
-            const merged = Array.from(mapById.values());
-            this.materiasSubject.next(merged);
-            this.saveStorage(this.STORAGE_MATERIAS, merged);
-          }
-        }),
-        map(() => this.materiasSubject.value),
-        catchError(() => of(this.materiasSubject.value))
-      );
-    }
-
-    if (rol !== 'Estudiante' && rol !== 'Ayudante') {
-      return of(this.materiasSubject.value);
-    }
-
-    const endpointMisMaterias = `${getApiBase()}/api/Estudiante/mis-materias`;
-
-    return this.http.get<any>(endpointMisMaterias).pipe(
-      tap((res) => {
-        let materiasBackend: any[] = [];
-        if (Array.isArray(res)) {
-          materiasBackend = res;
-        } else if (res && Array.isArray(res.materias)) {
-          materiasBackend = res.materias;
-        } else if (res && Array.isArray(res.clases)) {
-          materiasBackend = res.clases;
-        }
-
-        // Mapear única y exclusivamente las materias reales de la API sin arrays estáticos de relleno
-        const mapped = materiasBackend.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
-        this.materiasSubject.next(mapped);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(this.STORAGE_MATERIAS_ESTUDIANTE, JSON.stringify(mapped));
-        }
-      }),
-      map(() => this.materiasSubject.value),
-      catchError(() => {
-        // En caso de que el backend esté offline o dé 503, obtener únicamente las clases reales del sistema donde el estudiante figure inscrito
-        const materiasReales = this.obtenerClasesRealesEstudiante(estudianteId, correoUsuario);
-        this.materiasSubject.next(materiasReales);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(this.STORAGE_MATERIAS_ESTUDIANTE, JSON.stringify(materiasReales));
-        }
-        return of(materiasReales);
-      })
-    );
+   const endpointMisMaterias = `${getApiBase()}/api/Estudiante/mis-materias`;
+   return this.http.get<any>(endpointMisMaterias).pipe(
+     map((res) => {
+       const materiasBackend: any[] = Array.isArray(res) ? res : (res && Array.isArray((res as any).materias) ? (res as any).materias : []);
+       const mapped = materiasBackend.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
+       this.materiasSubject.next(mapped);
+       return mapped;
+     }),
+     catchError(() => {
+       this.materiasSubject.next([]);
+       return of([]);
+     })
+   );
   }
 
   getMateriasEstudiante(): Observable<MateriaDto[]> {
-    return this.refreshMaterias();
-  }
-
-  /**
-   * Busca clases reales registradas en la aplicación donde el estudiante figure efectivamente matriculado.
-   * Si no está inscrito en ninguna, retorna array vacío ([]), sin materias falsas de relleno.
-   */
-  private obtenerClasesRealesEstudiante(estudianteId: number, correoUsuario: string): MateriaDto[] {
-    if (typeof window === 'undefined') return [];
-    const clasesEncontradas: MateriaDto[] = [];
-
-    // 1. Revisar materias activas con lista de estudiantes
-    try {
-      const storedMaterias = localStorage.getItem(this.STORAGE_MATERIAS);
-      if (storedMaterias) {
-        const mats: MateriaDto[] = JSON.parse(storedMaterias);
-        if (Array.isArray(mats)) {
-          mats.forEach(m => {
-            const isInscrito = m.estudiantes?.some(e => 
-              (correoUsuario && e.correo && e.correo.toLowerCase() === correoUsuario) ||
-              (Number(e.id) === estudianteId) ||
-              (Number(e.estudianteId) === estudianteId)
-            );
-            if (isInscrito && !clasesEncontradas.some(c => c.id === m.id)) {
-              clasesEncontradas.push(m);
-            }
-          });
-        }
-      }
-    } catch {}
-
-    // 2. Revisar clases de claseService
-    try {
-      const storedClases = localStorage.getItem('sigac_clases_v2');
-      if (storedClases) {
-        const clases = JSON.parse(storedClases);
-        if (Array.isArray(clases)) {
-          clases.forEach((c: any, idx: number) => {
-            const matchId = Array.isArray(c.estudianteIds) && c.estudianteIds.includes(estudianteId);
-            const matchCorreo = Array.isArray(c.estudiantes) && c.estudiantes.some((e: any) => 
-              correoUsuario && e.correo && e.correo.toLowerCase() === correoUsuario
-            );
-            if ((matchId || matchCorreo) && !clasesEncontradas.some(m => m.id === c.id || m.claseId === c.id)) {
-              clasesEncontradas.push(this.mapToMateriaDto(c, idx));
-            }
-          });
-        }
-      }
-    } catch {}
-
-    return clasesEncontradas;
+   return this.refreshMaterias();
   }
 
   createMateria(dto: CreateMateriaDto): Observable<MateriaDto> {

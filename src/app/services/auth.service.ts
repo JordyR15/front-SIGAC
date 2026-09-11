@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
@@ -133,7 +133,7 @@ export class AuthService {
         };
 
         if (!user.token) {
-          throw new Error('No se recibió token JWT válido del backend.');
+          throw new Error('No se recibiÃ³ token JWT vÃ¡lido del backend.');
         }
 
         return user;
@@ -146,7 +146,7 @@ export class AuthService {
 
   /**
    * POST /api/Login/forgot-password (o /recuperar-password)
-   * Solicitar código o enlace de recuperación con { email: string }
+   * Solicitar cÃ³digo o enlace de recuperaciÃ³n con { email: string }
    */
   forgotPassword(email: string): Observable<any> {
    const base = getApiBase();
@@ -404,7 +404,7 @@ export class AuthService {
   }
 
   /**
-   * Obtiene dinámicamente el ID del estudiante autenticado.
+   * Obtiene dinÃ¡micamente el ID del estudiante autenticado.
    * Evita colisiones con el ID 1 que pertenece al Administrador.
    */
   getEstudianteId(): number | null {
@@ -440,7 +440,7 @@ export class AuthService {
   }
 
   /**
-   * Getter reactivo del usuario en sesión actual.
+   * Getter reactivo del usuario en sesiÃ³n actual.
    * Permite acceder como `this.authService.currentUser?.id`.
    */
   get currentUser(): UserDto | null {
@@ -468,9 +468,11 @@ export class AuthService {
   }
 
   /**
-   * Método compatible para llamadas `this.authService.getCurrentUser()`.
+   * MÃ©todo compatible para llamadas `this.authService.getCurrentUser()`.
    */
   getCurrentUser(): UserDto | null {
     return this.currentUser;
   }
 }
+
+

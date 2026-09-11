@@ -41,6 +41,7 @@
         <option value="Docente">Docente de Cátedra</option>
         <option value="Coordinador">Coordinador</option>
         <option value="Tribunal">Tribunal Evaluador</option>
+        <option value="Jurado">Jurado</option>
       </select>
     </div>
   </div>
@@ -318,9 +319,24 @@
                   <div class="text-xs">
                     <span class="font-bold text-slate-800 flex items-center gap-1.5">
                       <i class="fa-solid fa-gavel text-purple-600"></i>
-                      Miembro de Tribunal Evaluador (Jurado)
+                      Miembro de Tribunal Evaluador
                     </span>
                     <p class="text-slate-500 text-[11px] mt-0.5">Permite integrar mesas evaluadoras, calificar sustentaciones de sílabo mediante rúbricas y emitir dictámenes.</p>
+                  </div>
+                </label>
+
+                <!-- Checkbox 4: Jurado (rol separado) -->
+                <label class="flex items-start gap-3 p-2.5 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-slate-300 transition-colors">
+                  <input type="checkbox"
+                         formControlName="rolJurado"
+                         id="chk-rol-jurado"
+                         class="mt-0.5 rounded text-accent focus:ring-accent w-4 h-4 cursor-pointer">
+                  <div class="text-xs">
+                    <span class="font-bold text-slate-800 flex items-center gap-1.5">
+                      <i class="fa-solid fa-gavel text-purple-600"></i>
+                      Jurado
+                    </span>
+                    <p class="text-slate-500 text-[11px] mt-0.5">Asignar como jurado para evaluaciones puntuales sin ser miembro permanente del tribunal.</p>
                   </div>
                 </label>
               </div>

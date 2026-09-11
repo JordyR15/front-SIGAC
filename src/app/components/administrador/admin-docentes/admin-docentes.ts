@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import Swal from 'sweetalert2';
 import { AdminDocenteService, DocenteItemDto } from '../../../services/admin-docente.service';
 
 @Component({
@@ -47,7 +48,8 @@ export class AdminDocentesComponent implements OnInit {
       // Checkboxes de roles
       rolDocente: [{ value: true, disabled: false }],
       rolCoordinador: [false],
-      rolTribunal: [false]
+      rolTribunal: [false],
+      rolJurado: [false]
     });
   }
 
@@ -57,7 +59,12 @@ export class AdminDocentesComponent implements OnInit {
         this.docentes = data;
       },
       error: (err) => {
-        console.error('Error al cargar docentes:', err);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error cargando docentes',
+          html: `<pre style="white-space: pre-wrap; text-align:left;">${(err && err.message) ? err.message : JSON.stringify(err)}</pre>`,
+          confirmButtonText: 'Aceptar'
+        });
       }
     });
   }
@@ -73,7 +80,8 @@ export class AdminDocentesComponent implements OnInit {
       correo: '',
       rolDocente: true,
       rolCoordinador: false,
-      rolTribunal: false
+      rolTribunal: false,
+      rolJurado: false
     });
     this.modalAbierto = true;
   }
@@ -108,15 +116,12 @@ export class AdminDocentesComponent implements OnInit {
     if (formVal.rolDocente) rolesSeleccionados.push('Docente');
     if (formVal.rolCoordinador) rolesSeleccionados.push('Coordinador');
     if (formVal.rolTribunal) rolesSeleccionados.push('Tribunal');
+    if (formVal.rolJurado) rolesSeleccionados.push('Jurado');
 
     if (rolesSeleccionados.length === 0) {
       this.mensajeError = 'Debe seleccionar al menos un rol para el docente.';
       return;
     }
-
-    this.isSubmitting = true;
-    this.mensajeExito = '';
-    this.mensajeError = '';
 
     const payload = {
       username: formVal.username.trim(),
@@ -127,20 +132,43 @@ export class AdminDocentesComponent implements OnInit {
       roles: rolesSeleccionados
     };
 
-    this.adminDocenteService.crearDocente(payload).subscribe({
-      next: (res) => {
-        this.isSubmitting = false;
-        this.mensajeExito = `Docente ${payload.nombre} ${payload.apellido} registrado exitosamente con roles: ${rolesSeleccionados.join(', ')}.`;
-        this.cargarDocentes();
-        setTimeout(() => {
+    // Mostrar JSON que se enviará al backend y pedir confirmación
+    Swal.fire({
+      title: 'JSON a enviar al backend',
+      html: `<pre style="white-space: pre-wrap; text-align:left;">${JSON.stringify(payload, null, 2).replace(/</g, '&lt;')}</pre>`,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'Enviar',
+      cancelButtonText: 'Cancelar',
+      width: 700
+    }).then((result) => {
+      if (!result.isConfirmed) return;
+
+      this.isSubmitting = true;
+      this.mensajeExito = '';
+      this.mensajeError = '';
+
+      this.adminDocenteService.crearDocente(payload).subscribe({
+        next: (res) => {
+          this.isSubmitting = false;
+          const createdId = res?.id ?? (res?.docente ? res.docente.id : null);
+          const successMsg = `Docente ${payload.nombre} ${payload.apellido} registrado exitosamente${createdId ? ' (ID: ' + createdId + ')' : ''} con roles: ${rolesSeleccionados.join(', ')}.`;
+
+          // Mostrar notificación clara al usuario
+          Swal.fire({ icon: 'success', title: 'Docente creado', html: `<div style="text-align:left">${successMsg}</div>`, confirmButtonText: 'Aceptar' });
+
+          // Limpiar formulario, cerrar modal y recargar lista
+          try { this.docenteForm.reset({ username: '', password: 'Temporal2026*', nombre: '', apellido: '', correo: '', rolDocente: true, rolCoordinador: false, rolTribunal: false, rolJurado: false }); } catch {}
+          this.mensajeExito = successMsg;
+          this.cargarDocentes();
           this.cerrarModal();
-        }, 1200);
-      },
-      error: (err) => {
-        this.isSubmitting = false;
-        this.mensajeError = 'Error al registrar el docente. Por favor verifique los datos.';
-        console.error(err);
-      }
+        },
+        error: (err) => {
+          this.isSubmitting = false;
+          this.mensajeError = 'Error al registrar el docente. Por favor verifique los datos.';
+          Swal.fire({ icon: 'error', title: 'Error al registrar docente', html: `<pre style="white-space:pre-wrap; text-align:left">${(err && err.message) ? err.message : JSON.stringify(err)}</pre>`, confirmButtonText: 'Aceptar' });
+        }
+      });
     });
   }
 
