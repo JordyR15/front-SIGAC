@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { LoginComponent } from './components/login/login.component';
+import { noAuthGuard } from './guards/no-auth.guard';
 import { LayoutComponent } from './layout/layout';
 import { DashboardComponent } from './components/dashboard/dashboard';
 
@@ -45,7 +46,7 @@ import { PostulacionComponent } from './components/estudiante/postulacion/postul
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
-  { path: 'login', component: LoginComponent },
+  { path: 'login', component: LoginComponent, canActivate: [noAuthGuard] },
   { path: 'recuperar-password', component: RecuperarPasswordComponent },
   {
     path: '',

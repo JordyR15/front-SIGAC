@@ -119,7 +119,9 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     esEsencial: true,
     url: 'https://repositorio.uteq.edu.ec/guias/calculo-avanzado.pdf',
     descripcion: '',
-    temaNombre: 'Tema 1: Fundamentos y Derivadas Parciales'
+    temaNombre: 'Tema 1: Fundamentos y Derivadas Parciales',
+    // Texto con enlaces adicionales (una por línea o separadas por comas)
+    linksString: ''
   };
 
   // Actividades Pedagógicas
@@ -1102,6 +1104,27 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       }
     };
     reader.readAsDataURL(file);
+
+    // Intentar subir el archivo al backend y usar la URL devuelta
+    try {
+      this.materiaService.uploadRecurso(this.materiaSeleccionadaId, file).subscribe({
+        next: (res) => {
+          if (res?.url) {
+            this.nuevoRecurso.url = res.url;
+            this.mostrarMensajeExito('Archivo subido correctamente. La URL fue añadida al recurso.');
+          }
+          if (res?.key) {
+            // opcional: guardar key localmente en archivoRecurso
+            (this.archivoRecurso as any).storageKey = res.key;
+          }
+        },
+        error: () => {
+          // Silenciar error de upload (backend puede no estar disponible en dev)
+        }
+      });
+    } catch (e) {
+      // noop
+    }
   }
 
   quitarArchivoRecurso(): void {
@@ -1192,6 +1215,10 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     }
 
     this.isLoading = true;
+
+    const rawLinks = (this.nuevoRecurso as any).linksString || '';
+    const links = rawLinks.split(/\r?\n|,/) .map((s: string) => s.trim()).filter(Boolean);
+
     this.materiaService.addRecurso(this.materiaSeleccionadaId, {
       titulo: this.nuevoRecurso.titulo.trim(),
       materiaId: this.materiaSeleccionadaId,
@@ -1202,7 +1229,8 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       temaNombre: this.nuevoRecurso.temaNombre,
       nombreArchivo: this.archivoRecurso?.nombre,
       archivoDataUrl: this.archivoRecurso?.dataUrl,
-      tamanoArchivoKb: this.archivoRecurso?.tamanoKb
+      tamanoArchivoKb: this.archivoRecurso?.tamanoKb,
+      links: links
     }).subscribe({
       next: () => {
         this.isLoading = false;
@@ -1211,6 +1239,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         setTimeout(() => this.successMessage = '', 4000);
         this.nuevoRecurso.titulo = '';
         this.nuevoRecurso.descripcion = '';
+        (this.nuevoRecurso as any).linksString = '';
         this.archivoRecurso = null;
       },
       error: () => {
@@ -1263,5 +1292,10 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       this.materiaService.deleteRecurso(recursoId);
       this.actualizarRecursosYActividades();
     }
+  }
+
+  private mostrarMensajeExito(msg: string): void {
+    this.successMessage = msg;
+    setTimeout(() => this.successMessage = '', 4000);
   }
 }

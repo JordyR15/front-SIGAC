@@ -30,13 +30,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // --- Datos del Ayudante / Docente ---
   dashboardAyudante = {
-    estudiantes: 25,
-    clasesImpartidas: 8,
-    promedioAsistencia: 92,
-    proximasClases: [
-      { titulo: 'Clase Virtual - Cálculo Avanzado', descripcion: 'Zoom - 10:00 AM (Mañana)', ruta: '/docente/gestion-clases' },
-      { titulo: 'Clase Presencial - Mecánica Cuántica', descripcion: 'Aula 301 - 14:00 PM (Viernes)', ruta: '/docente/gestion-clases' }
-    ]
+    estudiantes: 0,
+    clasesImpartidas: 0,
+    promedioAsistencia: 0,
+    proximasClases: [] as Array<{ titulo: string; descripcion: string; ruta: string }>
   };
 
   // --- Datos del Administrador ---
@@ -53,7 +50,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    if (this.rol === 'Estudiante') {
+    if (this.rol === 'Estudiante' || this.rol === 'Docente' || this.rol === 'Ayudante') {
       this.materiaService.refreshMaterias().subscribe();
     }
 
@@ -62,6 +59,36 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
       const correoUsuario = (localStorage.getItem('correo') || '').toLowerCase().trim();
       const userId = Number(localStorage.getItem('userId')) || 1;
+
+      if (this.rol === 'Docente' || this.rol === 'Ayudante') {
+        const clasesDelUsuario = list.map((m, idx) => {
+          const totalEstudiantes = Array.isArray(m.estudiantes) ? m.estudiantes.length : 0;
+          const asistenciaPromedio = totalEstudiantes > 0
+            ? (m.estudiantes!.reduce((sum, e) => sum + (typeof e.asistencia === 'number' ? e.asistencia : 0), 0) / totalEstudiantes)
+            : 0;
+
+          return {
+            titulo: `${m.nombre}${m.codigo ? ` · ${m.codigo}` : ''}`,
+            descripcion: `${m.docente || 'Docente Titular'} · ${m.semestre || '2026-2'} · ${m.grupo || 'Grupo A'} · ${totalEstudiantes} estudiantes · ${Math.round(asistenciaPromedio)}% asistencia`,
+            ruta: '/docente/gestion-clases'
+          };
+        });
+
+        this.dashboardAyudante.estudiantes = list.reduce((sum, m) => sum + (Array.isArray(m.estudiantes) ? m.estudiantes.length : 0), 0);
+        this.dashboardAyudante.clasesImpartidas = list.length;
+        this.dashboardAyudante.promedioAsistencia = list.length > 0
+          ? Math.round(list.reduce((sum, m) => {
+              const estudiantes = Array.isArray(m.estudiantes) ? m.estudiantes : [];
+              const promedioMateria = estudiantes.length > 0
+                ? estudiantes.reduce((s, e) => s + (typeof e.asistencia === 'number' ? e.asistencia : 0), 0) / estudiantes.length
+                : 0;
+              return sum + promedioMateria;
+            }, 0) / list.length)
+          : 0;
+        this.dashboardAyudante.proximasClases = clasesDelUsuario.length > 0 ? clasesDelUsuario.slice(0, 4) : [
+          { titulo: 'Sin clases programadas', descripcion: 'No hay materias registradas para este usuario en el sistema.', ruta: '/docente/gestion-clases' }
+        ];
+      }
 
       this.materiasEstudiante = list.map((m, idx) => {
         // Encontrar datos del estudiante logueado si están disponibles en la materia

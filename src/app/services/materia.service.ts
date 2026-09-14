@@ -80,6 +80,10 @@ export interface RecursoDto {
   nombreArchivo?: string;
   archivoDataUrl?: string;
   tamanoArchivoKb?: number;
+  // Nuevo: enlaces adicionales relacionados al recurso (Sub-links, vídeos, referencias)
+  links?: string[];
+  // Si el backend devuelve una key/clave de almacenamiento (p.ej. Supabase), queda registrada
+  storageKey?: string;
 }
 
 export interface CreateRecursoDto {
@@ -94,6 +98,8 @@ export interface CreateRecursoDto {
   nombreArchivo?: string;
   archivoDataUrl?: string;
   tamanoArchivoKb?: number;
+  // Nuevo: lista opcional de links relacionados (por ejemplo múltiples URLs o videos)
+  links?: string[];
 }
 
 export interface RecursoConEstadoDto extends RecursoDto {}
@@ -563,8 +569,11 @@ export class MateriaService {
           fechaCreacion: r.fechaCreacion,
           nombreArchivo: r.nombreArchivo,
           archivoDataUrl: r.archivoDataUrl,
-          tamanoArchivoKb: r.tamanoArchivoKb
-        }));
+                  tamanoArchivoKb: r.tamanoArchivoKb,
+                  // Nuevo: leer Links/links/Links desde la respuesta del backend si existe
+                  links: Array.isArray(r.links) ? r.links : (Array.isArray(r.Links) ? r.Links : []),
+                  storageKey: r.key || r.storageKey || r.storage || undefined
+                }));
         const currentOther = this.recursosSubject.value.filter(r => Number(r.materiaId) !== Number(materiaId));
         const combined = [...mapped, ...currentOther];
         this.recursosSubject.next(combined);
@@ -611,25 +620,62 @@ export class MateriaService {
       fechaCreacion: new Date().toISOString().split('T')[0],
       nombreArchivo: dto.nombreArchivo,
       archivoDataUrl: dto.archivoDataUrl,
-      tamanoArchivoKb: dto.tamanoArchivoKb
-    };
+        tamanoArchivoKb: dto.tamanoArchivoKb,
+        // Nuevo: tomar links opcionales desde el DTO
+        links: Array.isArray((dto as any).links) ? (dto as any).links : (Array.isArray((dto as any).Links) ? (dto as any).Links : [])
+      };
 
-    const currentRecursos = this.recursosSubject.value;
-    const updated = [nuevoRecurso, ...currentRecursos];
-    this.recursosSubject.next(updated);
-    this.saveStorage(this.STORAGE_RECURSOS, updated);
+      const currentRecursos = this.recursosSubject.value;
+      const updated = [nuevoRecurso, ...currentRecursos];
+      this.recursosSubject.next(updated);
+      this.saveStorage(this.STORAGE_RECURSOS, updated);
 
-    // Intentar backend
-    return this.http.post<RecursoDto>(`${this.apiUrl}/${materiaId}/recursos`, dto).pipe(
-      tap(backendRes => {
-        if (backendRes && backendRes.id) {
-          nuevoRecurso.id = backendRes.id;
-          this.saveStorage(this.STORAGE_RECURSOS, this.recursosSubject.value);
-        }
-      }),
-      catchError(() => of(nuevoRecurso))
-    );
-  }
+      // Preparar payload para el backend: incluir Links (mayor compatibilidad con DTO del backend)
+      const payload: any = {
+        Titulo: dto.titulo?.trim(),
+        Descripcion: dto.descripcion || dto.descripcion || '',
+        Url: dto.url || dto.url || '',
+        EsEsencial: !!dto.esEsencial,
+        MateriaId: Number(materiaId),
+        TemaId: dto.temaId,
+        TemaNombre: dto.temaNombre,
+        Tipo: dto.tipo,
+        NombreArchivo: dto.nombreArchivo,
+        TamanoArchivoKb: dto.tamanoArchivoKb,
+        Links: Array.isArray((dto as any).links) ? (dto as any).links : (Array.isArray((dto as any).Links) ? (dto as any).Links : [])
+      };
+
+      return this.http.post<RecursoDto>(`${this.apiUrl}/${materiaId}/recursos`, payload).pipe(
+        tap(backendRes => {
+          if (backendRes && backendRes.id) {
+            nuevoRecurso.id = backendRes.id;
+            // Backend puede devolver Links y storage key
+            if (Array.isArray((backendRes as any).links) || Array.isArray((backendRes as any).Links)) {
+                          nuevoRecurso.links = Array.isArray((backendRes as any).links) ? (backendRes as any).links : (backendRes as any).Links;
+            }
+            if ((backendRes as any).key) {
+              nuevoRecurso.storageKey = (backendRes as any).key;
+            }
+            this.saveStorage(this.STORAGE_RECURSOS, this.recursosSubject.value);
+          }
+        }),
+        catchError(() => of(nuevoRecurso))
+      );
+    }
+
+    /**
+     * Subir archivo binario al backend (multipart/form-data)
+     * Endpoint implementado en backend: POST /api/Materia/{materiaId}/recursos/upload
+     * Devuelve objeto con { url, key, raw }
+     */
+    uploadRecurso(materiaId: number, archivo: File): Observable<{ url?: string; key?: string; raw?: any }> {
+      const fd = new FormData();
+      fd.append('archivo', archivo);
+      const url = `${getApiBase()}/api/Materia/${materiaId}/recursos/upload`;
+      return this.http.post<any>(url, fd).pipe(
+        map((res) => ({ url: res?.url || res?.Url || res?.urlArchivo || undefined, key: res?.key || res?.Key || undefined, raw: res }))
+      );
+    }
 
   marcarRecursoComoVisto(recursoId: number): Observable<any> {
     const safeRecursoId = Math.floor(Math.abs(Number(recursoId)) % 2147483647) || 1;

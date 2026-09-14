@@ -54,8 +54,13 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
     esencial: false,
     url: 'https://ejemplo.edu/recurso.pdf',
     descripcion: '',
-    temaNombre: ''
+    temaNombre: '',
+    // Texto para enlaces adicionales (uno por línea o separados por comas)
+    linksString: ''
   };
+
+  // Archivo temporal seleccionado por el usuario (si carga localmente)
+  archivoRecurso: { nombre: string; tamanoKb: number; dataUrl: string; storageKey?: string } | null = null;
 
   nuevaActividad = {
     nombre: '',
@@ -212,6 +217,10 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
   agregarRecurso() {
     if (!this.nuevoRecurso.nombre.trim()) return;
 
+    // Parsear links (líneas o comas)
+    const rawLinks = (this.nuevoRecurso as any).linksString || '';
+    const links = rawLinks.split(/\r?\n|,/) .map((s: string) => s.trim()).filter(Boolean);
+
     this.materiaService.addRecurso(this.materiaId, {
       titulo: this.nuevoRecurso.nombre,
       descripcion: this.nuevoRecurso.descripcion || `Recurso de ${this.nuevoRecurso.tipo}`,
@@ -219,7 +228,11 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
       tipo: this.nuevoRecurso.tipo,
       esEsencial: this.nuevoRecurso.esencial,
       materiaId: this.materiaId,
-      temaNombre: this.nuevoRecurso.temaNombre || this.temaActualNombre
+      temaNombre: this.nuevoRecurso.temaNombre || this.temaActualNombre,
+      nombreArchivo: this.archivoRecurso?.nombre,
+      archivoDataUrl: this.archivoRecurso?.dataUrl,
+      tamanoArchivoKb: this.archivoRecurso?.tamanoKb,
+      links: links
     }).subscribe(() => {
       this.nuevoRecurso = {
         nombre: '',
@@ -227,10 +240,53 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
         esencial: false,
         url: 'https://ejemplo.edu/recurso.pdf',
         descripcion: '',
-        temaNombre: this.temaActualNombre
-      };
+        temaNombre: this.temaActualNombre,
+        linksString: ''
+      } as any;
+      this.archivoRecurso = null;
       this.showAddRecurso = false;
     });
+  }
+
+  onArchivoRecursoChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.archivoRecurso = {
+        nombre: file.name,
+        tamanoKb: Math.round(file.size / 1024),
+        dataUrl: reader.result as string
+      };
+      if (!this.nuevoRecurso.nombre.trim()) {
+        this.nuevoRecurso.nombre = file.name.replace(/\.[^/.]+$/, '');
+      }
+    };
+    reader.readAsDataURL(file);
+
+    // Intentar subir al backend y obtener URL pública
+    try {
+      this.materiaService.uploadRecurso(this.materiaId, file).subscribe({
+        next: (res) => {
+          if (res?.url) {
+            this.nuevoRecurso.url = res.url;
+          }
+          if (res?.key) {
+            if (this.archivoRecurso) (this.archivoRecurso as any).storageKey = res.key;
+          }
+        },
+        error: () => {
+          // backend posiblemente inactivo — dejar archivo local
+        }
+      });
+    } catch (e) {
+      // noop
+    }
+  }
+
+  quitarArchivoRecurso(): void {
+    this.archivoRecurso = null;
   }
 
   agregarActividad() {

@@ -76,7 +76,9 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     tipo: 'PDF',
     url: 'https://repositorio.uteq.edu.ec/guias/apoyo-ayudantia.pdf',
     descripcion: '',
-    esEsencial: true
+    esEsencial: true,
+    // enlaces adicionales como texto separado por líneas o comas
+    linksString: ''
   };
 
   // Formulario nueva actividad
@@ -418,6 +420,23 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
       }
     };
     reader.readAsDataURL(file);
+
+    // Subir archivo al backend y obtener URL pública (si el backend está disponible)
+    try {
+      this.materiaService.uploadRecurso(this.materiaSeleccionadaId, file).subscribe({
+        next: (res) => {
+          if (res?.url) {
+            this.nuevoRecurso.url = res.url;
+            this.mostrarMensajeExito('Archivo subido correctamente. URL establecida en el campo del recurso.');
+          }
+        },
+        error: () => {
+          // Silenciar; el archivo seguirá disponible como dataUrl local
+        }
+      });
+    } catch (e) {
+      // ignore
+    }
   }
 
   quitarArchivoRecurso(): void {
@@ -506,29 +525,52 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const recurso: RecursoDto = {
-      id: Date.now(),
-      materiaId: this.materiaSeleccionadaId,
+    // Parse links string (separado por líneas o comas)
+    const rawLinks = (this.nuevoRecurso as any).linksString || '';
+    const links = rawLinks.split(/\r?\n|,/) .map((s: string) => s.trim()).filter(Boolean);
+
+    const payload = {
       titulo: this.nuevoRecurso.titulo,
       tipo: this.nuevoRecurso.tipo,
       url: this.nuevoRecurso.url,
       descripcion: this.nuevoRecurso.descripcion || 'Material de apoyo compartido por el Ayudante de Cátedra.',
       esEsencial: this.nuevoRecurso.esEsencial,
-      visto: false,
-      creadoPor: 'Ayudante de Cátedra',
-      fechaCreacion: new Date().toISOString().split('T')[0],
       nombreArchivo: this.archivoRecurso?.nombre,
       archivoDataUrl: this.archivoRecurso?.dataUrl,
-      tamanoArchivoKb: this.archivoRecurso?.tamanoKb
-    };
+      tamanoArchivoKb: this.archivoRecurso?.tamanoKb,
+      links: links
+    } as any;
 
-    this.materiaService.addRecurso(this.materiaSeleccionadaId, recurso);
-    this.recursosMateria = this.materiaService.getRecursosSnapshot(this.materiaSeleccionadaId);
-    this.modalNuevoRecurso = false;
-    this.nuevoRecurso.titulo = '';
-    this.nuevoRecurso.descripcion = '';
-    this.archivoRecurso = null;
-    this.mostrarMensajeExito('Recurso didáctico agregado con éxito.');
+    // Si hay un archivo seleccionado, ya se intentó subir en onArchivoRecursoChange; still call addRecurso
+    this.materiaService.addRecurso(this.materiaSeleccionadaId, {
+      titulo: payload.titulo,
+      descripcion: payload.descripcion,
+      url: payload.url,
+      tipo: payload.tipo,
+      esEsencial: payload.esEsencial,
+      nombreArchivo: payload.nombreArchivo,
+      archivoDataUrl: payload.archivoDataUrl,
+      tamanoArchivoKb: payload.tamanoArchivoKb,
+      links: payload.links,
+      materiaId: this.materiaSeleccionadaId
+    }).subscribe(() => {
+      this.recursosMateria = this.materiaService.getRecursosSnapshot(this.materiaSeleccionadaId);
+      this.modalNuevoRecurso = false;
+      this.nuevoRecurso.titulo = '';
+      this.nuevoRecurso.descripcion = '';
+      (this.nuevoRecurso as any).linksString = '';
+      this.archivoRecurso = null;
+      this.mostrarMensajeExito('Recurso didáctico agregado con éxito.');
+    }, () => {
+      // Fallback UI update
+      this.recursosMateria = this.materiaService.getRecursosSnapshot(this.materiaSeleccionadaId);
+      this.modalNuevoRecurso = false;
+      this.nuevoRecurso.titulo = '';
+      this.nuevoRecurso.descripcion = '';
+      (this.nuevoRecurso as any).linksString = '';
+      this.archivoRecurso = null;
+      this.mostrarMensajeExito('Recurso agregado (modo offline).');
+    });
   }
 
   guardarActividad() {

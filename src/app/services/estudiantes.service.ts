@@ -1,7 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpEvent, HttpEventType, HttpRequest } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { Observable, catchError, map, throwError } from 'rxjs';
 import { getApiBase } from '../api';
 
 export interface BulkUploadResponseDto {
@@ -41,6 +40,16 @@ export class EstudiantesService {
     return `${getApiBase()}/api/estudiantes`;
   }
 
+  private mapBulkUploadResponse(res: any): BulkUploadResponseDto {
+    return {
+      createdCount: Number(res?.CreatedCount ?? res?.createdCount ?? 0),
+      createdUsernames: res?.CreatedUsernames ?? res?.createdUsernames ?? [],
+      errors: res?.Errors ?? res?.errors ?? [],
+      jobId: res?.JobId ?? res?.jobId,
+      totalFilasProcesadas: res?.TotalFilasProcesadas ?? res?.totalFilasProcesadas
+    };
+  }
+
   /**
    * POST /api/estudiantes/bulk-upload
    * Roles: Admin, Decano, Coord, Docente
@@ -52,22 +61,8 @@ export class EstudiantesService {
     formData.append('file', archivo, archivo.name);
 
     return this.http.post<any>(`${this.apiUrl}/bulk-upload`, formData).pipe(
-      map((res: any) => ({
-        createdCount: Number(res?.CreatedCount ?? res?.createdCount ?? 0),
-        createdUsernames: res?.CreatedUsernames ?? res?.createdUsernames ?? [],
-        errors: res?.Errors ?? res?.errors ?? [],
-        jobId: res?.JobId ?? res?.jobId,
-        totalFilasProcesadas: res?.TotalFilasProcesadas ?? res?.totalFilasProcesadas
-      } as BulkUploadResponseDto)),
-      catchError((err) => {
-        const errorMsg = err?.error?.message || err?.message || 'No fue posible conectar con el endpoint POST /api/estudiantes/bulk-upload del servidor backend .NET.';
-        return of({
-          createdCount: 0,
-          createdUsernames: [],
-          errors: [`Fallo en la comunicación con el servidor: ${errorMsg}`],
-          totalFilasProcesadas: 0
-        } as BulkUploadResponseDto);
-      })
+      map((res: any) => this.mapBulkUploadResponse(res)),
+      catchError((err) => throwError(() => err))
     );
   }
 
@@ -90,40 +85,14 @@ export class EstudiantesService {
             return { progreso };
           case HttpEventType.Response: {
             const raw = event.body as any;
-            const resp: BulkUploadResponseDto | undefined = raw ? {
-              createdCount: Number(raw?.CreatedCount ?? raw?.createdCount ?? 0),
-              createdUsernames: raw?.CreatedUsernames ?? raw?.createdUsernames ?? [],
-              errors: raw?.Errors ?? raw?.errors ?? [],
-              jobId: raw?.JobId ?? raw?.jobId,
-              totalFilasProcesadas: raw?.TotalFilasProcesadas ?? raw?.totalFilasProcesadas
-            } : undefined;
+            const resp: BulkUploadResponseDto | undefined = raw ? this.mapBulkUploadResponse(raw) : undefined;
             return { progreso: 100, respuesta: resp };
           }
           default:
             return { progreso: 0 };
         }
       }),
-      catchError(() => {
-        return of({
-          progreso: 100,
-          respuesta: {
-            createdCount: 12,
-            createdUsernames: [
-              'sofia.navarrete',
-              'mateo.castillo',
-              'domenic.alvarez',
-              'joaquin.paredes',
-              'camila.mendez',
-              'sebastian.cruz'
-            ],
-            errors: [
-              'Fila 4: La cédula "1723489110" ya se encuentra registrada en el sistema académico.'
-            ],
-            jobId: 'job-' + Date.now(),
-            totalFilasProcesadas: 13
-          }
-        });
-      })
+      catchError((err) => throwError(() => err))
     );
   }
 
@@ -134,16 +103,7 @@ export class EstudiantesService {
    */
   descargarPlantilla(): Observable<Blob> {
     return this.http.get(`${this.apiUrl}/template`, { responseType: 'blob' }).pipe(
-      catchError(() => {
-        // Generar CSV estándar como fallback descargable en el cliente
-        const headers = 'nombres,apellidos,cedula,correo\n';
-        const sample1 = 'Juan Carlos,Pérez Gómez,1712345678,juan.perez@universidad.edu\n';
-        const sample2 = 'María Belén,Andrade Ramos,1798765432,maria.andrade@universidad.edu\n';
-        const sample3 = 'David Alejandro,Torres Silva,1755667788,david.torres@universidad.edu\n';
-        const csvContent = '\uFEFF' + headers + sample1 + sample2 + sample3; // UTF-8 BOM
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        return of(blob);
-      })
+      catchError((err) => throwError(() => err))
     );
   }
 
@@ -153,18 +113,7 @@ export class EstudiantesService {
    */
   getResultadoImportacion(jobId: string): Observable<ImportJobResultDto> {
     return this.http.get<ImportJobResultDto>(`${this.apiUrl}/imports/${jobId}/result`).pipe(
-      catchError(() => {
-        return of({
-          jobId,
-          estado: 'Fallido',
-          fechaInicio: new Date().toISOString(),
-          fechaFin: new Date().toISOString(),
-          totalRegistros: 0,
-          exitosos: 0,
-          fallidos: 0,
-          detallesErrores: []
-        } as ImportJobResultDto);
-      })
+      catchError((err) => throwError(() => err))
     );
   }
 }

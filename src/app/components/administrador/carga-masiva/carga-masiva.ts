@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { EstudiantesService, BulkUploadResponseDto, ImportJobResultDto } from '../../../services/estudiantes.service';
+import { HttpErrorResponse } from '@angular/common/http';
 
 @Component({
   selector: 'app-carga-masiva-estudiantes',
@@ -76,33 +77,24 @@ export class CargaMasivaEstudiantesComponent {
     if (!this.archivoSeleccionado) return;
 
     this.isUploading = true;
-    this.progreso = 15;
+    this.progreso = 0;
     this.mensajeError = '';
     this.resultado = null;
-
-    // Simulación progresiva de barra de carga
-    const intervalo = setInterval(() => {
-      if (this.progreso < 85) {
-        this.progreso += 15;
-      }
-    }, 150);
-
-    this.estudiantesService.bulkUpload(this.archivoSeleccionado).subscribe({
-      next: (resp) => {
-        clearInterval(intervalo);
-        this.progreso = 100;
-        setTimeout(() => {
+    this.estudiantesService.bulkUploadConProgreso(this.archivoSeleccionado).subscribe({
+      next: (evento) => {
+        this.progreso = Math.max(this.progreso, evento.progreso);
+        if (evento.respuesta) {
+          this.resultado = evento.respuesta;
           this.isUploading = false;
-          this.resultado = resp;
-          if (resp.jobId) {
-            this.consultarJob(resp.jobId);
+          if (evento.respuesta.jobId) {
+            this.consultarJob(evento.respuesta.jobId);
           }
-        }, 300);
+        }
       },
-      error: (err) => {
-        clearInterval(intervalo);
+      error: (err: HttpErrorResponse) => {
         this.isUploading = false;
-        this.mensajeError = 'Ocurrió un error al procesar la carga masiva en el servidor backend.';
+        const serverMessage = err?.error?.message || err?.error?.title || err?.message;
+        this.mensajeError = `No se pudo completar la carga masiva en el endpoint /api/estudiantes/bulk-upload. ${serverMessage ? `Detalle: ${serverMessage}` : ''}`.trim();
       }
     });
   }
@@ -125,8 +117,10 @@ export class CargaMasivaEstudiantesComponent {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.isDownloadingTemplate = false;
+        const serverMessage = err?.error?.message || err?.error?.title || err?.message;
+        this.mensajeError = `No se pudo descargar la plantilla desde /api/estudiantes/template. ${serverMessage ? `Detalle: ${serverMessage}` : ''}`.trim();
       }
     });
   }
@@ -138,6 +132,9 @@ export class CargaMasivaEstudiantesComponent {
     this.estudiantesService.getResultadoImportacion(jobId).subscribe({
       next: (job) => {
         this.jobDetalle = job;
+      },
+      error: () => {
+        this.jobDetalle = null;
       }
     });
   }
