@@ -4,6 +4,21 @@ import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { timeout } from 'rxjs/operators';
 import { getApiBase } from '../api';
+import {
+  RecursoDto,
+  CreateRecursoDto,
+  RecursoConEstadoDto,
+  ActividadDto,
+  CreateActividadDto
+} from '../models/materia/materia.dto';
+
+export type {
+  RecursoDto,
+  CreateRecursoDto,
+  RecursoConEstadoDto,
+  ActividadDto,
+  CreateActividadDto
+};
 
 export interface EstudianteMateria {
   id: number;
@@ -64,74 +79,8 @@ export interface TemaMateriaDto {
   nombre: string;
 }
 
-export interface RecursoDto {
-  id: number;
-  materiaId: number;
-  temaId?: number;
-  temaNombre?: string;
-  titulo: string;
-  descripcion?: string;
-  url: string;
-  tipo: string; // 'PDF' | 'Video' | 'Enlace' | 'Simulador' | 'Documento'
-  esEsencial: boolean;
-  visto: boolean;
-  creadoPor?: string;
-  fechaCreacion?: string;
-  nombreArchivo?: string;
-  archivoDataUrl?: string;
-  tamanoArchivoKb?: number;
-  // Nuevo: enlaces adicionales relacionados al recurso (Sub-links, vídeos, referencias)
-  links?: string[];
-  // Si el backend devuelve una key/clave de almacenamiento (p.ej. Supabase), queda registrada
-  storageKey?: string;
-}
-
-export interface CreateRecursoDto {
-  titulo: string;
-  descripcion?: string;
-  url: string;
-  esEsencial: boolean;
-  materiaId: number;
-  temaId?: number;
-  temaNombre?: string;
-  tipo?: string;
-  nombreArchivo?: string;
-  archivoDataUrl?: string;
-  tamanoArchivoKb?: number;
-  // Nuevo: lista opcional de links relacionados (por ejemplo múltiples URLs o videos)
-  links?: string[];
-}
-
-export interface RecursoConEstadoDto extends RecursoDto {}
-
 export interface MarkRecursoAsSeenDto {
   recursoId: number;
-}
-
-export interface ActividadDto {
-  id: number;
-  materiaId: number;
-  titulo: string;
-  descripcion: string;
-  fechaEntrega: string;
-  tipo: string; // 'Taller' | 'Tarea' | 'Quiz' | 'Proyecto' | 'Examen'
-  estado: string; // 'pendiente' | 'entregada' | 'calificada'
-  nota?: number;
-  entregadoEl?: string;
-  nombreArchivo?: string;
-  archivoDataUrl?: string;
-  tamanoArchivoKb?: number;
-}
-
-export interface CreateActividadDto {
-  titulo: string;
-  descripcion: string;
-  fechaEntrega: string;
-  tipo: string;
-  materiaId: number;
-  nombreArchivo?: string;
-  archivoDataUrl?: string;
-  tamanoArchivoKb?: number;
 }
 
 export interface AsistenteRegistro {
@@ -188,11 +137,11 @@ export class MateriaService {
     return [];
   }
 
-  private get apiUrl() { return `${getApiBase()}/api/Materia`; }
+  private get apiUrl() { return `${getApiBase()}/api`; }
 
   private mapToMateriaDto(item: any, idx: number): MateriaDto {
     return {
-      id: Number(item.id || item.materiaId || item.catedraId || item.asignaturaId || (idx + 101)),
+      id: Number(item.id || item.materiaId || item.catedraId || item.claseId || (idx + 101)),
       nombre: item.nombre || item.nombreMateria || item.nombreCatedra || item.nombreAsignatura || item.materia || `Asignatura ${idx + 1}`,
       codigo: item.codigo || item.codigoMateria || item.codigoAsignatura || item.sigla || `MAT-${101 + idx}`,
       descripcion: item.descripcion || item.descripcionMateria || item.detalle || 'Asignatura inscrita en el periodo académico activo.',
@@ -242,8 +191,7 @@ export class MateriaService {
     }
   }
 
-  // ==================== MATERIAS ====================
-
+  // ==================== MATERIAS ====================\n
   getMaterias(): Observable<MateriaDto[]> {
     return this.materias$;
   }
@@ -407,7 +355,7 @@ export class MateriaService {
     this.recursosSubject.next(recs);
     this.saveStorage(this.STORAGE_RECURSOS, recs);
 
-    return this.http.delete(`${this.apiUrl}/${id}`).pipe(
+    return this.http.delete(`${this.apiUrl}/Materia/${id}`).pipe(
       map(() => true),
       catchError(() => of(true))
     );
@@ -485,8 +433,7 @@ export class MateriaService {
     );
   }
 
-  // ==================== TEMAS ====================
-
+  // ==================== TEMAS ====================\n
   getTemasByMateria(materiaId: number): string[] {
     const key = `${this.STORAGE_TEMAS}_${materiaId}`;
     const stored = this.loadStorage<string[]>(key, []);
@@ -548,134 +495,54 @@ export class MateriaService {
     }
   }
 
-  // ==================== RECURSOS ====================
+  // ==================== RECURSOS ====================\n
+  getRecursos(materiaId: number): Observable<RecursoDto[]> {
+    return this.http.get<RecursoDto[]>(`${this.apiUrl}/Materia/${materiaId}/recursos`);
+  }
+
+  subirRecursoArchivo(materiaId: number, file: File, titulo: string, descripcion: string = ''): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('archivo', file);
+    formData.append('titulo', titulo);
+    formData.append('descripcion', descripcion);
+    return this.http.post(`${this.apiUrl}/Materia/${materiaId}/recursos/upload`, formData);
+  }
 
   getRecursosByMateria(materiaId: number): Observable<RecursoDto[]> {
-    return this.http.get<any>(`${this.apiUrl}/${materiaId}/recursos`).pipe(
-      map(res => {
-        const list = Array.isArray(res) ? res : (res?.recursos || []);
-        const mapped: RecursoDto[] = list.map((r: any) => ({
-          id: Number(r.id),
-          materiaId: Number(r.materiaId || materiaId),
-          temaId: r.temaId,
-          temaNombre: r.temaNombre,
-          titulo: r.titulo,
-          descripcion: r.descripcion,
-          url: r.url,
-          tipo: r.tipo || 'PDF',
-          esEsencial: !!r.esEsencial,
-          visto: !!r.visto,
-          creadoPor: r.creadoPor,
-          fechaCreacion: r.fechaCreacion,
-          nombreArchivo: r.nombreArchivo,
-          archivoDataUrl: r.archivoDataUrl,
-                  tamanoArchivoKb: r.tamanoArchivoKb,
-                  // Nuevo: leer Links/links/Links desde la respuesta del backend si existe
-                  links: Array.isArray(r.links) ? r.links : (Array.isArray(r.Links) ? r.Links : []),
-                  storageKey: r.key || r.storageKey || r.storage || undefined
-                }));
+    return this.getRecursos(materiaId).pipe(
+      tap((mapped) => {
+        const list = Array.isArray(mapped) ? mapped : [];
         const currentOther = this.recursosSubject.value.filter(r => Number(r.materiaId) !== Number(materiaId));
-        const combined = [...mapped, ...currentOther];
+        const combined = [...list, ...currentOther];
         this.recursosSubject.next(combined);
         this.saveStorage(this.STORAGE_RECURSOS, combined);
-        return mapped;
       }),
-      catchError(() => {
-        return this.recursos$.pipe(
-          map(recursos => recursos.filter(r => Number(r.materiaId) === Number(materiaId)))
-        );
-      })
+      catchError(() => of([]))
     );
   }
 
   getRecursosConEstado(materiaId: number): Observable<RecursoConEstadoDto[]> {
-    return this.getRecursosByMateria(materiaId);
+    return this.getRecursos(materiaId);
   }
 
-  addRecurso(materiaId: number, dto: CreateRecursoDto): Observable<RecursoDto> {
-    const rolActual = typeof window !== 'undefined' ? (localStorage.getItem('rol') || 'Docente') : 'Docente';
-    const nombreUsuario = typeof window !== 'undefined' ? (localStorage.getItem('nombre') || rolActual) : rolActual;
+  crearRecurso(materiaId: number, dto: CreateRecursoDto): Observable<any> {
+    return this.http.post(`${this.apiUrl}/Materia/${materiaId}/recursos`, dto);
+  }
 
-    let tipoCalculado = dto.tipo || 'Enlace';
-    if (dto.url) {
-      const urlLower = dto.url.toLowerCase();
-      if (urlLower.endsWith('.pdf')) tipoCalculado = 'PDF';
-      else if (urlLower.includes('youtu') || urlLower.includes('vimeo') || urlLower.endsWith('.mp4')) tipoCalculado = 'Video';
-      else if (urlLower.includes('geogebra') || urlLower.includes('sim') || urlLower.includes('lab')) tipoCalculado = 'Simulador';
-    }
+  addRecurso(materiaId: number, dto: CreateRecursoDto): Observable<any> {
+    return this.crearRecurso(materiaId, dto);
+  }
 
-    const safeGeneratedId = Math.floor((Date.now() / 1000) % 2000000000) + Math.floor(Math.random() * 1000) + 1;
-    const nuevoRecurso: RecursoDto = {
-      id: safeGeneratedId,
-      materiaId: Number(materiaId),
-      temaId: dto.temaId,
-      temaNombre: dto.temaNombre || 'Tema 1: Fundamentos y Conceptos Iniciales',
-      titulo: dto.titulo.trim(),
-      descripcion: dto.descripcion?.trim() || `Recurso de tipo ${tipoCalculado}`,
-      url: dto.url?.trim() || 'https://ejemplo.edu/recurso.pdf',
-      tipo: tipoCalculado,
-      esEsencial: !!dto.esEsencial,
-      visto: false,
-      creadoPor: `${nombreUsuario} (${rolActual})`,
-      fechaCreacion: new Date().toISOString().split('T')[0],
-      nombreArchivo: dto.nombreArchivo,
-      archivoDataUrl: dto.archivoDataUrl,
-        tamanoArchivoKb: dto.tamanoArchivoKb,
-        // Nuevo: tomar links opcionales desde el DTO
-        links: Array.isArray((dto as any).links) ? (dto as any).links : (Array.isArray((dto as any).Links) ? (dto as any).Links : [])
-      };
-
-      const currentRecursos = this.recursosSubject.value;
-      const updated = [nuevoRecurso, ...currentRecursos];
-      this.recursosSubject.next(updated);
-      this.saveStorage(this.STORAGE_RECURSOS, updated);
-
-      // Preparar payload para el backend: incluir Links (mayor compatibilidad con DTO del backend)
-      const payload: any = {
-        Titulo: dto.titulo?.trim(),
-        Descripcion: dto.descripcion || dto.descripcion || '',
-        Url: dto.url || dto.url || '',
-        EsEsencial: !!dto.esEsencial,
-        MateriaId: Number(materiaId),
-        TemaId: dto.temaId,
-        TemaNombre: dto.temaNombre,
-        Tipo: dto.tipo,
-        NombreArchivo: dto.nombreArchivo,
-        TamanoArchivoKb: dto.tamanoArchivoKb,
-        Links: Array.isArray((dto as any).links) ? (dto as any).links : (Array.isArray((dto as any).Links) ? (dto as any).Links : [])
-      };
-
-      return this.http.post<RecursoDto>(`${this.apiUrl}/${materiaId}/recursos`, payload).pipe(
-        tap(backendRes => {
-          if (backendRes && backendRes.id) {
-            nuevoRecurso.id = backendRes.id;
-            // Backend puede devolver Links y storage key
-            if (Array.isArray((backendRes as any).links) || Array.isArray((backendRes as any).Links)) {
-                          nuevoRecurso.links = Array.isArray((backendRes as any).links) ? (backendRes as any).links : (backendRes as any).Links;
-            }
-            if ((backendRes as any).key) {
-              nuevoRecurso.storageKey = (backendRes as any).key;
-            }
-            this.saveStorage(this.STORAGE_RECURSOS, this.recursosSubject.value);
-          }
-        }),
-        catchError(() => of(nuevoRecurso))
-      );
-    }
-
-    /**
-     * Subir archivo binario al backend (multipart/form-data)
-     * Endpoint implementado en backend: POST /api/Materia/{materiaId}/recursos/upload
-     * Devuelve objeto con { url, key, raw }
-     */
-    uploadRecurso(materiaId: number, archivo: File): Observable<{ url?: string; key?: string; raw?: any }> {
-      const fd = new FormData();
-      fd.append('archivo', archivo);
-      const url = `${getApiBase()}/api/Materia/${materiaId}/recursos/upload`;
-      return this.http.post<any>(url, fd).pipe(
-        map((res) => ({ url: res?.url || res?.Url || res?.urlArchivo || undefined, key: res?.key || res?.Key || undefined, raw: res }))
-      );
-    }
+  uploadRecurso(materiaId: number, archivo: File, titulo?: string, descripcion?: string): Observable<{ url?: string; key?: string; raw?: any }> {
+    return this.subirRecursoArchivo(materiaId, archivo, titulo || archivo.name, descripcion || '').pipe(
+      map((res: any) => ({
+        url: res?.url || res?.Url || res?.urlArchivo || res?.enlace || undefined,
+        key: res?.key || res?.Key || undefined,
+        raw: res
+      }))
+    );
+  }
 
   marcarRecursoComoVisto(recursoId: number): Observable<any> {
     const safeRecursoId = Math.floor(Math.abs(Number(recursoId)) % 2147483647) || 1;
@@ -692,7 +559,7 @@ export class MateriaService {
       recursoId: safeRecursoId
     };
 
-    return this.http.post(`${this.apiUrl}/recursos/marcar-visto`, payload).pipe(
+    return this.http.post(`${this.apiUrl}/Materia/recursos/marcar-visto`, payload).pipe(
       catchError(() => of({ success: true }))
     );
   }
@@ -714,8 +581,7 @@ export class MateriaService {
     this.saveStorage(this.STORAGE_RECURSOS, list);
   }
 
-  // ==================== ACTIVIDADES ====================
-
+  // ==================== ACTIVIDADES ====================\n
   getActividadesSnapshot(materiaId?: number): ActividadDto[] {
     if (materiaId !== undefined) {
       return this.actividadesSubject.value.filter(a => Number(a.materiaId) === Number(materiaId));
@@ -723,66 +589,29 @@ export class MateriaService {
     return this.actividadesSubject.value;
   }
 
+  getActividades(materiaId: number): Observable<ActividadDto[]> {
+    return this.http.get<ActividadDto[]>(`${this.apiUrl}/Materia/${materiaId}/actividades`);
+  }
+
   getActividadesByMateria(materiaId: number): Observable<ActividadDto[]> {
-    return this.http.get<any>(`${this.apiUrl}/${materiaId}/actividades`).pipe(
-      map(res => {
-        const list = Array.isArray(res) ? res : (res?.actividades || []);
-        const mapped: ActividadDto[] = list.map((a: any) => ({
-          id: Number(a.id),
-          materiaId: Number(a.materiaId || materiaId),
-          titulo: a.titulo,
-          descripcion: a.descripcion,
-          fechaEntrega: a.fechaEntrega,
-          tipo: a.tipo || 'Taller',
-          estado: a.estado || 'pendiente',
-          nota: a.nota !== undefined ? Number(a.nota) : undefined,
-          entregadoEl: a.entregadoEl,
-          nombreArchivo: a.nombreArchivo,
-          archivoDataUrl: a.archivoDataUrl,
-          tamanoArchivoKb: a.tamanoArchivoKb
-        }));
+    return this.getActividades(materiaId).pipe(
+      tap((mapped) => {
+        const list = Array.isArray(mapped) ? mapped : [];
         const currentOther = this.actividadesSubject.value.filter(a => Number(a.materiaId) !== Number(materiaId));
-        const combined = [...mapped, ...currentOther];
+        const combined = [...list, ...currentOther];
         this.actividadesSubject.next(combined);
         this.saveStorage(this.STORAGE_ACTIVIDADES, combined);
-        return mapped;
       }),
-      catchError(() => {
-        return this.actividades$.pipe(
-          map(acts => acts.filter(a => Number(a.materiaId) === Number(materiaId)))
-        );
-      })
+      catchError(() => of([]))
     );
   }
 
-  addActividad(materiaId: number, dto: CreateActividadDto): Observable<ActividadDto> {
-    const nuevaActividad: ActividadDto = {
-      id: Date.now(),
-      materiaId: Number(materiaId),
-      titulo: dto.titulo.trim(),
-      descripcion: dto.descripcion?.trim() || 'Sin descripción',
-      fechaEntrega: dto.fechaEntrega || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-      tipo: dto.tipo || 'Taller',
-      estado: 'pendiente',
-      nombreArchivo: dto.nombreArchivo,
-      archivoDataUrl: dto.archivoDataUrl,
-      tamanoArchivoKb: dto.tamanoArchivoKb
-    };
+  crearActividad(materiaId: number, dto: CreateActividadDto): Observable<any> {
+    return this.http.post(`${this.apiUrl}/Materia/${materiaId}/actividades`, dto);
+  }
 
-    const current = this.actividadesSubject.value;
-    const updated = [nuevaActividad, ...current];
-    this.actividadesSubject.next(updated);
-    this.saveStorage(this.STORAGE_ACTIVIDADES, updated);
-
-    return this.http.post<ActividadDto>(`${this.apiUrl}/${materiaId}/actividades`, dto).pipe(
-      tap(backendRes => {
-        if (backendRes && backendRes.id) {
-          nuevaActividad.id = backendRes.id;
-          this.saveStorage(this.STORAGE_ACTIVIDADES, this.actividadesSubject.value);
-        }
-      }),
-      catchError(() => of(nuevaActividad))
-    );
+  addActividad(materiaId: number, dto: CreateActividadDto): Observable<any> {
+    return this.crearActividad(materiaId, dto);
   }
 
   updateActividadEstado(actividadId: number, nuevoEstado: string, nota?: number): void {
@@ -807,8 +636,7 @@ export class MateriaService {
     this.saveStorage(this.STORAGE_ACTIVIDADES, list);
   }
 
-  // ==================== ASISTENCIA Y CLASES ====================
-
+  // ==================== ASISTENCIA Y CLASES ====================\n
   getAsistenciasByMateria(materiaId: number): Observable<RegistroAsistenciaDto[]> {
     return this.asistencias$.pipe(
       map(regs => regs.filter(reg => Number(reg.materiaId) === Number(materiaId)))
@@ -864,8 +692,7 @@ export class MateriaService {
     return this.recursosSubject.value;
   }
 
-  // ==================== ASIGNACIÓN Y GESTIÓN INTEGRAL DE ESTUDIANTES ====================
-
+  // ==================== ASIGNACIÓN Y GESTIÓN INTEGRAL DE ESTUDIANTES ====================\n
   agregarEstudiantesAMateria(materiaId: number, estudiantes: ({ id: number; nombre?: string; correo?: string } | number)[]): Observable<any> {
     const materias = this.materiasSubject.value.map(m => {
       if (Number(m.id) === Number(materiaId)) {
@@ -901,7 +728,7 @@ export class MateriaService {
     this.saveStorage(this.STORAGE_MATERIAS, materias);
 
     const estudianteIds = estudiantes.map(e => typeof e === 'number' ? e : e.id);
-    return this.http.post(`${this.apiUrl}/${materiaId}/estudiantes`, { estudianteIds }).pipe(
+    return this.http.post(`${this.apiUrl}/Materia/${materiaId}/estudiantes`, { estudianteIds }).pipe(
       catchError(() => of({ success: true }))
     );
   }
@@ -975,15 +802,15 @@ export class MateriaService {
     if (!observacion?.trim()) return;
     const materias = this.materiasSubject.value.map(m => {
       if (Number(m.id) === Number(materiaId)) {
-        const list = (m.estudiantes || []).map(e => {
-          if (Number(e.id) === Number(estudianteId)) {
-            const obs = e.observaciones ? [...e.observaciones] : [];
-            const fecha = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
-            obs.unshift(`[${fecha}] ${observacion.trim()}`);
-            return { ...e, observaciones: obs };
-          }
-          return e;
-        });
+        const list = (m.estudiantes || []).map(e =>
+          Number(e.id) === Number(estudianteId) ? {
+            ...e,
+            observaciones: [
+              `[${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}] ${observacion.trim()}`,
+              ...(e.observaciones || [])
+            ]
+          } : e
+        );
         return { ...m, estudiantes: list };
       }
       return m;

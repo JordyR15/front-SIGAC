@@ -46,7 +46,7 @@ export class EntregaTareaEstudianteComponent implements OnInit {
       this.materiaId = actMateria.materiaId || 101;
       const mat = this.materiaService.getMateriaById(this.materiaId);
       this.actividad = {
-        id: actMateria.id,
+        id: actMateria.id || this.actividadId,
         catedraId: this.materiaId,
         catedraNombre: mat ? mat.nombre : 'Cálculo Avanzado',
         docenteNombre: mat ? (mat.docente || 'Dra. Evelyn Vance') : 'Dra. Evelyn Vance',

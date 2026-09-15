@@ -5,7 +5,16 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { getApiBase } from '../../../api';
-import { MateriaDto, MateriaService, RecursoDto, ActividadDto, RegistroAsistenciaDto, AsistenteRegistro } from '../../../services/materia.service';
+import {
+  MateriaDto,
+  MateriaService,
+  RecursoDto,
+  CreateRecursoDto,
+  ActividadDto,
+  CreateActividadDto,
+  RegistroAsistenciaDto,
+  AsistenteRegistro
+} from '../../../services/materia.service';
 import { DocenteService, ActividadAyudantiaDto } from '../../../services/docente.service';
 import { EstudianteService, BitacoraItemDto } from '../../../services/estudiante.service';
 import { DocumentosDescargaService } from '../../../services/documentos-descarga.service';
@@ -74,10 +83,9 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
   nuevoRecurso = {
     titulo: '',
     tipo: 'PDF',
-    url: 'https://repositorio.uteq.edu.ec/guias/apoyo-ayudantia.pdf',
+    url: '',
     descripcion: '',
     esEsencial: true,
-    // enlaces adicionales como texto separado por líneas o comas
     linksString: ''
   };
 
@@ -96,7 +104,7 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
   sesionAsistenciaSeleccionadaId: number = 1;
   busquedaEstudianteAsistencia: string = '';
   filtroEstadoAsistencia: 'todos' | 'presentes' | 'ausentes' = 'todos';
-  
+
   // Modal para nueva fecha de asistencia
   modalNuevaSesionAsistencia = false;
   nuevaSesion = {
@@ -114,6 +122,7 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
   };
 
   // Archivos adjuntos seleccionados por el ayudante
+  archivoRecursoRaw: File | null = null;
   archivoRecurso: { nombre: string; tamanoKb: number; dataUrl: string } | null = null;
   archivoActividad: { nombre: string; tamanoKb: number; dataUrl: string } | null = null;
 
@@ -226,7 +235,7 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
         this.seleccionarMateria(mapped[0].id);
       },
       error: () => {
-        // Si el backend no responde, se mantiene el estado local para la demo.
+        // En caso de no responder el endpoint de clases del ayudante
       }
     });
   }
@@ -264,15 +273,15 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ==================== NAVEGACIÓN Y SELECCIÓN ====================
+  // ==================== NAVEGACIÓN Y SELECCIÓN ====================\n
 
   seleccionarMateria(id: number) {
     this.materiaSeleccionadaId = Number(id);
     this.materiaSeleccionada = this.materias.find(m => m.id === this.materiaSeleccionadaId) || this.materias[0];
 
-    // Cargar recursos y actividades
-    this.recursosMateria = this.materiaService.getRecursosSnapshot(this.materiaSeleccionadaId);
-    this.actividadesMateria = this.materiaService.getActividadesSnapshot(this.materiaSeleccionadaId);
+    // Carga en vivo: llamar a materiaService.getRecursos y getActividades directamente desde la API
+    this.cargarRecursosEnVivo();
+    this.cargarActividadesEnVivo();
 
     // Cargar asistencias
     const todasAsist: RegistroAsistenciaDto[] = this.materiaService.getAsistenciasSnapshot();
@@ -285,20 +294,46 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     this.cargarSilabo();
   }
 
+  cargarRecursosEnVivo(): void {
+    if (!this.materiaSeleccionadaId) return;
+    this.materiaService.getRecursos(this.materiaSeleccionadaId).subscribe({
+      next: (recursos) => {
+        this.recursosMateria = Array.isArray(recursos) ? recursos : [];
+      },
+      error: (err) => {
+        console.error('Error cargando recursos de la materia:', err);
+        this.recursosMateria = [];
+      }
+    });
+  }
+
+  cargarActividadesEnVivo(): void {
+    if (!this.materiaSeleccionadaId) return;
+    this.materiaService.getActividades(this.materiaSeleccionadaId).subscribe({
+      next: (actividades) => {
+        this.actividadesMateria = Array.isArray(actividades) ? actividades : [];
+      },
+      error: (err) => {
+        console.error('Error cargando actividades de la materia:', err);
+        this.actividadesMateria = [];
+      }
+    });
+  }
+
   cambiarTab(tab: 'catedra' | 'horario' | 'silabo' | 'asistencia' | 'recursos' | 'bitacoras') {
     this.tabActiva = tab;
   }
 
-  // ==================== CALIFICACIÓN DIRECTA ====================
+  // ==================== CALIFICACIÓN DIRECTA ====================\n
 
-  calificarActividad(actividadId: number) {
-    // Navegación directa al módulo de calificación con soporte para rol Ayudante
+  calificarActividad(actividadId?: number) {
+    if (!actividadId) return;
     this.router.navigate(['/ayudante/actividades', actividadId, 'calificar'], {
       queryParams: { materiaId: this.materiaSeleccionadaId }
     });
   }
 
-  // ==================== SÍLABO Y DIRECTRICES ====================
+  // ==================== SÍLABO Y DIRECTRICES ====================\n
 
   cargarSilabo() {
     const ayudantiaId = this.materiaSeleccionadaId === 101 ? 1 : 2;
@@ -317,7 +352,7 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ==================== CONTROL DE ASISTENCIA (20+ ALUMNOS) ====================
+  // ==================== CONTROL DE ASISTENCIA ====================\n
 
   get sesionAsistenciaActual(): RegistroAsistenciaDto | undefined {
     return this.registrosAsistencia.find(r => r.id === this.sesionAsistenciaSeleccionadaId);
@@ -339,8 +374,8 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     // Buscador
     if (this.busquedaEstudianteAsistencia.trim()) {
       const q = this.busquedaEstudianteAsistencia.toLowerCase().trim();
-      list = list.filter(a => 
-        a.nombre.toLowerCase().includes(q) || 
+      list = list.filter(a =>
+        a.nombre.toLowerCase().includes(q) ||
         (a.email && a.email.toLowerCase().includes(q))
       );
     }
@@ -390,7 +425,7 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
 
     const estudiantes = this.materiaSeleccionada?.estudiantes || [];
     this.materiaService.addRegistroAsistencia(this.materiaSeleccionadaId, this.nuevaSesion.tema, estudiantes);
-    
+
     // Actualizar lista
     const todas: RegistroAsistenciaDto[] = this.materiaService.getAsistenciasSnapshot();
     this.registrosAsistencia = todas.filter((a: RegistroAsistenciaDto) => Number(a.materiaId) === Number(this.materiaSeleccionadaId));
@@ -402,45 +437,26 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     this.mostrarMensajeExito('Nueva sesión de asistencia creada correctamente.');
   }
 
-  // ==================== GESTIÓN DE RECURSOS Y ACTIVIDADES ====================
+  // ==================== GESTIÓN DE RECURSOS Y ACTIVIDADES ====================\n
 
   onArchivoRecursoChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
     const file = input.files[0];
-    const reader = new FileReader();
-    reader.onload = () => {
-      this.archivoRecurso = {
-        nombre: file.name,
-        tamanoKb: Math.round(file.size / 1024),
-        dataUrl: reader.result as string
-      };
-      if (!this.nuevoRecurso.titulo.trim()) {
-        this.nuevoRecurso.titulo = file.name.replace(/\.[^/.]+$/, '');
-      }
+    this.archivoRecursoRaw = file;
+    this.archivoRecurso = {
+      nombre: file.name,
+      tamanoKb: Math.round(file.size / 1024),
+      dataUrl: ''
     };
-    reader.readAsDataURL(file);
-
-    // Subir archivo al backend y obtener URL pública (si el backend está disponible)
-    try {
-      this.materiaService.uploadRecurso(this.materiaSeleccionadaId, file).subscribe({
-        next: (res) => {
-          if (res?.url) {
-            this.nuevoRecurso.url = res.url;
-            this.mostrarMensajeExito('Archivo subido correctamente. URL establecida en el campo del recurso.');
-          }
-        },
-        error: () => {
-          // Silenciar; el archivo seguirá disponible como dataUrl local
-        }
-      });
-    } catch (e) {
-      // ignore
+    if (!this.nuevoRecurso.titulo.trim()) {
+      this.nuevoRecurso.titulo = file.name.replace(/\.[^/.]+$/, '');
     }
   }
 
   quitarArchivoRecurso(): void {
     this.archivoRecurso = null;
+    this.archivoRecursoRaw = null;
   }
 
   onArchivoActividadChange(event: Event): void {
@@ -481,10 +497,10 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     <h4 style="color:#475569;margin:4px 0 0 0;">Material de Refuerzo de Ayudantía · SIGAC</h4>
   </div>
   <h3 style="color:#0f172a;">${rec.titulo}</h3>
-  <p><strong>Tipo:</strong> ${rec.tipo} | <strong>Fecha:</strong> ${rec.fechaCreacion || '2026'} | <strong>Publicado por:</strong> ${rec.creadoPor || 'Ayudante de Cátedra'}</p>
+  <p><strong>Tipo:</strong> ${rec.tipo || 'Recurso'} | <strong>Fecha:</strong> ${rec.fechaSubida || rec.fechaCreacion || '2026'} | <strong>Publicado por:</strong> ${rec.creadoPor || 'Ayudante de Cátedra'}</p>
   <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:15px;border-radius:8px;margin:15px 0;">
     <p>${rec.descripcion || 'Material pedagógico para preparación de talleres y exámenes.'}</p>
-    <p><strong>Enlace oficial:</strong> <a href="${rec.url}">${rec.url}</a></p>
+    <p><strong>Enlace oficial:</strong> <a href="${rec.url || rec.enlace || '#'}">${rec.url || rec.enlace || 'Sin enlace'}</a></p>
   </div>
   <p style="font-size:11px;color:#64748b;">Descargado desde el repositorio de ayudantías SIGAC - UTEQ.</p>
 </body>
@@ -508,7 +524,7 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     <h4 style="color:#475569;margin:4px 0 0 0;">Guía Práctica y Taller de Ayudantía · SIGAC</h4>
   </div>
   <h3 style="color:#0f172a;">${act.titulo}</h3>
-  <p><strong>Tipo:</strong> ${act.tipo} | <strong>Fecha Límite:</strong> ${act.fechaEntrega}</p>
+  <p><strong>Tipo:</strong> ${act.tipo || 'Taller'} | <strong>Fecha Límite:</strong> ${act.fechaEntrega}</p>
   <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:15px;border-radius:8px;margin:15px 0;">
     <h4>Instrucciones para el estudiante:</h4>
     <p>${act.descripcion || 'Resolver los ejercicios planteados y remitir el documento digital antes de la fecha límite.'}</p>
@@ -525,52 +541,63 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Parse links string (separado por líneas o comas)
-    const rawLinks = (this.nuevoRecurso as any).linksString || '';
-    const links = rawLinks.split(/\r?\n|,/) .map((s: string) => s.trim()).filter(Boolean);
+    if (this.archivoRecursoRaw) {
+      // Subir archivo real a través del endpoint oficial POST /api/Materia/{materiaId}/recursos/upload
+      this.materiaService.subirRecursoArchivo(
+        this.materiaSeleccionadaId,
+        this.archivoRecursoRaw,
+        this.nuevoRecurso.titulo.trim(),
+        this.nuevoRecurso.descripcion?.trim() || ''
+      ).subscribe({
+        next: () => {
+          this.mostrarMensajeExito('Archivo subido exitosamente a la base de datos.');
+          this.limpiarFormularioRecurso();
+          this.modalNuevoRecurso = false;
+          // Refrescar en vivo desde la API
+          this.cargarRecursosEnVivo();
+        },
+        error: (err) => {
+          console.error('Error al subir archivo de recurso:', err);
+          this.mostrarMensajeError('Error al subir el archivo al servidor.');
+        }
+      });
+    } else {
+      // Si no se adjuntó archivo, guardar el recurso con su URL
+      const dto: CreateRecursoDto = {
+        titulo: this.nuevoRecurso.titulo.trim(),
+        descripcion: this.nuevoRecurso.descripcion?.trim() || '',
+        tipo: this.nuevoRecurso.tipo,
+        url: this.nuevoRecurso.url?.trim() || '',
+        esVisible: true
+      };
 
-    const payload = {
-      titulo: this.nuevoRecurso.titulo,
-      tipo: this.nuevoRecurso.tipo,
-      url: this.nuevoRecurso.url,
-      descripcion: this.nuevoRecurso.descripcion || 'Material de apoyo compartido por el Ayudante de Cátedra.',
-      esEsencial: this.nuevoRecurso.esEsencial,
-      nombreArchivo: this.archivoRecurso?.nombre,
-      archivoDataUrl: this.archivoRecurso?.dataUrl,
-      tamanoArchivoKb: this.archivoRecurso?.tamanoKb,
-      links: links
-    } as any;
+      this.materiaService.crearRecurso(this.materiaSeleccionadaId, dto).subscribe({
+        next: () => {
+          this.mostrarMensajeExito('Recurso didáctico creado exitosamente.');
+          this.limpiarFormularioRecurso();
+          this.modalNuevoRecurso = false;
+          // Refrescar en vivo desde la API
+          this.cargarRecursosEnVivo();
+        },
+        error: (err) => {
+          console.error('Error al registrar recurso:', err);
+          this.mostrarMensajeError('Error al registrar el recurso en el servidor.');
+        }
+      });
+    }
+  }
 
-    // Si hay un archivo seleccionado, ya se intentó subir en onArchivoRecursoChange; still call addRecurso
-    this.materiaService.addRecurso(this.materiaSeleccionadaId, {
-      titulo: payload.titulo,
-      descripcion: payload.descripcion,
-      url: payload.url,
-      tipo: payload.tipo,
-      esEsencial: payload.esEsencial,
-      nombreArchivo: payload.nombreArchivo,
-      archivoDataUrl: payload.archivoDataUrl,
-      tamanoArchivoKb: payload.tamanoArchivoKb,
-      links: payload.links,
-      materiaId: this.materiaSeleccionadaId
-    }).subscribe(() => {
-      this.recursosMateria = this.materiaService.getRecursosSnapshot(this.materiaSeleccionadaId);
-      this.modalNuevoRecurso = false;
-      this.nuevoRecurso.titulo = '';
-      this.nuevoRecurso.descripcion = '';
-      (this.nuevoRecurso as any).linksString = '';
-      this.archivoRecurso = null;
-      this.mostrarMensajeExito('Recurso didáctico agregado con éxito.');
-    }, () => {
-      // Fallback UI update
-      this.recursosMateria = this.materiaService.getRecursosSnapshot(this.materiaSeleccionadaId);
-      this.modalNuevoRecurso = false;
-      this.nuevoRecurso.titulo = '';
-      this.nuevoRecurso.descripcion = '';
-      (this.nuevoRecurso as any).linksString = '';
-      this.archivoRecurso = null;
-      this.mostrarMensajeExito('Recurso agregado (modo offline).');
-    });
+  private limpiarFormularioRecurso(): void {
+    this.nuevoRecurso = {
+      titulo: '',
+      tipo: 'PDF',
+      url: '',
+      descripcion: '',
+      esEsencial: true,
+      linksString: ''
+    };
+    this.archivoRecurso = null;
+    this.archivoRecursoRaw = null;
   }
 
   guardarActividad() {
@@ -579,29 +606,47 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const actividad: ActividadDto = {
-      id: Date.now(),
-      materiaId: this.materiaSeleccionadaId,
-      titulo: this.nuevaActividad.titulo,
-      tipo: this.nuevaActividad.tipo,
-      descripcion: this.nuevaActividad.descripcion || 'Actividad práctica para evaluar el progreso formativo.',
-      fechaEntrega: this.nuevaActividad.fechaEntrega || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-      estado: 'pendiente',
-      nombreArchivo: this.archivoActividad?.nombre,
-      archivoDataUrl: this.archivoActividad?.dataUrl,
-      tamanoArchivoKb: this.archivoActividad?.tamanoKb
+    if (!this.nuevaActividad.fechaEntrega) {
+      this.mostrarMensajeError('Por favor selecciona la fecha de entrega.');
+      return;
+    }
+
+    const dto: CreateActividadDto = {
+      titulo: this.nuevaActividad.titulo.trim(),
+      descripcion: this.nuevaActividad.descripcion?.trim() || 'Actividad práctica para evaluar el progreso formativo.',
+      tipo: this.nuevaActividad.tipo || 'Taller',
+      fechaEntrega: this.nuevaActividad.fechaEntrega,
+      puntajeMaximo: Number(this.nuevaActividad.ponderacion) || 10
     };
 
-    this.materiaService.addActividad(this.materiaSeleccionadaId, actividad);
-    this.actividadesMateria = this.materiaService.getActividadesSnapshot(this.materiaSeleccionadaId);
-    this.modalNuevaActividad = false;
-    this.nuevaActividad.titulo = '';
-    this.nuevaActividad.descripcion = '';
-    this.archivoActividad = null;
-    this.mostrarMensajeExito('Actividad evaluativa creada con éxito.');
+    // Crear actividad a través del endpoint oficial POST /api/Materia/{materiaId}/actividades
+    this.materiaService.crearActividad(this.materiaSeleccionadaId, dto).subscribe({
+      next: () => {
+        this.mostrarMensajeExito('Actividad evaluativa creada con éxito.');
+        this.limpiarFormularioActividad();
+        this.modalNuevaActividad = false;
+        // Refrescar en vivo desde la API
+        this.cargarActividadesEnVivo();
+      },
+      error: (err) => {
+        console.error('Error al crear actividad:', err);
+        this.mostrarMensajeError('Error al registrar la actividad en el servidor.');
+      }
+    });
   }
 
-  // ==================== BITÁCORAS E INFORMES ====================
+  private limpiarFormularioActividad(): void {
+    this.nuevaActividad = {
+      titulo: '',
+      tipo: 'Taller',
+      fechaEntrega: '',
+      descripcion: '',
+      ponderacion: 10
+    };
+    this.archivoActividad = null;
+  }
+
+  // ==================== BITÁCORAS E INFORMES ====================\n
 
   guardarBitacora() {
     if (!this.nuevaBitacora.actividadesRealizadas.trim()) {
@@ -620,7 +665,7 @@ export class AyudanteMateriasComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ==================== UTILIDADES ====================
+  // ==================== UTILIDADES ====================\n
 
   formatearFecha(fecha?: string): string {
     if (!fecha) return '';

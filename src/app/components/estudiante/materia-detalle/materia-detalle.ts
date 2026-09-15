@@ -200,15 +200,18 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
     this.showAddTema = false;
   }
 
-  toggleVisto(id: number) {
+  toggleVisto(id?: number) {
+    if (!id) return;
     this.materiaService.marcarRecursoComoVisto(id).subscribe();
   }
 
-  toggleEsencial(id: number) {
+  toggleEsencial(id?: number) {
+    if (!id) return;
     this.materiaService.toggleRecursoEsencial(id);
   }
 
-  eliminarRecurso(id: number) {
+  eliminarRecurso(id?: number) {
+    if (!id) return;
     if (confirm('¿Estás seguro de eliminar este recurso educativo?')) {
       this.materiaService.deleteRecurso(id);
     }
@@ -308,12 +311,14 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
     this.materiaService.updateActividadEstado(actividadId, 'entregada');
   }
 
-  calificarActividad(actividadId: number) {
+  calificarActividad(actividadId?: number) {
+    if (!actividadId) return;
     const rutaBase = this.esAyudante ? '/ayudante' : '/docente';
     this.router.navigate([`${rutaBase}/actividades`, actividadId, 'calificar']);
   }
 
-  eliminarActividad(actividadId: number) {
+  eliminarActividad(actividadId?: number) {
+    if (!actividadId) return;
     if (confirm('¿Deseas eliminar esta actividad del curso?')) {
       this.materiaService.deleteActividad(actividadId);
     }

@@ -1282,12 +1282,14 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     });
   }
 
-  toggleRecursoEsencial(recursoId: number) {
+  toggleRecursoEsencial(recursoId?: number) {
+    if (!recursoId) return;
     this.materiaService.toggleRecursoEsencial(recursoId);
     this.actualizarRecursosYActividades();
   }
 
-  eliminarRecurso(recursoId: number) {
+  eliminarRecurso(recursoId?: number) {
+    if (!recursoId) return;
     if (confirm('¿Deseas eliminar este recurso?')) {
       this.materiaService.deleteRecurso(recursoId);
       this.actualizarRecursosYActividades();
