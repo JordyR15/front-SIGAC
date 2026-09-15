@@ -1,7 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { Observable, catchError, map, throwError } from 'rxjs';
 import { getApiBase } from '../api';
 import { AuthService } from './auth.service';
 
@@ -16,6 +15,10 @@ export interface JerarquiaRolInfo {
 
 export interface AsignarRolDto {
   rol: string;
+}
+
+export interface ActualizarRolesDto {
+  roles: string[];
 }
 
 export interface RespuestaAsignacionRol {
@@ -47,7 +50,7 @@ export class RolesService {
   }
 
   private get apiUrl() {
-    return `${getApiBase()}/api/Roles`;
+    return `${getApiBase()}/api/roles`;
   }
 
   // Jerarquía del sistema universitario: Administrador -> Decano -> Coordinador -> Docente -> Estudiante
@@ -91,18 +94,29 @@ export class RolesService {
    */
   asignarRol(userId: number, nuevoRol: RolSistema | string): Observable<RespuestaAsignacionRol> {
     const body: AsignarRolDto = { rol: nuevoRol };
-    return this.http.put<RespuestaAsignacionRol>(`${this.apiUrl}/${userId}`, body).pipe(
-      catchError(() => {
-        // Fallback para pruebas locales
-        return of({
-          success: true,
-          mensaje: `Rol '${nuevoRol}' asignado exitosamente al usuario #${userId}.`,
-          userId,
-          nuevoRol,
-          asignadoPor: localStorage.getItem('username') || 'Administrador',
-          fecha: new Date().toISOString()
-        });
-      })
+    return this.http.put<any>(`${this.apiUrl}/${userId}`, body).pipe(
+      map((res: any) => ({
+        success: true,
+        mensaje: res?.message || res?.mensaje || `Rol '${nuevoRol}' asignado exitosamente al usuario #${userId}.`,
+        userId,
+        nuevoRol: String(nuevoRol),
+        asignadoPor: localStorage.getItem('username') || 'Sistema',
+        fecha: new Date().toISOString()
+      })),
+      catchError((err) => throwError(() => err))
+    );
+  }
+
+  /**
+   * PUT /api/roles/{userId}
+   * Reemplaza la lista de roles del usuario.
+   * Body: { roles: [...] } (forma preferida) o { rol: "..." } legacy.
+   */
+  actualizarRoles(userId: number, roles: string[]): Observable<string> {
+    const body: ActualizarRolesDto = { roles };
+    return this.http.put<any>(`${this.apiUrl}/${userId}`, body).pipe(
+      map((res: any) => String(res?.message || res?.mensaje || 'Roles actualizados correctamente.')),
+      catchError((err) => throwError(() => err))
     );
   }
 

@@ -86,11 +86,11 @@
       </div>
     }
 
-    <!-- SECCIÓN COORDINADOR: Si hasRole('Coordinador'): Validación de Ayudantías, Configuración Cátedras -->
-    @if (hasRole('Coordinador')) {
+    <!-- SECCIÓN COORDINACIÓN / DECANATO -->
+    @if (hasRole('Coordinador') || hasRole('Decano')) {
       <div>
         <span class="text-[10px] font-bold text-amber-600 uppercase tracking-wider px-3 mb-2 block flex items-center justify-between">
-          <span>Coordinación</span>
+          <span>{{ hasRole('Decano') ? 'Decanato' : 'Coordinación' }}</span>
           <i class="fa-solid fa-user-tie text-amber-500 text-xs"></i>
         </span>
         <div class="space-y-1">
@@ -105,6 +105,12 @@
              class="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-xs font-medium">
             <i class="fa-solid fa-sliders text-sm w-5 text-center text-amber-600"></i>
             <span>Configuración Cátedras</span>
+          </a>
+          <a routerLink="/admin/docentes"
+             routerLinkActive="bg-accent/10 text-accent font-semibold"
+             class="flex items-center gap-3 px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors text-xs font-medium">
+            <i class="fa-solid fa-user-gear text-sm w-5 text-center text-amber-600"></i>
+            <span>Gestión de Roles</span>
           </a>
         </div>
       </div>

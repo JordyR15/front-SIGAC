@@ -97,7 +97,7 @@ export const routes: Routes = [
       { path: 'jurado/presentaciones', component: EvaluacionTribunalComponent },
 
       // ADMINISTRADOR
-      { path: 'admin/docentes', component: AdminDocentesComponent, canActivate: [roleGuard], data: { roles: ['Administrador'] } },
+      { path: 'admin/docentes', component: AdminDocentesComponent, canActivate: [roleGuard], data: { roles: ['Administrador', 'Decano', 'Coordinador'] } },
       { path: 'admin/solicitudes', component: SolicitudesComponent },
       { path: 'admin/asignaciones', component: AsignacionesComponent },
       { path: 'admin/seguimiento', component: SeguimientoComponent },

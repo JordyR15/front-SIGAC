@@ -4,6 +4,8 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { RouterModule } from '@angular/router';
 import Swal from 'sweetalert2';
 import { AdminDocenteService, DocenteItemDto } from '../../../services/admin-docente.service';
+import { AuthService } from '../../../services/auth.service';
+import { RolesService, RolSistema } from '../../../services/roles.service';
 
 @Component({
   selector: 'app-admin-docentes',
@@ -14,6 +16,8 @@ import { AdminDocenteService, DocenteItemDto } from '../../../services/admin-doc
 export class AdminDocentesComponent implements OnInit {
   private fb = inject(FormBuilder);
   private adminDocenteService = inject(AdminDocenteService);
+  private authService = inject(AuthService);
+  private rolesService = inject(RolesService);
 
   docentes: DocenteItemDto[] = [];
   docenteForm!: FormGroup;
@@ -25,6 +29,14 @@ export class AdminDocentesComponent implements OnInit {
 
   mensajeExito = '';
   mensajeError = '';
+  esAdministrador = false;
+  esDecano = false;
+  esCoordinador = false;
+
+  modalRolesAbierto = false;
+  docenteEditando: DocenteItemDto | null = null;
+  rolesEnEdicion: string[] = [];
+  isUpdatingRoles = false;
 
   // Roles disponibles para asignación múltiple
   rolesDisponibles = [
@@ -34,8 +46,129 @@ export class AdminDocentesComponent implements OnInit {
   ];
 
   ngOnInit(): void {
+    this.detectarPermisosGestion();
     this.iniciarFormulario();
     this.cargarDocentes();
+  }
+
+  private normalizarRol(rol: string): string {
+    return (rol || '').trim().toLowerCase();
+  }
+
+  private canonizarRol(rol: string): RolSistema | null {
+    const r = this.normalizarRol(rol);
+    if (r === 'administrador' || r === 'admin') return 'Administrador';
+    if (r === 'decano') return 'Decano';
+    if (r === 'coordinador') return 'Coordinador';
+    if (r === 'docente') return 'Docente';
+    if (r === 'estudiante') return 'Estudiante';
+    return null;
+  }
+
+  private detectarPermisosGestion(): void {
+    this.esAdministrador = this.authService.hasRole('Administrador');
+    this.esDecano = this.authService.hasRole('Decano');
+    this.esCoordinador = this.authService.hasRole('Coordinador');
+  }
+
+  get puedeGestionarRoles(): boolean {
+    return this.esAdministrador || this.esDecano || this.esCoordinador;
+  }
+
+  get tituloGestion(): string {
+    if (this.esAdministrador) return 'Gestión y Registro de Docentes';
+    return 'Gestión de Roles Académicos';
+  }
+
+  get subtituloGestion(): string {
+    if (this.esAdministrador) {
+      return 'Asignación de responsabilidades académicas múltiples (Docente de Cátedra, Coordinador de Carrera y Tribunal Evaluador).';
+    }
+    return 'Actualiza roles de usuarios usando el endpoint institucional de roles según tu nivel de autorización.';
+  }
+
+  get rolesPermitidosParaGestion(): RolSistema[] {
+    if (this.esAdministrador) return ['Administrador', 'Decano', 'Coordinador', 'Docente', 'Estudiante'];
+    if (this.esDecano) return ['Coordinador', 'Docente', 'Estudiante'];
+    if (this.esCoordinador) return ['Docente', 'Estudiante'];
+    return [];
+  }
+
+  puedeEditarUsuario(docente: DocenteItemDto): boolean {
+    if (!this.puedeGestionarRoles) return false;
+    if (!docente.roles || docente.roles.length === 0) return true;
+    return docente.roles.every((r) => {
+      const canon = this.canonizarRol(r);
+      if (!canon) return false;
+      return this.rolesPermitidosParaGestion.includes(canon);
+    });
+  }
+
+  abrirModalRoles(docente: DocenteItemDto): void {
+    if (!this.puedeEditarUsuario(docente)) return;
+    this.mensajeExito = '';
+    this.mensajeError = '';
+    this.docenteEditando = docente;
+    const canonicos = (docente.roles || [])
+      .map((r) => this.canonizarRol(r))
+      .filter((r): r is RolSistema => !!r)
+      .filter((r) => this.rolesPermitidosParaGestion.includes(r));
+    this.rolesEnEdicion = canonicos.length > 0 ? [...canonicos] : ['Docente'];
+    this.modalRolesAbierto = true;
+  }
+
+  cerrarModalRoles(): void {
+    this.modalRolesAbierto = false;
+    this.docenteEditando = null;
+    this.rolesEnEdicion = [];
+    this.isUpdatingRoles = false;
+  }
+
+  toggleRolEnEdicion(rol: RolSistema, checked: boolean): void {
+    if (checked) {
+      if (!this.rolesEnEdicion.includes(rol)) this.rolesEnEdicion.push(rol);
+    } else {
+      this.rolesEnEdicion = this.rolesEnEdicion.filter((r) => r !== rol);
+    }
+  }
+
+  guardarRolesUsuario(): void {
+    if (!this.docenteEditando) return;
+    const rolesFinales = [...new Set(this.rolesEnEdicion)].filter((r) => this.rolesPermitidosParaGestion.includes(r as RolSistema));
+    if (rolesFinales.length === 0) {
+      this.mensajeError = 'Debes seleccionar al menos un rol permitido.';
+      return;
+    }
+
+    this.isUpdatingRoles = true;
+    this.rolesService.actualizarRoles(this.docenteEditando.id, rolesFinales).subscribe({
+      next: (msg) => {
+        const idx = this.docentes.findIndex((d) => d.id === this.docenteEditando!.id);
+        if (idx >= 0) {
+          this.docentes[idx] = { ...this.docentes[idx], roles: rolesFinales };
+        }
+        this.isUpdatingRoles = false;
+        this.mensajeExito = msg || 'Roles actualizados correctamente.';
+        Swal.fire({
+          icon: 'success',
+          title: 'Roles actualizados',
+          text: this.mensajeExito,
+          confirmButtonText: 'Aceptar'
+        });
+        this.cerrarModalRoles();
+      },
+      error: (err) => {
+        this.isUpdatingRoles = false;
+        const serverMsg = err?.error?.message || err?.error?.title || err?.message || 'No fue posible actualizar roles.';
+        this.mensajeError = serverMsg;
+        Swal.fire({
+          icon: 'error',
+          title: 'No se pudo actualizar roles',
+          text: this.mensajeError,
+          confirmButtonText: 'Aceptar'
+        });
+      }
+    });
   }
 
   iniciarFormulario(): void {
@@ -54,14 +187,15 @@ export class AdminDocentesComponent implements OnInit {
   }
 
   cargarDocentes(): void {
-    this.adminDocenteService.getDocentes().subscribe({
+    const rolParam = (!this.filtroRol || this.filtroRol === 'Todos') ? undefined : this.filtroRol;
+    this.adminDocenteService.getUsuariosPorRol(rolParam).subscribe({
       next: (data) => {
         this.docentes = data;
       },
       error: (err) => {
         Swal.fire({
           icon: 'error',
-          title: 'Error cargando docentes',
+          title: 'Error cargando usuarios',
           html: `<pre style="white-space: pre-wrap; text-align:left;">${(err && err.message) ? err.message : JSON.stringify(err)}</pre>`,
           confirmButtonText: 'Aceptar'
         });
@@ -70,6 +204,7 @@ export class AdminDocentesComponent implements OnInit {
   }
 
   abrirModal(): void {
+    if (!this.esAdministrador) return;
     this.mensajeExito = '';
     this.mensajeError = '';
     this.docenteForm.reset({
@@ -104,6 +239,7 @@ export class AdminDocentesComponent implements OnInit {
   }
 
   guardarDocente(): void {
+    if (!this.esAdministrador) return;
     if (this.docenteForm.invalid) {
       this.docenteForm.markAllAsTouched();
       return;

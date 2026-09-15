@@ -6,12 +6,12 @@
         <i class="fa-solid fa-user-shield"></i>
         <span>Administración Central</span>
       </div>
-      <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Gestión y Registro de Docentes</h1>
+      <h1 class="text-2xl font-bold text-slate-900 tracking-tight">{{ tituloGestion }}</h1>
       <p class="text-sm text-slate-500 mt-1">
-        Asignación de responsabilidades académicas múltiples (Docente de Cátedra, Coordinador de Carrera y Tribunal Evaluador).
+        {{ subtituloGestion }}
       </p>
     </div>
-    <div class="flex items-center gap-3 shrink-0">
+    <div class="flex items-center gap-3 shrink-0" *ngIf="esAdministrador">
       <button (click)="abrirModal()"
               id="btn-nuevo-docente"
               class="inline-flex items-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent-hover text-white text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-[0.98]">
@@ -34,7 +34,7 @@
 
     <div class="flex items-center gap-2 w-full sm:w-auto">
       <span class="text-xs text-slate-500 font-medium whitespace-nowrap">Filtrar por Rol:</span>
-      <select [(ngModel)]="filtroRol"
+      <select [(ngModel)]="filtroRol" (ngModelChange)="cargarDocentes()"
               id="select-filtro-rol"
               class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-accent/20 cursor-pointer w-full sm:w-auto">
         <option value="Todos">Todos los roles</option>
@@ -42,6 +42,7 @@
         <option value="Coordinador">Coordinador</option>
         <option value="Tribunal">Tribunal Evaluador</option>
         <option value="Jurado">Jurado</option>
+        <option value="Estudiante">Estudiante</option>
       </select>
     </div>
   </div>
@@ -106,6 +107,71 @@
                       <span>{{ r }}</span>
                     </span>
                   }
+
+                  @if (modalRolesAbierto && docenteEditando) {
+                    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+                      <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+                        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+                          <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                              <i class="fa-solid fa-user-gear"></i>
+                            </div>
+                            <div>
+                              <h2 class="text-base font-bold text-slate-900">Editar Roles de Usuario</h2>
+                              <p class="text-xs text-slate-500">{{ docenteEditando.nombre }} {{ docenteEditando.apellido }} ({{ docenteEditando.username }})</p>
+                            </div>
+                          </div>
+                          <button (click)="cerrarModalRoles()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                          </button>
+                        </div>
+
+                        <div class="p-6 space-y-4 overflow-y-auto">
+                          <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
+                            Se enviará <strong>PUT /api/roles/{{ docenteEditando.id }}</strong> con el body de roles permitido.
+                          </div>
+
+                          <div class="space-y-2">
+                            @for (rol of rolesPermitidosParaGestion; track rol) {
+                              <label class="flex items-center gap-3 p-2.5 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:border-slate-300">
+                                <input
+                                  type="checkbox"
+                                  class="rounded text-accent focus:ring-accent w-4 h-4"
+                                  [checked]="rolesEnEdicion.includes(rol)"
+                                  (change)="toggleRolEnEdicion(rol, $any($event.target).checked)"
+                                />
+                                <span class="text-sm font-medium text-slate-800">{{ rol }}</span>
+                              </label>
+                            }
+                          </div>
+
+                          <p class="text-[11px] text-slate-500">
+                            Reglas aplicadas en UI: Coordinador solo puede asignar Docente/Estudiante. Decano puede asignar Coordinador/Docente/Estudiante. Administrador puede asignar todos.
+                          </p>
+                        </div>
+
+                        <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3 shrink-0">
+                          <button type="button"
+                                  (click)="cerrarModalRoles()"
+                                  class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-200/60 transition-colors">
+                            Cancelar
+                          </button>
+                          <button type="button"
+                                  (click)="guardarRolesUsuario()"
+                                  [disabled]="isUpdatingRoles"
+                                  class="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white text-xs font-semibold rounded-xl shadow-sm transition-all disabled:opacity-50">
+                            @if (isUpdatingRoles) {
+                              <i class="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                              <span>Guardando...</span>
+                            } @else {
+                              <i class="fa-solid fa-check text-xs"></i>
+                              <span>Actualizar Roles</span>
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  }
                 </div>
               </td>
 
@@ -125,6 +191,14 @@
                      class="p-1.5 text-slate-400 hover:text-accent hover:bg-slate-100 rounded-lg transition-colors">
                     <i class="fa-solid fa-book-open"></i>
                   </a>
+                  <button *ngIf="puedeGestionarRoles"
+                          title="Cambiar roles"
+                          [disabled]="!puedeEditarUsuario(doc)"
+                          (click)="abrirModalRoles(doc)"
+                          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-user-gear text-[10px]"></i>
+                    <span>Cambiar roles</span>
+                  </button>
                   <button title="Enviar credenciales por correo"
                           (click)="mensajeExito = 'Credenciales reenviadas al correo de ' + doc.nombre"
                           class="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
@@ -198,6 +272,7 @@
                 @if (docenteForm.get('nombre')?.invalid && docenteForm.get('nombre')?.touched) {
                   <p class="text-[11px] text-rose-500 mt-1">El nombre es requerido (mínimo 2 letras).</p>
                 }
+
               </div>
 
               <div>

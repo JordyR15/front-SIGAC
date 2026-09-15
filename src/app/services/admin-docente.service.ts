@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { getApiBase } from '../api';
 
@@ -117,5 +117,60 @@ export class AdminDocenteService {
      }),
      catchError(() => of([]))
    );
+  }
+
+  /**
+   * GET /api/Usuarios?rol={rol}
+   * Obtiene usuarios filtrando por rol si se proporciona.
+   */
+  getUsuariosPorRol(rol?: string): Observable<DocenteItemDto[]> {
+    const q = (rol && rol !== 'Todos') ? `?rol=${encodeURIComponent(rol)}` : '';
+    const url = `${this.baseUrl}/api/Usuarios${q}`;
+
+    const fallbackPersona = `${this.baseUrl}/api/Persona`;
+    const fallbackDocente = `${this.baseUrl}/api/Docente`;
+
+    return this.http.get<any[]>(url).pipe(
+      catchError(() => this.http.get<any[]>(fallbackPersona)),
+      catchError(() => this.http.get<any[]>(fallbackDocente)),
+      map((data: any) => {
+        let rawList: any[] = [];
+        if (Array.isArray(data)) {
+          rawList = data;
+        } else if (data && Array.isArray(data.docentes)) {
+          rawList = data.docentes;
+        } else if (data && Array.isArray(data.personas)) {
+          rawList = data.personas;
+        } else if (data && Array.isArray(data.items)) {
+          rawList = data.items;
+        }
+
+        if (rawList.length === 0) {
+          return this.getListaCompletaLocal();
+        }
+
+        const mapped = rawList.map((p: any, idx: number) => {
+          const roles = Array.isArray(p.roles)
+            ? p.roles
+            : (Array.isArray(p.Roles) ? p.Roles : (p.rol || p.Rol ? [p.rol || p.Rol] : ['Usuario']));
+          const correo = String(p.correo ?? p.email ?? p.CORREO ?? `${(p.username ?? p.usuario ?? `user.${idx + 1}`).split('@')[0]}@uteq.edu.ec`);
+
+          return {
+            id: Number(p.id ?? p.M_ID ?? p.docenteId ?? p.personaId ?? idx + 1),
+            username: String(p.username ?? p.usuario ?? p.USERNAME ?? correo.split('@')[0] ?? `user.${idx + 1}`),
+            nombre: String(p.nombre ?? p.NOMBRE ?? 'Usuario'),
+            apellido: String(p.apellido ?? p.APELLIDO ?? ''),
+            correo,
+            roles,
+            activo: p.activo !== false,
+            departamento: p.departamento || 'Facultad',
+            titulo: p.titulo || ''
+          } as DocenteItemDto;
+        });
+
+        return mapped;
+      }),
+      catchError(() => of([]))
+    );
   }
 }
