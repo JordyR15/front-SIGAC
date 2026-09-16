@@ -27,6 +27,7 @@
       <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
       <input type="text"
              [(ngModel)]="filtroTexto"
+             (input)="aplicarFiltros()"
              placeholder="Buscar por nombre, correo o usuario..."
              id="input-filtro-docentes"
              class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all">
@@ -37,12 +38,10 @@
       <select [(ngModel)]="filtroRol" (ngModelChange)="cargarDocentes()"
               id="select-filtro-rol"
               class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-accent/20 cursor-pointer w-full sm:w-auto">
-        <option value="Todos">Todos los roles</option>
-        <option value="Docente">Docente de Cátedra</option>
+        <option value="Todos">Todos los Docentes y Personal</option>
+        <option value="Docente">Docente</option>
         <option value="Coordinador">Coordinador</option>
-        <option value="Tribunal">Tribunal Evaluador</option>
-        <option value="Jurado">Jurado</option>
-        <option value="Estudiante">Estudiante</option>
+        <option value="Administrador">Administrador</option>
       </select>
     </div>
   </div>
@@ -72,7 +71,9 @@
                   </div>
                   <div>
                     <p class="font-semibold text-slate-900 leading-snug">{{ doc.nombre }} {{ doc.apellido }}</p>
-                    <p class="text-xs text-slate-500">{{ doc.titulo || 'Docente de Cátedra' }}</p>
+                    <span class="text-xs text-slate-500">
+                      {{ doc.titulo || doc.departamento || doc.roles?.[0] || 'Docente Titular' }}
+                    </span>
                   </div>
                 </div>
               </td>
@@ -97,12 +98,14 @@
                     <span [ngClass]="{
                       'bg-indigo-50 text-indigo-700 border-indigo-200': r === 'Docente',
                       'bg-amber-50 text-amber-700 border-amber-200': r === 'Coordinador',
-                      'bg-purple-50 text-purple-700 border-purple-200': r === 'Tribunal' || r === 'Jurado'
+                      'bg-purple-50 text-purple-700 border-purple-200': r === 'Tribunal' || r === 'Jurado',
+                      'bg-slate-100 text-slate-700 border-slate-200': r === 'Administrador'
                     }" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border">
                       <i [ngClass]="{
                         'fa-chalkboard-user': r === 'Docente',
                         'fa-user-tie': r === 'Coordinador',
-                        'fa-gavel': r === 'Tribunal' || r === 'Jurado'
+                        'fa-gavel': r === 'Tribunal' || r === 'Jurado',
+                        'fa-user-shield': r === 'Administrador'
                       }" class="fa-solid text-[10px]"></i>
                       <span>{{ r }}</span>
                     </span>
@@ -319,7 +322,7 @@
                   <input type="email"
                          id="input-correo-docente"
                          formControlName="correo"
-                         placeholder="carlos.mendoza@universidad.edu"
+                         placeholder="carlos.mendoza@uteq.edu.ec"
                          class="w-full pl-8 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 outline-none focus:bg-white focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all">
                 </div>
                 @if (docenteForm.get('correo')?.invalid && docenteForm.get('correo')?.touched) {

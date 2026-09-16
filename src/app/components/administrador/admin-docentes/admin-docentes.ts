@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -18,14 +18,16 @@ export class AdminDocentesComponent implements OnInit {
   private adminDocenteService = inject(AdminDocenteService);
   private authService = inject(AuthService);
   private rolesService = inject(RolesService);
+  private cdr = inject(ChangeDetectorRef);
 
   docentes: DocenteItemDto[] = [];
+  docentesFiltrados: DocenteItemDto[] = [];
   docenteForm!: FormGroup;
 
   modalAbierto = false;
   isSubmitting = false;
   filtroTexto = '';
-  filtroRol = 'Todos';
+  filtroRol = 'Docente';
 
   mensajeExito = '';
   mensajeError = '';
@@ -156,6 +158,9 @@ export class AdminDocentesComponent implements OnInit {
           confirmButtonText: 'Aceptar'
         });
         this.cerrarModalRoles();
+        this.aplicarFiltros();
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       },
       error: (err) => {
         this.isUpdatingRoles = false;
@@ -174,7 +179,7 @@ export class AdminDocentesComponent implements OnInit {
   iniciarFormulario(): void {
     this.docenteForm = this.fb.group({
       username: ['', [Validators.required, Validators.minLength(4), Validators.pattern('^[a-zA-Z0-9._-]+$')]],
-      password: ['Temporal2026*', [Validators.required, Validators.minLength(6)]],
+      password: ['Uteq.2026!', [Validators.required, Validators.minLength(6)]],
       nombre: ['', [Validators.required, Validators.minLength(2)]],
       apellido: ['', [Validators.required, Validators.minLength(2)]],
       correo: ['', [Validators.required, Validators.email]],
@@ -189,10 +194,22 @@ export class AdminDocentesComponent implements OnInit {
   cargarDocentes(): void {
     const rolParam = (!this.filtroRol || this.filtroRol === 'Todos') ? undefined : this.filtroRol;
     this.adminDocenteService.getUsuariosPorRol(rolParam).subscribe({
-      next: (data) => {
-        this.docentes = data;
+      next: (rawList) => {
+        const list = Array.isArray(rawList) ? rawList : [];
+        this.docentes = list.filter(u => {
+          const r = (u.roles?.[0] || (u as any).rol || '').toLowerCase();
+          const allRoles = Array.isArray(u.roles) ? u.roles.map(x => (x || '').toLowerCase()) : [r];
+          return r !== 'estudiante' && r !== 'ayudante' && !allRoles.includes('estudiante') && !allRoles.includes('ayudante');
+        });
+        this.aplicarFiltros();
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       },
       error: (err) => {
+        this.docentes = [];
+        this.aplicarFiltros();
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
         Swal.fire({
           icon: 'error',
           title: 'Error cargando usuarios',
@@ -203,13 +220,29 @@ export class AdminDocentesComponent implements OnInit {
     });
   }
 
+  aplicarFiltros(): void {
+    const txt = (this.filtroTexto || '').trim().toLowerCase();
+    this.docentesFiltrados = this.docentes.filter(d => {
+      const matchTexto = !txt ||
+        (d.nombre || '').toLowerCase().includes(txt) ||
+        (d.apellido || '').toLowerCase().includes(txt) ||
+        (d.correo || '').toLowerCase().includes(txt) ||
+        (d.username || '').toLowerCase().includes(txt);
+
+      const matchRol = !this.filtroRol || this.filtroRol === 'Todos' ||
+        (d.roles && d.roles.some(r => r.toLowerCase() === this.filtroRol.toLowerCase()));
+
+      return matchTexto && matchRol;
+    });
+  }
+
   abrirModal(): void {
     if (!this.esAdministrador) return;
     this.mensajeExito = '';
     this.mensajeError = '';
     this.docenteForm.reset({
       username: '',
-      password: 'Temporal2026*',
+      password: 'Uteq.2026!',
       nombre: '',
       apellido: '',
       correo: '',
@@ -233,7 +266,7 @@ export class AdminDocentesComponent implements OnInit {
       const usernameSugerido = `${nom.split(' ')[0]}.${ape.split(' ')[0]}`;
       this.docenteForm.patchValue({
         username: usernameSugerido,
-        correo: `${usernameSugerido}@universidad.edu`
+        correo: `${usernameSugerido}@uteq.edu.ec`
       });
     }
   }
@@ -255,70 +288,48 @@ export class AdminDocentesComponent implements OnInit {
     if (formVal.rolJurado) rolesSeleccionados.push('Jurado');
 
     if (rolesSeleccionados.length === 0) {
-      this.mensajeError = 'Debe seleccionar al menos un rol para el docente.';
-      return;
+      rolesSeleccionados.push('Docente');
     }
 
     const payload = {
       username: formVal.username.trim(),
-      password: formVal.password,
+      password: formVal.password?.trim() || 'Uteq.2026!',
       nombre: formVal.nombre.trim(),
       apellido: formVal.apellido.trim(),
       correo: formVal.correo.trim(),
       roles: rolesSeleccionados
     };
 
-    // Mostrar JSON que se enviará al backend y pedir confirmación
-    Swal.fire({
-      title: 'JSON a enviar al backend',
-      html: `<pre style="white-space: pre-wrap; text-align:left;">${JSON.stringify(payload, null, 2).replace(/</g, '&lt;')}</pre>`,
-      icon: 'info',
-      showCancelButton: true,
-      confirmButtonText: 'Enviar',
-      cancelButtonText: 'Cancelar',
-      width: 700
-    }).then((result) => {
-      if (!result.isConfirmed) return;
+    this.isSubmitting = true;
+    this.mensajeExito = '';
+    this.mensajeError = '';
 
-      this.isSubmitting = true;
-      this.mensajeExito = '';
-      this.mensajeError = '';
+    this.adminDocenteService.crearDocente(payload).subscribe({
+      next: () => {
+        this.isSubmitting = false;
+        this.cerrarModal();
 
-      this.adminDocenteService.crearDocente(payload).subscribe({
-        next: (res) => {
-          this.isSubmitting = false;
-          const createdId = res?.id ?? (res?.docente ? res.docente.id : null);
-          const successMsg = `Docente ${payload.nombre} ${payload.apellido} registrado exitosamente${createdId ? ' (ID: ' + createdId + ')' : ''} con roles: ${rolesSeleccionados.join(', ')}.`;
+        Swal.fire({
+          icon: 'success',
+          title: 'Docente registrado exitosamente',
+          text: `El docente "${payload.nombre} ${payload.apellido}" ha sido registrado en el sistema.`,
+          timer: 1800,
+          showConfirmButton: false
+        });
 
-          // Mostrar notificación clara al usuario
-          Swal.fire({ icon: 'success', title: 'Docente creado', html: `<div style="text-align:left">${successMsg}</div>`, confirmButtonText: 'Aceptar' });
-
-          // Limpiar formulario, cerrar modal y recargar lista
-          try { this.docenteForm.reset({ username: '', password: 'Temporal2026*', nombre: '', apellido: '', correo: '', rolDocente: true, rolCoordinador: false, rolTribunal: false, rolJurado: false }); } catch {}
-          this.mensajeExito = successMsg;
-          this.cargarDocentes();
-          this.cerrarModal();
-        },
-        error: (err) => {
-          this.isSubmitting = false;
-          this.mensajeError = 'Error al registrar el docente. Por favor verifique los datos.';
-          Swal.fire({ icon: 'error', title: 'Error al registrar docente', html: `<pre style="white-space:pre-wrap; text-align:left">${(err && err.message) ? err.message : JSON.stringify(err)}</pre>`, confirmButtonText: 'Aceptar' });
-        }
-      });
-    });
-  }
-
-  get docentesFiltrados(): DocenteItemDto[] {
-    return this.docentes.filter(d => {
-      const matchTexto = !this.filtroTexto ||
-        d.nombre.toLowerCase().includes(this.filtroTexto.toLowerCase()) ||
-        d.apellido.toLowerCase().includes(this.filtroTexto.toLowerCase()) ||
-        d.correo.toLowerCase().includes(this.filtroTexto.toLowerCase()) ||
-        d.username.toLowerCase().includes(this.filtroTexto.toLowerCase());
-
-      const matchRol = this.filtroRol === 'Todos' || d.roles.includes(this.filtroRol);
-
-      return matchTexto && matchRol;
+        this.cargarDocentes();
+      },
+      error: (err) => {
+        this.isSubmitting = false;
+        const msg = err?.error?.message || err?.error?.title || 'Error al registrar el docente. Por favor verifique los datos.';
+        this.mensajeError = msg;
+        Swal.fire({
+          icon: 'error',
+          title: 'Error al registrar docente',
+          text: msg,
+          confirmButtonColor: '#4f46e5'
+        });
+      }
     });
   }
 }
