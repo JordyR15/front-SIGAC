@@ -163,6 +163,9 @@ export class MateriaService {
       };
     });
 
+    const parsedClaseId = item.claseId ? Number(item.claseId) : (typeof item.clase === 'object' && item.clase?.id ? Number(item.clase.id) : undefined);
+    const parsedClaseNombre = item.claseNombre || item.nombreClase || (typeof item.clase === 'object' ? item.clase?.nombre : undefined) || undefined;
+
     return {
       id: Number(item.id || item.materiaId || item.catedraId || item.claseId || (idx + 101)),
       nombre: item.nombre || item.nombreMateria || item.nombreCatedra || item.nombreAsignatura || item.materia || `Asignatura ${idx + 1}`,
@@ -175,8 +178,8 @@ export class MateriaService {
       creditos: Number(item.creditos || item.creditosMateria || 4),
       semana: Number(item.semana || item.semanaActual || 1),
       totalSemanas: Number(item.totalSemanas || 16),
-      claseId: item.claseId ? Number(item.claseId) : undefined,
-      claseNombre: item.claseNombre || item.nombreClase || undefined,
+      claseId: parsedClaseId,
+      claseNombre: parsedClaseNombre,
       clases: mappedClases,
       semestre: item.semestre || item.semestreCatedra || item.periodo || '2026-2',
       grupo: item.grupo || item.paralelo || 'Grupo A',
@@ -234,11 +237,11 @@ export class MateriaService {
     );
   }
 
-  crearMateria(dto: { nombre: string; codigo: string; descripcion?: string; semestre?: string; creditos?: number; docenteId?: number }): Observable<any> {
+  crearMateria(dto: { nombre: string; codigo: string; descripcion?: string; semestre?: string; creditos?: number; docenteId?: number; claseId?: number }): Observable<any> {
     return this.http.post(`${this.apiUrl}/Materia`, dto);
   }
 
-  createMateria(dto: { nombre: string; codigo: string; descripcion?: string; semestre?: string; creditos?: number; docenteId?: number } | any): Observable<any> {
+  createMateria(dto: { nombre: string; codigo: string; descripcion?: string; semestre?: string; creditos?: number; docenteId?: number; claseId?: number } | any): Observable<any> {
     return this.crearMateria(dto);
   }
 

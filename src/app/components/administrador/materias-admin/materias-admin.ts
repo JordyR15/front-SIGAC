@@ -93,20 +93,25 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
           m.clases = [];
         }
 
-        // Asociar clases encontradas que apunten a esta materia
+        // Si la materia tiene claseId, vincular claseNombre si aún no lo tiene
+        if (m.claseId && !m.claseNombre) {
+          const matchingClase = this.clases.find(c => Number(c.id) === Number(m.claseId));
+          if (matchingClase) {
+            m.claseNombre = matchingClase.nombre;
+          }
+        }
+
+        // Asociar clases encontradas que apunten a esta materia o viceversa
         const clasesAsociadas = this.clases.filter(c =>
+          (m.claseId && Number(c.id) === Number(m.claseId)) ||
           Number(c.materiaId) === Number(m.id) ||
-          (Array.isArray(c.materiaIds) && c.materiaIds.some(id => Number(id) === Number(m.id))) ||
-          Number(m.claseId) === Number(c.id) ||
-          (c.nombre && m.claseNombre && c.nombre.trim().toLowerCase() === m.claseNombre.trim().toLowerCase())
+          (Array.isArray(c.materiaIds) && c.materiaIds.some(id => Number(id) === Number(m.id)))
         );
 
         clasesAsociadas.forEach(c => {
           const yaExiste = (m.clases as any[]).some(mc => {
             const mcId = typeof mc === 'object' ? mc.id : null;
-            const mcNombre = typeof mc === 'string' ? mc : mc?.nombre;
-            return (mcId && Number(mcId) === Number(c.id)) ||
-                   (mcNombre && mcNombre.trim().toLowerCase() === c.nombre.trim().toLowerCase());
+            return mcId && Number(mcId) === Number(c.id);
           });
 
           if (!yaExiste) {
@@ -158,10 +163,10 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
     // Si se seleccionó una clase específica (no 'Todas'):
     if (this.claseSeleccionada && this.claseSeleccionada !== 'Todas' && this.claseSeleccionada.id) {
       resultado = resultado.filter(m => {
-        return Number(this.claseSeleccionada.materiaId) === Number(m.id) ||
-               (m.claseId && Number(m.claseId) === Number(this.claseSeleccionada.id)) ||
-               (m.clases && (m.clases as any[]).some(c => (c.id && Number(c.id) === Number(this.claseSeleccionada.id)) || (c.nombre && c.nombre.trim().toLowerCase() === this.claseSeleccionada.nombre.trim().toLowerCase()))) ||
-               (this.claseSeleccionada.nombre && this.claseSeleccionada.nombre.toLowerCase().includes(m.nombre.toLowerCase()));
+        return (m.claseId && Number(m.claseId) === Number(this.claseSeleccionada.id)) ||
+               Number(this.claseSeleccionada.materiaId) === Number(m.id) ||
+               (m.clases && (m.clases as any[]).some(c => c.id && Number(c.id) === Number(this.claseSeleccionada.id))) ||
+               (m.claseNombre && m.claseNombre.trim().toLowerCase() === this.claseSeleccionada.nombre.trim().toLowerCase());
       });
     }
 
@@ -173,6 +178,7 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
         m.codigo?.toLowerCase().includes(q) ||
         (m as any).docenteNombre?.toLowerCase().includes(q) ||
         m.docente?.toLowerCase().includes(q) ||
+        (m.claseNombre && m.claseNombre.toLowerCase().includes(q)) ||
         (m.clases && (m.clases as any[]).some(c => this.getClaseNombre(c).toLowerCase().includes(q)))
       );
     }
@@ -221,48 +227,33 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
     });
 
     this.materiasFiltradas.forEach(m => {
-      // Recolectar todos los nombres de paralelo / cohorte asociados a esta materia
-      const nombresClases = new Set<string>();
+      // Agrupar directamente según materia.claseNombre o materia.claseId
+      let nombreClase = m.claseNombre?.trim();
 
-      // 1. Clases en el array m.clases
-      if (m.clases && Array.isArray(m.clases) && m.clases.length > 0) {
-        m.clases.forEach(c => {
-          const nom = this.getClaseNombre(c)?.trim();
-          if (nom) nombresClases.add(nom);
-        });
+      if (!nombreClase && m.claseId) {
+        const matchingClase = this.clases.find(c => Number(c.id) === Number(m.claseId));
+        if (matchingClase?.nombre) {
+          nombreClase = matchingClase.nombre.trim();
+        }
       }
 
-      // 2. Clases en this.clases asociadas por materiaId
-      this.clases.forEach(c => {
-        if (
-          Number(c.materiaId) === Number(m.id) ||
-          (Array.isArray(c.materiaIds) && c.materiaIds.some(id => Number(id) === Number(m.id)))
-        ) {
-          if (c.nombre?.trim()) {
-            nombresClases.add(c.nombre.trim());
-          }
-        }
-      });
-
-      // 3. m.claseNombre directo
-      if (m.claseNombre?.trim()) {
-        nombresClases.add(m.claseNombre.trim());
+      if (!nombreClase && m.clases && m.clases.length > 0) {
+        const primera = m.clases[0];
+        nombreClase = this.getClaseNombre(primera)?.trim();
       }
 
-      // Si no tiene ninguna clase asignada
-      if (nombresClases.size === 0) {
-        nombresClases.add('Otras Materias / Sin Clase Asignada');
+      if (!nombreClase) {
+        nombreClase = 'Otras Materias / Sin Clase Asignada';
       }
 
-      nombresClases.forEach(nombreClase => {
-        if (!mapGrupos.has(nombreClase)) {
-          mapGrupos.set(nombreClase, []);
-        }
-        const lista = mapGrupos.get(nombreClase)!;
-        if (!lista.some(existente => Number(existente.id) === Number(m.id))) {
-          lista.push(m);
-        }
-      });
+      if (!mapGrupos.has(nombreClase)) {
+        mapGrupos.set(nombreClase, []);
+      }
+
+      const lista = mapGrupos.get(nombreClase)!;
+      if (!lista.some(existente => Number(existente.id) === Number(m.id))) {
+        lista.push(m);
+      }
     });
 
     const resultado: GrupoClaseMaterias[] = [];
@@ -274,7 +265,7 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
 
         resultado.push({
           claseNombre: nombreClase,
-          claseId: matchingClase?.id,
+          claseId: matchingClase?.id || mats.find(m => m.claseId)?.claseId,
           semestre: matchingClase?.semestre || mats[0]?.semestre || '2026-2',
           materias: mats,
           totalEstudiantes,

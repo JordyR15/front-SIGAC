@@ -1,12 +1,12 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterModule, ActivatedRoute } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
 import Swal from 'sweetalert2';
 import { MateriaService } from '../../../services/materia.service';
 import { AdminDocenteService } from '../../../services/admin-docente.service';
-import { ClaseService, ClaseDto } from '../../../services/clase.service';
+import { ClaseDto, ClaseService } from '../../../services/clase.service';
 
 interface DocenteSelectorItem {
   id: number;
@@ -23,7 +23,6 @@ interface DocenteSelectorItem {
 export class CrearMateriaComponent implements OnInit, OnDestroy {
   private subDocentes?: Subscription;
   private subClases?: Subscription;
-  private subParams?: Subscription;
 
   docentes: DocenteSelectorItem[] = [];
   clases: ClaseDto[] = [];
@@ -38,7 +37,7 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
     semestre: '2026-2',
     grupo: 'Grupo A (Diurno)',
     docenteId: 0,
-    claseId: 0,
+    claseId: '' as string | number,
     creditos: 4
   };
 
@@ -48,7 +47,6 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
 
   constructor(
     private router: Router,
-    private route: ActivatedRoute,
     private materiaService: MateriaService,
     private adminDocenteService: AdminDocenteService,
     private claseService: ClaseService
@@ -87,19 +85,11 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
 
     this.subClases = this.claseService.getClases().subscribe({
       next: (list) => {
-        this.clases = list || [];
+        this.clases = Array.isArray(list) ? list : [];
       },
-      error: () => {
+      error: (err) => {
+        console.error('Error al cargar clases en crear-materia:', err);
         this.clases = [];
-      }
-    });
-
-    this.subParams = this.route.queryParams.subscribe((params) => {
-      if (params['claseId']) {
-        this.nuevaMateria.claseId = Number(params['claseId']);
-      }
-      if (params['semestre']) {
-        this.nuevaMateria.semestre = params['semestre'];
       }
     });
   }
@@ -107,12 +97,20 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.subDocentes?.unsubscribe();
     this.subClases?.unsubscribe();
-    this.subParams?.unsubscribe();
   }
 
   guardarMateria() {
     if (!this.nuevaMateria.nombre.trim() || !this.nuevaMateria.codigo.trim()) {
       this.errorMessage = 'Por favor, completa el nombre y código de la materia.';
+      return;
+    }
+
+    if (!this.nuevaMateria.claseId || Number(this.nuevaMateria.claseId) <= 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Campo Obligatorio',
+        text: 'Debes seleccionar obligatoriamente una clase o paralelo para registrar la materia.'
+      });
       return;
     }
 
@@ -132,70 +130,26 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
       descripcion: this.nuevaMateria.descripcion?.trim() || '',
       semestre: this.nuevaMateria.semestre,
       creditos: Number(this.nuevaMateria.creditos) || 4,
-      docenteId: docenteId
+      docenteId: docenteId,
+      claseId: Number(this.nuevaMateria.claseId)
     };
 
     this.materiaService.crearMateria(payload).subscribe({
-      next: (res) => {
+      next: () => {
         this.isLoading = false;
         this.successMessage = `¡Materia "${payload.nombre}" creada y registrada exitosamente!`;
-
-        const selectedClaseId = Number(this.nuevaMateria.claseId);
-        const nuevaMateriaId = Number(res?.id ?? res?.materiaId ?? res?.data?.id ?? 0);
-
-        if (selectedClaseId > 0) {
-          const claseSeleccionada = this.clases.find(c => Number(c.id) === Number(selectedClaseId));
-
-          if (claseSeleccionada) {
-            const materiaIdEnClase = Number(claseSeleccionada.materiaId || 0);
-
-            // Caso A: La clase aún no tenía materia asignada
-            if (!materiaIdEnClase) {
-              const updateClasePayload = {
-                nombre: claseSeleccionada.nombre,
-                semestre: claseSeleccionada.semestre || payload.semestre,
-                carrera: claseSeleccionada.carrera || 'Ingeniería de Software',
-                descripcion: claseSeleccionada.descripcion || '',
-                materiaId: nuevaMateriaId > 0 ? nuevaMateriaId : undefined,
-                materiaNombre: res?.nombre || payload.nombre,
-                docenteId: payload.docenteId || claseSeleccionada.docenteId
-              };
-
-              this.claseService.updateClase(selectedClaseId, updateClasePayload).subscribe({
-                next: () => {
-                  this.claseService.refreshClases().subscribe();
-                },
-                error: (err) => console.warn('Error al actualizar clase asignada:', err)
-              });
-            }
-            // Caso B: La clase ya tenía otra materia asignada -> NO sobreescribir; crear clase duplicada para esta nueva materia
-            else if (nuevaMateriaId > 0 && materiaIdEnClase !== nuevaMateriaId) {
-              this.claseService.createClase({
-                nombre: claseSeleccionada.nombre,
-                materiaId: nuevaMateriaId,
-                docenteId: payload.docenteId || claseSeleccionada.docenteId,
-                semestre: payload.semestre || claseSeleccionada.semestre || '2026-2'
-              }).subscribe({
-                next: () => {
-                  this.claseService.refreshClases().subscribe();
-                },
-                error: (err) => console.warn('Error al crear clase vinculada para la nueva materia:', err)
-              });
-            }
-          }
-        }
 
         Swal.fire({
           icon: 'success',
           title: 'Materia creada',
-          text: `La materia "${payload.nombre}" ha sido registrada exitosamente${selectedClaseId > 0 ? ' y asignada al paralelo correspondiente' : ''}.`,
-          timer: 1600,
+          text: `La materia "${payload.nombre}" ha sido registrada exitosamente.`,
+          timer: 1500,
           showConfirmButton: false
         });
 
         setTimeout(() => {
           this.router.navigate(['/admin/materias']);
-        }, 1300);
+        }, 1200);
       },
       error: (err) => {
         this.isLoading = false;

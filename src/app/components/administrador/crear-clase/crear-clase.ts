@@ -17,16 +17,15 @@ import { AdminDocenteService } from '../../../services/admin-docente.service';
 export class CrearClaseComponent implements OnInit, OnDestroy {
   materias: MateriaDto[] = [];
   docentes: { id: number; nombre: string; correo?: string }[] = [];
-  private sub?: Subscription;
+  private subMaterias?: Subscription;
   private subDocentes?: Subscription;
 
   nuevaClase = {
     nombre: '',
-    carrera: 'Ingeniería de Software',
-    semestre: '2026-2',
-    docenteId: 102,
     materiaId: 0,
-    materiaIdsSeleccionadas: [] as number[],
+    docenteId: 0,
+    semestre: '2026-2',
+    carrera: 'Ingeniería de Software',
     descripcion: ''
   };
 
@@ -70,10 +69,13 @@ export class CrearClaseComponent implements OnInit, OnDestroy {
       }
     });
 
-    // Invocando this.materiaService.getMaterias() para cargar siempre el listado fresco de la API
-    this.sub = this.materiaService.getMaterias().subscribe({
+    // Cargar materias oficiales desde GET /api/Materia
+    this.subMaterias = this.materiaService.getMaterias().subscribe({
       next: (list) => {
         this.materias = Array.isArray(list) ? list : [];
+        if (this.materias.length > 0 && !this.nuevaClase.materiaId) {
+          this.nuevaClase.materiaId = this.materias[0].id;
+        }
       },
       error: (err) => {
         console.error('Error al cargar materias:', err);
@@ -83,7 +85,7 @@ export class CrearClaseComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.sub?.unsubscribe();
+    this.subMaterias?.unsubscribe();
     this.subDocentes?.unsubscribe();
   }
 
@@ -121,22 +123,21 @@ export class CrearClaseComponent implements OnInit, OnDestroy {
     return 'Hubo un error inesperado al crear la clase. Intenta nuevamente.';
   }
 
-  toggleMateriaSelection(id: number) {
-    const idx = this.nuevaClase.materiaIdsSeleccionadas.indexOf(id);
-    if (idx >= 0) {
-      this.nuevaClase.materiaIdsSeleccionadas.splice(idx, 1);
-    } else {
-      this.nuevaClase.materiaIdsSeleccionadas.push(id);
-    }
-  }
-
-  isMateriaSelected(id: number): boolean {
-    return this.nuevaClase.materiaIdsSeleccionadas.includes(id);
-  }
-
   guardarClase() {
     if (!this.nuevaClase.nombre.trim()) {
-      this.errorMessage = 'Por favor ingresa el nombre de la clase o cohorte.';
+      this.errorMessage = 'Por favor ingresa el nombre de la clase o paralelo.';
+      return;
+    }
+
+    const materiaId = Number(this.nuevaClase.materiaId);
+    if (!materiaId || materiaId <= 0) {
+      this.errorMessage = 'Por favor selecciona la materia a la que pertenecerá esta clase.';
+      return;
+    }
+
+    const docenteId = Number(this.nuevaClase.docenteId);
+    if (!docenteId || docenteId <= 0) {
+      this.errorMessage = 'Por favor selecciona un docente para esta clase.';
       return;
     }
 
@@ -144,43 +145,17 @@ export class CrearClaseComponent implements OnInit, OnDestroy {
     this.successMessage = '';
     this.errorMessage = '';
 
-    const selectedMateriaIds = this.nuevaClase.materiaIdsSeleccionadas.length > 0
-      ? this.nuevaClase.materiaIdsSeleccionadas
-      : (this.nuevaClase.materiaId ? [Number(this.nuevaClase.materiaId)] : []);
-
-    let resolvedMateriaId: number;
-    if (selectedMateriaIds.length > 0) {
-      resolvedMateriaId = Number(selectedMateriaIds[0]);
-    } else if (this.materias.length > 0) {
-      resolvedMateriaId = Number(this.materias[0].id);
-    } else {
-      resolvedMateriaId = 101;
-    }
-
-    const resolvedDocenteId = Number(this.nuevaClase.docenteId) || 102;
-
-    this.claseService.createClase({
+    const payload = {
       nombre: this.nuevaClase.nombre.trim(),
-      materiaId: resolvedMateriaId,
-      materiaIds: selectedMateriaIds.length > 0 ? selectedMateriaIds : [resolvedMateriaId],
-      docenteId: resolvedDocenteId,
+      materiaId: materiaId,
+      docenteId: docenteId,
       semestre: this.nuevaClase.semestre || '2026-2',
-      carrera: this.nuevaClase.carrera || 'Ingeniería',
-      descripcion: this.nuevaClase.descripcion?.trim() || '',
-      estudianteIds: [1, 2, 3]
-    }).subscribe({
-      next: (creada) => {
-        if (selectedMateriaIds.length > 0) {
-          const currentMaterias = this.materiaService.getMateriasSnapshot();
-          currentMaterias.forEach(m => {
-            if (selectedMateriaIds.includes(m.id)) {
-              m.claseId = creada.id;
-              m.claseNombre = creada.nombre;
-              m.semestre = creada.semestre;
-            }
-          });
-        }
+      carrera: this.nuevaClase.carrera || 'Ingeniería de Software',
+      descripcion: this.nuevaClase.descripcion?.trim() || ''
+    };
 
+    this.claseService.createClase(payload).subscribe({
+      next: (creada) => {
         this.isLoading = false;
         this.successMessage = `¡Clase "${creada.nombre}" creada y registrada exitosamente!`;
         this.mostrarAlerta('success', 'Clase creada', `Se registró la clase "${creada.nombre}" correctamente.`);
