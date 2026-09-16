@@ -5,6 +5,12 @@ import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { MateriaService, MateriaDto, RecursoDto, ActividadDto, RegistroAsistenciaDto } from '../../../services/materia.service';
 import { DocumentosDescargaService } from '../../../services/documentos-descarga.service';
+import {
+  EstudianteService,
+  EvaluacionDiagnosticaEstudianteDto,
+  PreguntaCuestionarioDiagnosticoDto,
+  RespuestaCuestionarioDiagnosticoDto
+} from '../../../services/estudiante.service';
 
 @Component({
   selector: 'app-materia-detalle',
@@ -15,7 +21,7 @@ import { DocumentosDescargaService } from '../../../services/documentos-descarga
 export class MateriaDetalleComponent implements OnInit, OnDestroy {
   materiaId: number = 0;
   indiceTemaActual: number = 0;
-  tabActual: 'recursos' | 'actividades' | 'asistencia' = 'recursos';
+  tabActual: 'recursos' | 'actividades' | 'diagnostico' | 'asistencia' = 'recursos';
 
   rol: string = 'Estudiante';
   esAyudante: boolean = false;
@@ -25,9 +31,9 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
 
   materia: MateriaDto = {
     id: 101,
-    nombre: 'Cálculo Avanzado',
+    nombre: 'CÃ¡lculo Avanzado',
     codigo: 'MAT-301',
-    descripcion: 'Derivadas parciales e integrales múltiples.',
+    descripcion: 'Derivadas parciales e integrales mÃºltiples.',
     docente: 'Dra. Evelyn Vance',
     creditos: 4,
     semana: 8,
@@ -39,6 +45,22 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
   recursosDeMateria: RecursoDto[] = [];
   actividadesDeMateria: ActividadDto[] = [];
   registrosAsistencia: RegistroAsistenciaDto[] = [];
+
+  // =========================================================
+  // RF-004 - EVALUACIÓN DIAGNÓSTICA DEL ESTUDIANTE
+  // =========================================================
+  evaluacionesDiagnosticas: EvaluacionDiagnosticaEstudianteDto[] = [];
+  evaluacionDiagnosticaSeleccionada: EvaluacionDiagnosticaEstudianteDto | null = null;
+  preguntasDiagnostico: PreguntaCuestionarioDiagnosticoDto[] = [];
+  respuestasDiagnostico: Record<number, string> = {};
+  archivoDiagnostico: File | null = null;
+
+  cargandoDiagnosticos = false;
+  guardandoDiagnostico = false;
+  modalDiagnostico = false;
+
+  errorDiagnostico = '';
+  mensajeDiagnostico = '';
 
   showAddRecurso = false;
   showAddActividad = false;
@@ -55,7 +77,7 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
     url: 'https://ejemplo.edu/recurso.pdf',
     descripcion: '',
     temaNombre: '',
-    // Texto para enlaces adicionales (uno por línea o separados por comas)
+    // Texto para enlaces adicionales (uno por lÃ­nea o separados por comas)
     linksString: ''
   };
 
@@ -75,7 +97,8 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private materiaService: MateriaService,
-    private descargaService: DocumentosDescargaService
+    private descargaService: DocumentosDescargaService,
+    private estudianteService: EstudianteService
   ) {}
 
   ngOnInit() {
@@ -88,6 +111,10 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
         this.materiaId = 101;
       }
       this.cargarDatosMateria();
+
+      if (this.rol === 'Estudiante') {
+        this.cargarEvaluacionesDiagnosticas();
+      }
     });
 
     // Suscribirse a cambios en recursos
@@ -212,7 +239,7 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
 
   eliminarRecurso(id?: number) {
     if (!id) return;
-    if (confirm('¿Estás seguro de eliminar este recurso educativo?')) {
+    if (confirm('Â¿EstÃ¡s seguro de eliminar este recurso educativo?')) {
       this.materiaService.deleteRecurso(id);
     }
   }
@@ -220,7 +247,7 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
   agregarRecurso() {
     if (!this.nuevoRecurso.nombre.trim()) return;
 
-    // Parsear links (líneas o comas)
+    // Parsear links (lÃ­neas o comas)
     const rawLinks = (this.nuevoRecurso as any).linksString || '';
     const links = rawLinks.split(/\r?\n|,/) .map((s: string) => s.trim()).filter(Boolean);
 
@@ -268,7 +295,7 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
     };
     reader.readAsDataURL(file);
 
-    // Intentar subir al backend y obtener URL pública
+    // Intentar subir al backend y obtener URL pÃºblica
     try {
       this.materiaService.uploadRecurso(this.materiaId, file).subscribe({
         next: (res) => {
@@ -280,7 +307,7 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
           }
         },
         error: () => {
-          // backend posiblemente inactivo — dejar archivo local
+          // backend posiblemente inactivo â€” dejar archivo local
         }
       });
     } catch (e) {
@@ -297,7 +324,7 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
 
     this.materiaService.addActividad(this.materiaId, {
       titulo: this.nuevaActividad.nombre,
-      descripcion: this.nuevaActividad.descripcion || 'Sin descripción',
+      descripcion: this.nuevaActividad.descripcion || 'Sin descripciÃ³n',
       fechaEntrega: this.nuevaActividad.fechaEntrega,
       tipo: this.nuevaActividad.tipo,
       materiaId: this.materiaId
@@ -319,7 +346,7 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
 
   eliminarActividad(actividadId?: number) {
     if (!actividadId) return;
-    if (confirm('¿Deseas eliminar esta actividad del curso?')) {
+    if (confirm('Â¿Deseas eliminar esta actividad del curso?')) {
       this.materiaService.deleteActividad(actividadId);
     }
   }
@@ -329,6 +356,425 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
     this.materiaService.addRegistroAsistencia(this.materiaId, this.newClaseTema, this.materia.estudiantes);
     this.newClaseTema = '';
     this.showAddClase = false;
+  }
+
+  // =========================================================
+  // RF-004 - EVALUACIÓN DIAGNÓSTICA DEL ESTUDIANTE
+  // =========================================================
+
+  cargarEvaluacionesDiagnosticas(): void {
+    if (this.rol !== 'Estudiante') {
+      this.evaluacionesDiagnosticas = [];
+      this.cargandoDiagnosticos = false;
+      return;
+    }
+
+    if (this.cargandoDiagnosticos) {
+      return;
+    }
+
+    this.cargandoDiagnosticos = true;
+    this.errorDiagnostico = '';
+    this.mensajeDiagnostico = '';
+
+    this.estudianteService.getEvaluacionesDiagnosticas().subscribe({
+      next: (evaluaciones) => {
+        const todas = Array.isArray(evaluaciones) ? evaluaciones : [];
+
+        this.evaluacionesDiagnosticas =
+          this.filtrarDiagnosticosDeMateria(todas);
+
+        this.cargandoDiagnosticos = false;
+      },
+      error: (err) => {
+        this.cargandoDiagnosticos = false;
+        this.evaluacionesDiagnosticas = [];
+        this.errorDiagnostico =
+          err?.error?.message ||
+          'No se pudieron cargar las evaluaciones diagnósticas de esta materia.';
+      }
+    });
+  }
+
+  private filtrarDiagnosticosDeMateria(
+    evaluaciones: EvaluacionDiagnosticaEstudianteDto[]
+  ): EvaluacionDiagnosticaEstudianteDto[] {
+    /*
+     * IMPORTANTE:
+     * La ruta de materia puede usar el MateriaId real (por ejemplo 22),
+     * mientras RF-004 trabaja con CatedraId (por ejemplo 9).
+     * Por eso no podemos asumir que materiaId === catedraId.
+     */
+
+    const catedraIdMateria =
+      Number((this.materia as any)?.catedraId) || 0;
+
+    if (catedraIdMateria > 0) {
+      const porCatedraId = evaluaciones.filter(
+        evaluacion =>
+          Number(evaluacion.catedraId) === catedraIdMateria
+      );
+
+      if (porCatedraId.length > 0) {
+        return porCatedraId;
+      }
+    }
+
+    // Compatibilidad con pantallas donde la ruta ya contiene CatedraId.
+    const porIdRuta = evaluaciones.filter(
+      evaluacion =>
+        Number(evaluacion.catedraId) === Number(this.materiaId)
+    );
+
+    if (porIdRuta.length > 0) {
+      return porIdRuta;
+    }
+
+    /*
+     * Fallback seguro para el modelo actual:
+     * si el detalle está abierto con MateriaId pero el diagnóstico devuelve
+     * CatedraId, se relacionan por el nombre real de la asignatura/cátedra.
+     */
+    const nombreMateria =
+      this.normalizarTextoDiagnostico(this.materia?.nombre || '');
+
+    if (!nombreMateria) {
+      return [];
+    }
+
+    return evaluaciones.filter(evaluacion => {
+      const nombreCatedra =
+        this.normalizarTextoDiagnostico(evaluacion.catedra || '');
+
+      return nombreCatedra === nombreMateria;
+    });
+  }
+
+  private normalizarTextoDiagnostico(valor: string): string {
+    return (valor || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  }
+
+  abrirEvaluacionDiagnostica(
+    evaluacion: EvaluacionDiagnosticaEstudianteDto
+  ): void {
+    this.evaluacionDiagnosticaSeleccionada = { ...evaluacion };
+    this.archivoDiagnostico = null;
+    this.errorDiagnostico = '';
+    this.mensajeDiagnostico = '';
+
+    this.preguntasDiagnostico =
+      this.estudianteService.parsePreguntasCuestionario(
+        evaluacion.preguntasCuestionario
+      );
+
+    this.respuestasDiagnostico = {};
+
+    const respuestasGuardadas =
+      this.estudianteService.parseRespuestasCuestionario(
+        evaluacion.respuestasCuestionario
+      );
+
+    respuestasGuardadas.forEach(respuesta => {
+      if (respuesta.preguntaId) {
+        this.respuestasDiagnostico[respuesta.preguntaId] =
+          respuesta.respuesta;
+      }
+    });
+
+    this.modalDiagnostico = true;
+  }
+
+  cerrarEvaluacionDiagnostica(): void {
+    if (this.guardandoDiagnostico) {
+      return;
+    }
+
+    this.modalDiagnostico = false;
+    this.evaluacionDiagnosticaSeleccionada = null;
+    this.preguntasDiagnostico = [];
+    this.respuestasDiagnostico = {};
+    this.archivoDiagnostico = null;
+    this.errorDiagnostico = '';
+    this.mensajeDiagnostico = '';
+  }
+
+  onArchivoDiagnosticoChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+
+    this.archivoDiagnostico = null;
+    this.errorDiagnostico = '';
+    this.mensajeDiagnostico = '';
+
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
+    const archivo = input.files[0];
+
+    const extensionesPermitidas = [
+      '.pdf',
+      '.doc',
+      '.docx',
+      '.zip',
+      '.png',
+      '.jpg',
+      '.jpeg'
+    ];
+
+    const nombre = archivo.name.toLowerCase();
+    const extensionValida =
+      extensionesPermitidas.some(ext => nombre.endsWith(ext));
+
+    if (!extensionValida) {
+      this.errorDiagnostico =
+        'Formato no permitido. Usa PDF, Word, ZIP, PNG, JPG o JPEG.';
+      input.value = '';
+      return;
+    }
+
+    this.archivoDiagnostico = archivo;
+  }
+
+  quitarArchivoDiagnostico(): void {
+    this.archivoDiagnostico = null;
+    this.errorDiagnostico = '';
+  }
+
+  entregarArchivoDiagnostico(): void {
+    const evaluacion = this.evaluacionDiagnosticaSeleccionada;
+
+    if (!evaluacion) {
+      return;
+    }
+
+    if (evaluacion.tipoEvaluacion !== 'Archivo') {
+      this.errorDiagnostico =
+        'Esta evaluación diagnóstica no es de tipo Archivo.';
+      return;
+    }
+
+    if (!evaluacion.puedeRealizar) {
+      this.errorDiagnostico =
+        'La evaluación diagnóstica no está disponible para realizarse.';
+      return;
+    }
+
+    if (!this.archivoDiagnostico) {
+      this.errorDiagnostico =
+        'Selecciona un archivo antes de realizar la entrega.';
+      return;
+    }
+
+    this.guardandoDiagnostico = true;
+    this.errorDiagnostico = '';
+    this.mensajeDiagnostico = '';
+
+    this.estudianteService
+      .entregarEvaluacionDiagnosticaArchivo(
+        evaluacion.evaluacionId,
+        this.archivoDiagnostico
+      )
+      .subscribe({
+        next: (respuesta) => {
+          this.guardandoDiagnostico = false;
+          this.archivoDiagnostico = null;
+          this.mensajeDiagnostico =
+            respuesta?.message ||
+            'Evaluación diagnóstica entregada correctamente.';
+
+          this.actualizarDiagnosticoDespuesDeEntrega(
+            evaluacion.evaluacionId
+          );
+        },
+        error: (err) => {
+          this.guardandoDiagnostico = false;
+          this.errorDiagnostico =
+            err?.error?.message ||
+            'No se pudo entregar el archivo de la evaluación diagnóstica.';
+        }
+      });
+  }
+
+  entregarCuestionarioDiagnostico(): void {
+    const evaluacion = this.evaluacionDiagnosticaSeleccionada;
+
+    if (!evaluacion) {
+      return;
+    }
+
+    if (evaluacion.tipoEvaluacion !== 'Cuestionario') {
+      this.errorDiagnostico =
+        'Esta evaluación diagnóstica no es de tipo Cuestionario.';
+      return;
+    }
+
+    if (!evaluacion.puedeRealizar) {
+      this.errorDiagnostico =
+        'La evaluación diagnóstica no está disponible para realizarse.';
+      return;
+    }
+
+    const respuestas: RespuestaCuestionarioDiagnosticoDto[] =
+      this.preguntasDiagnostico
+        .map(pregunta => ({
+          preguntaId: pregunta.id,
+          respuesta:
+            (this.respuestasDiagnostico[pregunta.id] || '').trim()
+        }))
+        .filter(respuesta => !!respuesta.respuesta);
+
+    if (respuestas.length === 0) {
+      this.errorDiagnostico =
+        'Debes responder al menos una pregunta antes de entregar.';
+      return;
+    }
+
+    this.guardandoDiagnostico = true;
+    this.errorDiagnostico = '';
+    this.mensajeDiagnostico = '';
+
+    this.estudianteService
+      .entregarEvaluacionDiagnosticaCuestionario(
+        evaluacion.evaluacionId,
+        respuestas
+      )
+      .subscribe({
+        next: (respuesta) => {
+          this.guardandoDiagnostico = false;
+          this.mensajeDiagnostico =
+            respuesta?.message ||
+            'Cuestionario diagnóstico entregado correctamente.';
+
+          this.actualizarDiagnosticoDespuesDeEntrega(
+            evaluacion.evaluacionId
+          );
+        },
+        error: (err) => {
+          this.guardandoDiagnostico = false;
+          this.errorDiagnostico =
+            err?.error?.message ||
+            'No se pudo entregar el cuestionario diagnóstico.';
+        }
+      });
+  }
+
+  private actualizarDiagnosticoDespuesDeEntrega(
+    evaluacionId: number
+  ): void {
+    this.estudianteService.getEvaluacionesDiagnosticas().subscribe({
+      next: (evaluaciones) => {
+        const todas = Array.isArray(evaluaciones) ? evaluaciones : [];
+
+        this.evaluacionesDiagnosticas =
+          this.filtrarDiagnosticosDeMateria(todas);
+
+        const actualizada = this.evaluacionesDiagnosticas.find(
+          evaluacion =>
+            Number(evaluacion.evaluacionId) === Number(evaluacionId)
+        );
+
+        if (actualizada) {
+          this.evaluacionDiagnosticaSeleccionada = {
+            ...actualizada
+          };
+
+          this.preguntasDiagnostico =
+            this.estudianteService.parsePreguntasCuestionario(
+              actualizada.preguntasCuestionario
+            );
+
+          this.respuestasDiagnostico = {};
+
+          this.estudianteService
+            .parseRespuestasCuestionario(
+              actualizada.respuestasCuestionario
+            )
+            .forEach(respuesta => {
+              if (respuesta.preguntaId) {
+                this.respuestasDiagnostico[respuesta.preguntaId] =
+                  respuesta.respuesta;
+              }
+            });
+        }
+      },
+      error: () => {
+        // La entrega ya fue guardada. Si falla la recarga, el usuario
+        // puede cerrar y volver a abrir la pestaña para actualizar.
+      }
+    });
+  }
+
+  abrirArchivoDiagnostico(url?: string | null): void {
+    const archivoUrl =
+      this.estudianteService.resolverUrlArchivo(url);
+
+    if (!archivoUrl || typeof window === 'undefined') {
+      return;
+    }
+
+    window.open(
+      archivoUrl,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  }
+
+  formatearFechaHoraDiagnostico(
+    fecha?: string | null
+  ): string {
+    if (!fecha) {
+      return 'Sin fecha';
+    }
+
+    const date = new Date(fecha);
+
+    if (Number.isNaN(date.getTime())) {
+      return fecha;
+    }
+
+    return date.toLocaleString('es-EC', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  textoDisponibilidadDiagnostico(
+    evaluacion: EvaluacionDiagnosticaEstudianteDto
+  ): string {
+    switch (evaluacion.disponibilidad) {
+      case 'Disponible':
+        return 'Disponible';
+      case 'NoIniciada':
+        return 'Próximamente';
+      case 'Cerrada':
+        return 'Finalizada';
+      case 'SinFechas':
+        return 'Sin fechas';
+      default:
+        return evaluacion.disponibilidad || 'Sin estado';
+    }
+  }
+
+  textoEstadoEntregaDiagnostico(
+    evaluacion: EvaluacionDiagnosticaEstudianteDto
+  ): string {
+    if (evaluacion.estadoEntrega === 'Calificado') {
+      return 'Calificado';
+    }
+
+    if (evaluacion.estadoEntrega === 'Entregado') {
+      return 'Entregado';
+    }
+
+    return 'Pendiente';
   }
 
   Math = Math;
@@ -387,13 +833,13 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
 </head>
 <body>
   <div style="border-bottom:2px solid #047857;padding-bottom:10px;margin-bottom:20px;">
-    <h2 style="color:#065f46;margin:0;">Universidad Técnica Estatal de Quevedo (UTEQ)</h2>
-    <h4 style="color:#475569;margin:4px 0 0 0;">Material de Aprendizaje y Cátedra · SIGAC</h4>
+    <h2 style="color:#065f46;margin:0;">Universidad TÃ©cnica Estatal de Quevedo (UTEQ)</h2>
+    <h4 style="color:#475569;margin:4px 0 0 0;">Material de Aprendizaje y CÃ¡tedra Â· SIGAC</h4>
   </div>
   <h3 style="color:#0f172a;">${r.titulo}</h3>
-  <p><strong>Tipo:</strong> ${r.tipo} | <strong>Docente / Tutor:</strong> ${r.creadoPor || 'Cátedra'}</p>
+  <p><strong>Tipo:</strong> ${r.tipo} | <strong>Docente / Tutor:</strong> ${r.creadoPor || 'CÃ¡tedra'}</p>
   <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:15px;border-radius:8px;margin:15px 0;">
-    <p>${r.descripcion || 'Material de lectura y apoyo para el semestre académico.'}</p>
+    <p>${r.descripcion || 'Material de lectura y apoyo para el semestre acadÃ©mico.'}</p>
     <p><strong>Enlace del recurso:</strong> <a href="${r.url}">${r.url}</a></p>
   </div>
   <p style="font-size:11px;color:#64748b;">Descargado desde el aula virtual SIGAC - UTEQ.</p>
@@ -414,16 +860,16 @@ export class MateriaDetalleComponent implements OnInit, OnDestroy {
 </head>
 <body>
   <div style="border-bottom:2px solid #047857;padding-bottom:10px;margin-bottom:20px;">
-    <h2 style="color:#065f46;margin:0;">Universidad Técnica Estatal de Quevedo (UTEQ)</h2>
-    <h4 style="color:#475569;margin:4px 0 0 0;">Guía y Rúbrica de Actividad Evaluativa · SIGAC</h4>
+    <h2 style="color:#065f46;margin:0;">Universidad TÃ©cnica Estatal de Quevedo (UTEQ)</h2>
+    <h4 style="color:#475569;margin:4px 0 0 0;">GuÃ­a y RÃºbrica de Actividad Evaluativa Â· SIGAC</h4>
   </div>
   <h3 style="color:#0f172a;">${a.titulo}</h3>
   <p><strong>Tipo:</strong> ${a.tipo} | <strong>Fecha de Entrega:</strong> ${a.fechaEntrega}</p>
   <div style="background:#f8fafc;border:1px solid #cbd5e1;padding:15px;border-radius:8px;margin:15px 0;">
     <h4>Instrucciones para la entrega:</h4>
-    <p>${a.descripcion || 'Completar el informe o taller y enviarlo a través de la plataforma.'}</p>
+    <p>${a.descripcion || 'Completar el informe o taller y enviarlo a travÃ©s de la plataforma.'}</p>
   </div>
-  <p style="font-size:11px;color:#64748b;">Asignación oficial registrada en SIGAC - UTEQ.</p>
+  <p style="font-size:11px;color:#64748b;">AsignaciÃ³n oficial registrada en SIGAC - UTEQ.</p>
 </body>
 </html>`;
     this.descargaService.descargarArchivo(`${a.titulo.replace(/\s+/g, '_')}_Guia_UTEQ.html`, html);
