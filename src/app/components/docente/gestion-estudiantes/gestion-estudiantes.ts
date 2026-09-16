@@ -86,12 +86,16 @@ export class GestionEstudiantesComponent implements OnInit {
   ngOnInit(): void {
     this.route.queryParamMap.subscribe((params) => {
       const claseId = Number(params.get('claseId') || 0);
-      const estudianteId = Number(params.get('estudianteId') || 0);
 
-      this.estudianteObjetivoId = estudianteId;
+      const estudianteId = Number(params.get('abrirEstudiante') || 0);
+
+      if (estudianteId) {
+        this.estudianteObjetivoId = estudianteId;
+      }
 
       if (this.clases.length === 0) {
         this.cargarClases(claseId || undefined);
+
         return;
       }
 
@@ -345,6 +349,16 @@ export class GestionEstudiantesComponent implements OnInit {
 
     setTimeout(() => {
       this.abrirExpediente(estudiante);
+
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: {
+          abrirEstudiante: null,
+          t: null,
+        },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      });
     }, 0);
   }
   // =========================================================

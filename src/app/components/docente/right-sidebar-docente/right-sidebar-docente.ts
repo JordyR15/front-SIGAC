@@ -136,8 +136,8 @@ export class RightSidebarDocenteComponent implements OnInit {
     this.router.navigate(['/docente/gestion-estudiantes'], {
       queryParams: {
         claseId: alerta.claseId,
-        estudianteId: alerta.estudianteId,
-        alerta: Date.now(),
+        abrirEstudiante: alerta.estudianteId,
+        t: Date.now(),
       },
     });
   }
