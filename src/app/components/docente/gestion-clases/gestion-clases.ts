@@ -7,7 +7,12 @@ import { Subscription, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { getApiBase } from '../../../api';
 import { ClaseService } from '../../../services/clase.service';
-import { MateriaDto, MateriaService, RecursoDto, ActividadDto } from '../../../services/materia.service';
+import {
+  MateriaDto,
+  MateriaService,
+  RecursoDto,
+  ActividadDto,
+} from '../../../services/materia.service';
 import { DocumentosDescargaService } from '../../../services/documentos-descarga.service';
 import { DirectorioService } from '../../../services/directorio.service';
 import {
@@ -15,12 +20,16 @@ import {
   ActividadAyudantiaDto,
   MonitoreoAyudantiaDto,
   HorarioOcupadoAlumnoDto,
-  EvaluacionDto
+  EvaluacionDto,
+  PreguntaCuestionarioDto,
+  RegistrarResultadosDiagnosticosDto,
+  ResumenEvaluacionDiagnosticaDto,
 } from '../../../services/docente.service';
 
 export interface ClaseCreada {
   id: number;
   materiaId: number;
+  catedraId?: number | null;
   nombreMateria: string;
   dias: string[];
   fecha?: string;
@@ -32,9 +41,30 @@ export interface ClaseCreada {
   edificioPresencial?: string;
   aulaPresencial?: string;
   pisoPresencial?: string;
-  estudiantes: { id: number; nombre: string; presente: boolean; correo?: string; username?: string }[];
+  estudiantes: {
+    id: number;
+    nombre: string;
+    presente: boolean;
+    correo?: string;
+    username?: string;
+  }[];
+}
+export interface RespuestaCuestionarioVisual {
+  preguntaId: number;
+  respuesta: string;
 }
 
+export interface ResultadoDiagnosticoFormulario {
+  estudianteId: number;
+  nombreEstudiante: string;
+  calificacion: number | null;
+  observacion: string;
+  estado: string;
+  archivoEntregaUrl: string | null;
+  fechaEntrega: string | null;
+  respuestasCuestionario: string | null;
+  respuestas: RespuestaCuestionarioVisual[];
+}
 export interface AyudanteCatedraInfo {
   id: number;
   ayudantiaId: number;
@@ -51,7 +81,7 @@ export interface AyudanteCatedraInfo {
   selector: 'app-gestion-clases',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule],
-  templateUrl: './gestion-clases.html'
+  templateUrl: './gestion-clases.html',
 })
 export class GestionClasesComponent implements OnInit, OnDestroy {
   private STORAGE_DOCENTE_CLASES = 'sigac_docente_clases_v2';
@@ -83,7 +113,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     aplicacionVirtual: 'Google Meet',
     edificioPresencial: 'Edificio de Ingeniería',
     aulaPresencial: 'Aula Magna 302',
-    pisoPresencial: 'Piso 3'
+    pisoPresencial: 'Piso 3',
   };
 
   // Detección de conflicto de horarios
@@ -107,12 +137,12 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     descripcion: '',
     directrices: '',
     fechaPlanificada: '',
-    recursosSugeridos: ''
+    recursosSugeridos: '',
   };
 
   // Recursos Pedagógicos (Opciones del ayudante / docente)
   recursosMateria: RecursoDto[] = [];
-  subTabRecursos: 'recursos' | 'actividades' = 'recursos';
+  subTabRecursos: 'recursos' | 'actividades' | 'diagnostica' = 'recursos';
   nuevoRecurso = {
     titulo: '',
     tipo: 'PDF',
@@ -121,7 +151,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     descripcion: '',
     temaNombre: 'Tema 1: Fundamentos y Derivadas Parciales',
     // Texto con enlaces adicionales (una por línea o separadas por comas)
-    linksString: ''
+    linksString: '',
   };
 
   // Actividades Pedagógicas
@@ -131,9 +161,32 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     tipo: 'Taller',
     fechaEntrega: '',
     descripcion: '',
-    ponderacion: 10
+    ponderacion: 10,
+  };
+  // Evaluación Diagnóstica - RF-004
+  evaluacionesDiagnosticas: EvaluacionDto[] = [];
+
+  nuevaEvaluacionDiagnostica = {
+    nombre: '',
+    instrucciones: '',
+    tipoEvaluacion: 'Archivo' as 'Archivo' | 'Cuestionario',
+    fechaInicio: '',
+    fechaFin: '',
+    archivoDocenteUrl: '',
   };
 
+  preguntasNuevaEvaluacion: PreguntaCuestionarioDto[] = [];
+  nuevaPreguntaCuestionario = '';
+
+  evaluacionDiagnosticaSeleccionada: EvaluacionDto | null = null;
+  resultadosDiagnosticosFormulario: ResultadoDiagnosticoFormulario[] = [];
+  resultadoDiagnosticoSeleccionado: ResultadoDiagnosticoFormulario | null = null;
+  resumenEvaluacionDiagnostica: ResumenEvaluacionDiagnosticaDto | null = null;
+
+  mostrarModalCrearDiagnostica = false;
+  mostrarModalRevisionDiagnostica = false;
+  cargandoResultadosDiagnosticos = false;
+  guardandoResultadosDiagnosticos = false;
   // Archivos adjuntos seleccionados
   archivoRecurso: { nombre: string; tamanoKb: number; dataUrl: string } | null = null;
   archivoActividad: { nombre: string; tamanoKb: number; dataUrl: string } | null = null;
@@ -148,7 +201,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     mostrar: false,
     mensaje: '',
     username: '',
-    tempPassword: ''
+    tempPassword: '',
   };
   copiadoCredenciales = false;
 
@@ -158,7 +211,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     nombre: '',
     correo: '',
     cedula: '',
-    matricula: ''
+    matricula: '',
   };
 
   mostrarModalSolicitudAyudante = false;
@@ -177,7 +230,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     private docenteService: DocenteService,
     private descargaService: DocumentosDescargaService,
     private directorioService: DirectorioService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit() {
@@ -195,7 +248,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
     // Suscripción a Materias
     this.subs.push(
-      this.materiaService.materias$.subscribe(list => {
+      this.materiaService.materias$.subscribe((list) => {
         this.materias = list;
         if (list.length > 0) {
           if (!this.materiaSeleccionadaId) {
@@ -204,20 +257,20 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
           this.nuevaClase.materiaId = this.materiaSeleccionadaId;
           this.actualizarRecursosYActividades();
         }
-      })
+      }),
     );
 
     // Suscripción a Ocupaciones de Alumnos
     this.subs.push(
-      this.docenteService.ocupaciones$.subscribe(ocupaciones => {
+      this.docenteService.ocupaciones$.subscribe((ocupaciones) => {
         this.horariosOcupadosAlumnos = ocupaciones;
         this.revisarConflictoHorario();
-      })
+      }),
     );
 
     // Query params para tab y preselección
     this.subs.push(
-      this.route.queryParams.subscribe(params => {
+      this.route.queryParams.subscribe((params) => {
         if (params['tab']) {
           this.tabActiva = params['tab'] as any;
         }
@@ -235,7 +288,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
           this.nuevaClase.horaFin = params['horaFin'];
         }
         this.revisarConflictoHorario();
-      })
+      }),
     );
 
     // Cargar ayudante inicial para sílabo si existe
@@ -245,26 +298,60 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.subs.forEach(s => s.unsubscribe());
+    this.subs.forEach((s) => s.unsubscribe());
   }
 
   setTab(tab: 'catedras' | 'horarios' | 'silabo' | 'crear-clase' | 'recursos') {
     this.tabActiva = tab;
+
     if (tab === 'horarios' || tab === 'crear-clase') {
       this.revisarConflictoHorario();
     }
+
     if (tab === 'recursos') {
       this.actualizarRecursosYActividades();
+
+      // Solo cargamos diagnósticas si esa subpestaña ya está activa.
+      // Primero respetamos la materia elegida en el SELECT y después
+      // resolvemos su cátedra real.
+      if (this.subTabRecursos === 'diagnostica') {
+        this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
+      }
     }
   }
 
+  abrirSubTabDiagnostica(): void {
+    this.subTabRecursos = 'diagnostica';
+    this.evaluacionDiagnosticaSeleccionada = null;
+    this.resultadosDiagnosticosFormulario = [];
+    this.resultadoDiagnosticoSeleccionado = null;
+    this.resumenEvaluacionDiagnostica = null;
+
+    // La fuente de verdad es la opción actualmente elegida en el SELECT.
+    this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
+  }
+
   cambiarMateriaSeleccionada(materiaId: number) {
+    // Primero actualizamos exactamente lo seleccionado por el usuario.
     this.materiaSeleccionadaId = Number(materiaId);
     this.nuevaClase.materiaId = this.materiaSeleccionadaId;
     this.actualizarRecursosYActividades();
 
+    // Limpiamos los datos de la materia anterior antes de consultar la nueva.
+    this.evaluacionesDiagnosticas = [];
+    this.evaluacionDiagnosticaSeleccionada = null;
+    this.resultadosDiagnosticosFormulario = [];
+    this.resultadoDiagnosticoSeleccionado = null;
+    this.resumenEvaluacionDiagnostica = null;
+
+    // Si el usuario está mirando Diagnóstica, recién aquí consultamos
+    // usando la materia que acaba de seleccionar.
+    if (this.tabActiva === 'recursos' && this.subTabRecursos === 'diagnostica') {
+      this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
+    }
+
     // Actualizar ayudante seleccionado si corresponde
-    const ayudante = this.ayudantesCatedra.find(a => a.catedraId === this.materiaSeleccionadaId);
+    const ayudante = this.ayudantesCatedra.find((a) => a.catedraId === this.materiaSeleccionadaId);
     if (ayudante) {
       this.seleccionarAyudanteParaSilabo(ayudante);
     }
@@ -273,11 +360,32 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   }
 
   get materiaSeleccionada(): MateriaDto | undefined {
-    return this.materias.find(m => m.id === Number(this.materiaSeleccionadaId)) || this.materias[0];
+    return (
+      this.materias.find((m) => m.id === Number(this.materiaSeleccionadaId)) || this.materias[0]
+    );
+  }
+
+  private obtenerCatedraIdPorMateria(materiaId: number | null | undefined): number | null {
+    if (materiaId == null || Number.isNaN(Number(materiaId))) {
+      return null;
+    }
+
+    const clase = this.clasesCreadas.find(
+      (c) =>
+        Number(c.materiaId) === Number(materiaId) &&
+        c.catedraId != null &&
+        Number(c.catedraId) > 0,
+    );
+
+    return clase?.catedraId != null ? Number(clase.catedraId) : null;
+  }
+
+  get catedraSeleccionadaId(): number | null {
+    return this.obtenerCatedraIdPorMateria(this.materiaSeleccionadaId);
   }
 
   get ayudantesDeMateriaActual(): AyudanteCatedraInfo[] {
-    return this.ayudantesCatedra.filter(a => a.catedraId === Number(this.materiaSeleccionadaId));
+    return this.ayudantesCatedra.filter((a) => a.catedraId === Number(this.materiaSeleccionadaId));
   }
 
   // ==========================================
@@ -293,19 +401,20 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       this.nuevaClase.claseId || 1,
       dia,
       horaInicio,
-      horaFin
+      horaFin,
     );
   }
 
   getOcupacionEnCelda(dia: string, horaInicio: string): HorarioOcupadoAlumnoDto | undefined {
-    return this.horariosOcupadosAlumnos.find(o =>
-      o.dia.toLowerCase() === dia.toLowerCase() && o.horaInicio === horaInicio
+    return this.horariosOcupadosAlumnos.find(
+      (o) => o.dia.toLowerCase() === dia.toLowerCase() && o.horaInicio === horaInicio,
     );
   }
 
   getClaseDocenteEnCelda(dia: string, horaInicio: string): ClaseCreada | undefined {
-    return this.clasesCreadas.find(c =>
-      c.dias.some(d => d.toLowerCase() === dia.toLowerCase()) && c.horaInicio === horaInicio
+    return this.clasesCreadas.find(
+      (c) =>
+        c.dias.some((d) => d.toLowerCase() === dia.toLowerCase()) && c.horaInicio === horaInicio,
     );
   }
 
@@ -313,7 +422,9 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     // Si la celda está ocupada por alumnos, mostrar advertencia
     const conflicto = this.getOcupacionEnCelda(dia, horaInicio);
     if (conflicto) {
-      alert(`⚠️ Los alumnos están ocupados los ${dia}s a las ${horaInicio} con '${conflicto.materiaOcupada}'. No se recomienda programar en este horario.`);
+      alert(
+        `⚠️ Los alumnos están ocupados los ${dia}s a las ${horaInicio} con '${conflicto.materiaOcupada}'. No se recomienda programar en este horario.`,
+      );
       return;
     }
 
@@ -330,7 +441,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
   seleccionarAyudanteParaSilabo(ayudante: AyudanteCatedraInfo) {
     this.ayudanteSeleccionado = ayudante;
-    this.docenteService.getPlanificacionAyudantia(ayudante.ayudantiaId).subscribe(plan => {
+    this.docenteService.getPlanificacionAyudantia(ayudante.ayudantiaId).subscribe((plan) => {
       this.planificacionSilabo = plan;
     });
   }
@@ -339,7 +450,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     this.ayudanteSeleccionado = ayudante;
     this.tabMonitoreo = 'informes';
     this.cargarInformesDeAyudante(ayudante);
-    this.docenteService.monitorearAyudantia(ayudante.ayudantiaId).subscribe(monitoreo => {
+    this.docenteService.monitorearAyudantia(ayudante.ayudantiaId).subscribe((monitoreo) => {
       this.monitoreoAyudanteActual = monitoreo;
       this.modalBitacorasAbierto = true;
     });
@@ -370,12 +481,19 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
           horasTotales: 24,
           diasPorSemana: 3,
           modalidad: 'Presencial',
-          temasImpartidos: 'Ejercicios de integración múltiple, Teorema de Fubini y cambio de variables con Jacobiano.',
+          temasImpartidos:
+            'Ejercicios de integración múltiple, Teorema de Fubini y cambio de variables con Jacobiano.',
           anexos: [
-            { id: 'anx-1', nombre: 'Hojas_Asistencia_Firmadas_Agosto.pdf', tamanoKb: 1420, tipo: 'documento_firmado', fechaCarga: '2026-08-31' }
+            {
+              id: 'anx-1',
+              nombre: 'Hojas_Asistencia_Firmadas_Agosto.pdf',
+              tamanoKb: 1420,
+              tipo: 'documento_firmado',
+              fechaCarga: '2026-08-31',
+            },
           ],
           estado: 'Aprobado por Docente',
-          fechaCreacion: '2026-08-31 16:20'
+          fechaCreacion: '2026-08-31 16:20',
         },
         {
           id: 2,
@@ -387,22 +505,30 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
           horasTotales: 28,
           diasPorSemana: 3,
           modalidad: 'Virtual',
-          temasImpartidos: 'Campos vectoriales, rotacional, divergencia y resolución de guías de estudio para el examen intermedio.',
+          temasImpartidos:
+            'Campos vectoriales, rotacional, divergencia y resolución de guías de estudio para el examen intermedio.',
           anexos: [
-            { id: 'anx-2', nombre: 'Captura_Meet_Sesion_09_02.png', tamanoKb: 840, tipo: 'captura_videollamada', fechaCarga: '2026-09-02' }
+            {
+              id: 'anx-2',
+              nombre: 'Captura_Meet_Sesion_09_02.png',
+              tamanoKb: 840,
+              tipo: 'captura_videollamada',
+              fechaCarga: '2026-09-02',
+            },
           ],
           estado: 'Enviado a Coordinación',
-          fechaCreacion: '2026-09-02 18:00'
-        }
+          fechaCreacion: '2026-09-02 18:00',
+        },
       ];
     }
 
     // Filtrar los informes de este ayudante o de la cátedra activa
     this.informesAyudanteActual = todosLosInformes.filter(
-      inf => Number(inf.ayudantiaId) === Number(ayudante.ayudantiaId) ||
-             Number(inf.ayudantiaId) === Number(ayudante.catedraId) ||
-             Number(inf.ayudantiaId) === Number(ayudante.id) ||
-             ayudante.nombre.toLowerCase().includes('alejandro')
+      (inf) =>
+        Number(inf.ayudantiaId) === Number(ayudante.ayudantiaId) ||
+        Number(inf.ayudantiaId) === Number(ayudante.catedraId) ||
+        Number(inf.ayudantiaId) === Number(ayudante.id) ||
+        ayudante.nombre.toLowerCase().includes('alejandro'),
     );
   }
 
@@ -424,7 +550,9 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       }
     }
     this.successMessage = `¡Informe "${inf.numeroResolucion}" aprobado exitosamente por el docente responsable!`;
-    setTimeout(() => { this.successMessage = ''; }, 4500);
+    setTimeout(() => {
+      this.successMessage = '';
+    }, 4500);
   }
 
   descargarInformeAyudante(inf: any) {
@@ -440,7 +568,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       diasPorSemana: inf.diasPorSemana,
       temas: inf.temasImpartidos,
       anexos: inf.anexos,
-      estado: inf.estado
+      estado: inf.estado,
     });
 
     const nombreArchivo = `INFORME_AYUDANTIA_${inf.numeroResolucion.replace(/[\/\s]/g, '_')}_${inf.periodo.replace(/[\/\s]/g, '_')}.html`;
@@ -460,10 +588,13 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       diasPorSemana: inf.diasPorSemana,
       temas: inf.temasImpartidos,
       anexos: inf.anexos,
-      estado: inf.estado
+      estado: inf.estado,
     });
 
-    this.descargaService.imprimirDocumentoOficial(htmlContenido, `Informe_Ayudantia_${inf.numeroResolucion}`);
+    this.descargaService.imprimirDocumentoOficial(
+      htmlContenido,
+      `Informe_Ayudantia_${inf.numeroResolucion}`,
+    );
   }
 
   cerrarMonitoreoBitacoras() {
@@ -487,47 +618,60 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       ayudantiaId: this.ayudanteSeleccionado.ayudantiaId,
       semana: this.nuevaActividadSilabo.semana,
       tema: this.nuevaActividadSilabo.tema.trim(),
-      descripcion: this.nuevaActividadSilabo.descripcion.trim() || `Guía de enseñanza para la semana ${this.nuevaActividadSilabo.semana}`,
-      directrices: this.nuevaActividadSilabo.directrices.trim() || 'Resolver ejercicios y orientar a los alumnos en dudas teóricas.',
-      fechaPlanificada: this.nuevaActividadSilabo.fechaPlanificada || new Date().toISOString().split('T')[0],
-      recursosSugeridos: this.nuevaActividadSilabo.recursosSugeridos.trim() || 'Guía de ejercicios y presentaciones del curso',
-      completada: false
+      descripcion:
+        this.nuevaActividadSilabo.descripcion.trim() ||
+        `Guía de enseñanza para la semana ${this.nuevaActividadSilabo.semana}`,
+      directrices:
+        this.nuevaActividadSilabo.directrices.trim() ||
+        'Resolver ejercicios y orientar a los alumnos en dudas teóricas.',
+      fechaPlanificada:
+        this.nuevaActividadSilabo.fechaPlanificada || new Date().toISOString().split('T')[0],
+      recursosSugeridos:
+        this.nuevaActividadSilabo.recursosSugeridos.trim() ||
+        'Guía de ejercicios y presentaciones del curso',
+      completada: false,
     };
 
     this.isLoading = true;
-    this.docenteService.planificarActividadAyudantia(this.ayudanteSeleccionado.ayudantiaId, payload).subscribe({
-      next: (res) => {
-        this.isLoading = false;
-        this.planificacionSilabo.unshift(res);
-        this.successMessage = `¡Directriz del sílabo asignada exitosamente al ayudante ${this.ayudanteSeleccionado?.nombre}!`;
-        setTimeout(() => this.successMessage = '', 4000);
+    this.docenteService
+      .planificarActividadAyudantia(this.ayudanteSeleccionado.ayudantiaId, payload)
+      .subscribe({
+        next: (res) => {
+          this.isLoading = false;
+          this.planificacionSilabo.unshift(res);
+          this.successMessage = `¡Directriz del sílabo asignada exitosamente al ayudante ${this.ayudanteSeleccionado?.nombre}!`;
+          setTimeout(() => (this.successMessage = ''), 4000);
 
-        // Reset
-        this.nuevaActividadSilabo.tema = '';
-        this.nuevaActividadSilabo.descripcion = '';
-        this.nuevaActividadSilabo.directrices = '';
-        this.nuevaActividadSilabo.recursosSugeridos = '';
-        this.nuevaActividadSilabo.semana++;
-      },
-      error: () => {
-        this.isLoading = false;
-      }
-    });
+          // Reset
+          this.nuevaActividadSilabo.tema = '';
+          this.nuevaActividadSilabo.descripcion = '';
+          this.nuevaActividadSilabo.directrices = '';
+          this.nuevaActividadSilabo.recursosSugeridos = '';
+          this.nuevaActividadSilabo.semana++;
+        },
+        error: () => {
+          this.isLoading = false;
+        },
+      });
   }
 
   toggleCumplimientoSilabo(actividad: ActividadAyudantiaDto) {
     if (!this.ayudanteSeleccionado) return;
-    this.docenteService.toggleActividadPlanificada(this.ayudanteSeleccionado.ayudantiaId, actividad.id).subscribe(() => {
-      actividad.completada = !actividad.completada;
-    });
+    this.docenteService
+      .toggleActividadPlanificada(this.ayudanteSeleccionado.ayudantiaId, actividad.id)
+      .subscribe(() => {
+        actividad.completada = !actividad.completada;
+      });
   }
 
   eliminarActividadSilabo(actividadId: number) {
     if (!this.ayudanteSeleccionado) return;
     if (confirm('¿Deseas eliminar este tema del sílabo del ayudante?')) {
-      this.docenteService.eliminarActividadPlanificada(this.ayudanteSeleccionado.ayudantiaId, actividadId).subscribe(() => {
-        this.planificacionSilabo = this.planificacionSilabo.filter(a => a.id !== actividadId);
-      });
+      this.docenteService
+        .eliminarActividadPlanificada(this.ayudanteSeleccionado.ayudantiaId, actividadId)
+        .subscribe(() => {
+          this.planificacionSilabo = this.planificacionSilabo.filter((a) => a.id !== actividadId);
+        });
     }
   }
 
@@ -561,37 +705,48 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       codigoMateria: this.materiaSeleccionada.codigo,
       docenteId: this.docenteIdLogueado,
       nombreDocente: this.nombreDocente,
-      motivo: this.motivoSolicitud || 'Se requiere apoyo académico para tutorías y acompañamiento de estudiantes.',
+      motivo:
+        this.motivoSolicitud ||
+        'Se requiere apoyo académico para tutorías y acompañamiento de estudiantes.',
       estado: 'Pendiente',
-      fecha: new Date().toISOString().split('T')[0]
+      fecha: new Date().toISOString().split('T')[0],
     };
 
-    this.http.post(`${getApiBase()}/api/Docente/convocatorias`, payload).pipe(
-      catchError(() => {
-        const pendientes = JSON.parse(localStorage.getItem('sigac_convocatorias_pendientes') || '[]');
-        pendientes.unshift({ ...payload, id: Date.now() });
-        localStorage.setItem('sigac_convocatorias_pendientes', JSON.stringify(pendientes));
-        return of({ success: true, payload });
-      })
-    ).subscribe({
-      next: () => {
-        this.materiaService.asignarAyudanteMateria(this.materiaSeleccionada!.id, email).subscribe({
-          next: (res) => {
-            this.successMessage = res.mensaje || `Solicitud y asignación de ayudante enviada para ${this.materiaSeleccionada?.nombre}.`;
-            this.cerrarModalSolicitudAyudante();
-            setTimeout(() => this.successMessage = '', 3500);
-          },
-          error: () => {
-            this.errorMessage = 'No se pudo completar la asignación del ayudante.';
-            setTimeout(() => this.errorMessage = '', 3500);
-          }
-        });
-      },
-      error: () => {
-        this.errorMessage = 'No se pudo enviar la solicitud de ayudante.';
-        setTimeout(() => this.errorMessage = '', 3500);
-      }
-    });
+    this.http
+      .post(`${getApiBase()}/api/Docente/convocatorias`, payload)
+      .pipe(
+        catchError(() => {
+          const pendientes = JSON.parse(
+            localStorage.getItem('sigac_convocatorias_pendientes') || '[]',
+          );
+          pendientes.unshift({ ...payload, id: Date.now() });
+          localStorage.setItem('sigac_convocatorias_pendientes', JSON.stringify(pendientes));
+          return of({ success: true, payload });
+        }),
+      )
+      .subscribe({
+        next: () => {
+          this.materiaService
+            .asignarAyudanteMateria(this.materiaSeleccionada!.id, email)
+            .subscribe({
+              next: (res) => {
+                this.successMessage =
+                  res.mensaje ||
+                  `Solicitud y asignación de ayudante enviada para ${this.materiaSeleccionada?.nombre}.`;
+                this.cerrarModalSolicitudAyudante();
+                setTimeout(() => (this.successMessage = ''), 3500);
+              },
+              error: () => {
+                this.errorMessage = 'No se pudo completar la asignación del ayudante.';
+                setTimeout(() => (this.errorMessage = ''), 3500);
+              },
+            });
+        },
+        error: () => {
+          this.errorMessage = 'No se pudo enviar la solicitud de ayudante.';
+          setTimeout(() => (this.errorMessage = ''), 3500);
+        },
+      });
   }
 
   // ==========================================
@@ -610,36 +765,51 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     const urlClaseDocente = `${getApiBase()}/api/Clase/docente/${docId}`;
     const urlClaseDocenteLower = `${getApiBase()}/api/clase/docente/${docId}`;
 
-    this.http.get<any[]>(urlDocenteClases).pipe(
-      catchError(() => this.http.get<any[]>(urlDocenteClasesLower)),
-      catchError(() => this.http.get<any[]>(urlClaseDocente)),
-      catchError(() => this.http.get<any[]>(urlClaseDocenteLower)),
-      catchError(() => of([]))
-    ).subscribe({
-      next: (res) => {
-        this.isLoading = false;
-        let listaBackend: any[] = [];
-        if (Array.isArray(res)) {
-          listaBackend = res;
-        } else if (res && Array.isArray((res as any).clases)) {
-          listaBackend = (res as any).clases;
-        } else if (res && Array.isArray((res as any).materias)) {
-          listaBackend = (res as any).materias;
-        }
+    this.http
+      .get<any[]>(urlDocenteClases)
+      .pipe(
+        catchError(() => this.http.get<any[]>(urlDocenteClasesLower)),
+        catchError(() => this.http.get<any[]>(urlClaseDocente)),
+        catchError(() => this.http.get<any[]>(urlClaseDocenteLower)),
+        catchError(() => of([])),
+      )
+      .subscribe({
+        next: (res) => {
+          this.isLoading = false;
+          let listaBackend: any[] = [];
+          if (Array.isArray(res)) {
+            listaBackend = res;
+          } else if (res && Array.isArray((res as any).clases)) {
+            listaBackend = (res as any).clases;
+          } else if (res && Array.isArray((res as any).materias)) {
+            listaBackend = (res as any).materias;
+          }
 
-        if (listaBackend.length > 0) {
-          this.procesarClasesBackend(listaBackend);
-        } else {
+          if (listaBackend.length > 0) {
+            this.procesarClasesBackend(listaBackend);
+          } else {
+            this.cargarClasesLocalesFallback();
+          }
+
+          // Si Diagnóstica ya está abierta, primero procesarClasesBackend()
+          // deja establecida la materia del SELECT y recién después consultamos.
+          if (this.tabActiva === 'recursos' && this.subTabRecursos === 'diagnostica') {
+            this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
+          }
+
+          this.cdr.detectChanges();
+        },
+        error: () => {
+          this.isLoading = false;
           this.cargarClasesLocalesFallback();
-        }
-        this.cdr.detectChanges();
-      },
-      error: () => {
-        this.isLoading = false;
-        this.cargarClasesLocalesFallback();
-        this.cdr.detectChanges();
-      }
-    });
+
+          if (this.tabActiva === 'recursos' && this.subTabRecursos === 'diagnostica') {
+            this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
+          }
+
+          this.cdr.detectChanges();
+        },
+      });
   }
 
   private procesarClasesBackend(lista: any[]) {
@@ -647,8 +817,9 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     const nuevasClasesCreadas: ClaseCreada[] = [];
 
     lista.forEach((item, idx) => {
-      const matId = Number(item.materiaId || item.id || (idx + 101));
-      const matNombre = item.materia?.nombre || item.nombreMateria || item.nombre || `Materia ${matId}`;
+      const matId = Number(item.materiaId || item.id || idx + 101);
+      const matNombre =
+        item.materia?.nombre || item.nombreMateria || item.nombre || `Materia ${matId}`;
       const matCodigo = item.materia?.codigo || item.codigo || `MAT-${matId}`;
       const matCreditos = Number(item.materia?.creditos || item.creditos || 4);
 
@@ -666,15 +837,28 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         totalSemanas: item.totalSemanas || 16,
         grupo: item.grupo || 'Grupo A',
         estudiantes: item.estudiantes || [
-          { id: 1, nombre: 'Alejandro García', correo: 'a.garcia@uteq.edu.ec', nota: 4.8, asistencia: 100 },
-          { id: 2, nombre: 'María López', correo: 'm.lopez@uteq.edu.ec', nota: 4.6, asistencia: 95 }
-        ]
+          {
+            id: 1,
+            nombre: 'Alejandro García',
+            correo: 'a.garcia@uteq.edu.ec',
+            nota: 4.8,
+            asistencia: 100,
+          },
+          {
+            id: 2,
+            nombre: 'María López',
+            correo: 'm.lopez@uteq.edu.ec',
+            nota: 4.6,
+            asistencia: 95,
+          },
+        ],
       };
       nuevasMaterias.push(matDto);
 
       const claseProg: ClaseCreada = {
         id: Number(item.id || idx + 1),
         materiaId: matId,
+        catedraId: item.catedraId != null ? Number(item.catedraId) : null,
         nombreMateria: matNombre,
         dias: Array.isArray(item.dias) && item.dias.length > 0 ? item.dias : ['Lunes', 'Miércoles'],
         fecha: item.fecha || '2026-08-25',
@@ -688,8 +872,8 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         pisoPresencial: item.pisoPresencial || 'Piso 3',
         estudiantes: item.estudiantes || [
           { id: 1, nombre: 'Alejandro García', presente: true },
-          { id: 2, nombre: 'María López', presente: true }
-        ]
+          { id: 2, nombre: 'María López', presente: true },
+        ],
       };
       nuevasClasesCreadas.push(claseProg);
     });
@@ -703,12 +887,17 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       this.materiaService.syncMaterias(nuevasMaterias);
     }
 
-    if (!this.materiaSeleccionadaId || !this.materias.some(m => m.id === this.materiaSeleccionadaId)) {
-      if (this.materias.length > 0) {
-        this.materiaSeleccionadaId = this.materias[0].id;
-        this.nuevaClase.materiaId = this.materiaSeleccionadaId;
-      }
+    // No dependemos del orden en que materiaService emita su BehaviorSubject.
+    // Validamos la selección directamente contra las clases recién recibidas.
+    const existeMateriaSeleccionada = nuevasClasesCreadas.some(
+      (clase) => Number(clase.materiaId) === Number(this.materiaSeleccionadaId),
+    );
+
+    if (!existeMateriaSeleccionada && nuevasClasesCreadas.length > 0) {
+      this.materiaSeleccionadaId = Number(nuevasClasesCreadas[0].materiaId);
+      this.nuevaClase.materiaId = this.materiaSeleccionadaId;
     }
+
     this.actualizarRecursosYActividades();
   }
 
@@ -743,8 +932,8 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
           { id: 1, nombre: 'Alejandro García', presente: true },
           { id: 2, nombre: 'María López', presente: true },
           { id: 3, nombre: 'Carlos Ruiz', presente: false },
-          { id: 4, nombre: 'Ana Torres', presente: true }
-        ]
+          { id: 4, nombre: 'Ana Torres', presente: true },
+        ],
       },
       {
         id: 2,
@@ -759,9 +948,9 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         aplicacionVirtual: 'Google Meet',
         estudiantes: [
           { id: 1, nombre: 'Alejandro García', presente: true },
-          { id: 2, nombre: 'María López', presente: false }
-        ]
-      }
+          { id: 2, nombre: 'María López', presente: false },
+        ],
+      },
     ];
     this.guardarEnStorage();
   }
@@ -783,7 +972,9 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         this.nuevaClase.diasSeleccionados.push(dia);
       }
     } else {
-      this.nuevaClase.diasSeleccionados = this.nuevaClase.diasSeleccionados.filter(d => d !== dia);
+      this.nuevaClase.diasSeleccionados = this.nuevaClase.diasSeleccionados.filter(
+        (d) => d !== dia,
+      );
     }
     this.revisarConflictoHorario();
   }
@@ -798,7 +989,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     this.revisarConflictoHorario();
     if (this.conflictoDetectado) {
       const confirmacion = confirm(
-        `⚠️ ADVERTENCIA: Los estudiantes están ocupados en '${this.conflictoDetectado.materiaOcupada}' en este horario.\n¿Estás seguro de que deseas forzar la creación de la clase de todas formas?`
+        `⚠️ ADVERTENCIA: Los estudiantes están ocupados en '${this.conflictoDetectado.materiaOcupada}' en este horario.\n¿Estás seguro de que deseas forzar la creación de la clase de todas formas?`,
       );
       if (!confirmacion) {
         return;
@@ -809,14 +1000,14 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     const nombreMat = materiaObj?.nombre || 'Materia';
     const fechaSesion = this.nuevaClase.fecha || new Date().toISOString().split('T')[0];
 
-    const estudiantesIniciales = materiaObj?.estudiantes?.map(e => ({
+    const estudiantesIniciales = materiaObj?.estudiantes?.map((e) => ({
       id: e.id,
       nombre: e.nombre,
-      presente: false
+      presente: false,
     })) || [
       { id: 1, nombre: 'Alejandro García', presente: false },
       { id: 2, nombre: 'María López', presente: false },
-      { id: 3, nombre: 'Carlos Ruiz', presente: false }
+      { id: 3, nombre: 'Carlos Ruiz', presente: false },
     ];
 
     const claseParaAgregar: ClaseCreada = {
@@ -833,30 +1024,32 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       edificioPresencial: this.nuevaClase.edificioPresencial,
       aulaPresencial: this.nuevaClase.aulaPresencial,
       pisoPresencial: this.nuevaClase.pisoPresencial,
-      estudiantes: estudiantesIniciales
+      estudiantes: estudiantesIniciales,
     };
 
     this.clasesCreadas.unshift(claseParaAgregar);
     this.guardarEnStorage();
 
     // Registrar en backend / servicio
-    this.claseService.createClaseSesion({
-      materiaId: Number(this.nuevaClase.materiaId),
-      claseId: this.nuevaClase.claseId ? Number(this.nuevaClase.claseId) : undefined,
-      docenteId: this.docenteIdLogueado,
-      fecha: fechaSesion,
-      horaInicio: this.nuevaClase.horaInicio || '08:00',
-      horaFin: this.nuevaClase.horaFin || '10:00',
-      tipoClase: this.nuevaClase.tipoClase,
-      linkVirtual: this.nuevaClase.linkVirtual,
-      aplicacionVirtual: this.nuevaClase.aplicacionVirtual,
-      edificioPresencial: this.nuevaClase.edificioPresencial,
-      aulaPresencial: this.nuevaClase.aulaPresencial,
-      pisoPresencial: this.nuevaClase.pisoPresencial
-    }).subscribe();
+    this.claseService
+      .createClaseSesion({
+        materiaId: Number(this.nuevaClase.materiaId),
+        claseId: this.nuevaClase.claseId ? Number(this.nuevaClase.claseId) : undefined,
+        docenteId: this.docenteIdLogueado,
+        fecha: fechaSesion,
+        horaInicio: this.nuevaClase.horaInicio || '08:00',
+        horaFin: this.nuevaClase.horaFin || '10:00',
+        tipoClase: this.nuevaClase.tipoClase,
+        linkVirtual: this.nuevaClase.linkVirtual,
+        aplicacionVirtual: this.nuevaClase.aplicacionVirtual,
+        edificioPresencial: this.nuevaClase.edificioPresencial,
+        aulaPresencial: this.nuevaClase.aulaPresencial,
+        pisoPresencial: this.nuevaClase.pisoPresencial,
+      })
+      .subscribe();
 
     this.successMessage = `¡Clase de ${nombreMat} programada exitosamente!`;
-    setTimeout(() => this.successMessage = '', 4000);
+    setTimeout(() => (this.successMessage = ''), 4000);
 
     // Resetear formulario manteniendo la materia
     this.nuevaClase.diasSeleccionados = ['Lunes'];
@@ -894,58 +1087,66 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     }
     if (this.busquedaEstudianteAsistencia.trim()) {
       const q = this.busquedaEstudianteAsistencia.toLowerCase().trim();
-      list = list.filter((e: any) => e.nombre?.toLowerCase().includes(q) || e.correo?.toLowerCase().includes(q));
+      list = list.filter(
+        (e: any) => e.nombre?.toLowerCase().includes(q) || e.correo?.toLowerCase().includes(q),
+      );
     }
     return list;
   }
 
   marcarTodosAsistencia(claseId: number, presente: boolean) {
-    const clase = this.clasesCreadas.find(c => c.id === claseId);
+    const clase = this.clasesCreadas.find((c) => c.id === claseId);
     if (!clase || !clase.estudiantes) return;
-    clase.estudiantes.forEach(e => {
+    clase.estudiantes.forEach((e) => {
       e.presente = presente;
-      this.claseService.registrarAsistencia(claseId, {
-        claseSesionId: claseId,
-        estudianteId: e.id,
-        presente: presente
-      }).subscribe();
+      this.claseService
+        .registrarAsistencia(claseId, {
+          claseSesionId: claseId,
+          estudianteId: e.id,
+          presente: presente,
+        })
+        .subscribe();
     });
     this.guardarEnStorage();
   }
 
   invertirAsistencia(claseId: number) {
-    const clase = this.clasesCreadas.find(c => c.id === claseId);
+    const clase = this.clasesCreadas.find((c) => c.id === claseId);
     if (!clase || !clase.estudiantes) return;
-    clase.estudiantes.forEach(e => {
+    clase.estudiantes.forEach((e) => {
       e.presente = !e.presente;
-      this.claseService.registrarAsistencia(claseId, {
-        claseSesionId: claseId,
-        estudianteId: e.id,
-        presente: e.presente
-      }).subscribe();
+      this.claseService
+        .registrarAsistencia(claseId, {
+          claseSesionId: claseId,
+          estudianteId: e.id,
+          presente: e.presente,
+        })
+        .subscribe();
     });
     this.guardarEnStorage();
   }
 
   toggleAsistencia(claseId: number, estudianteId: number) {
-    const clase = this.clasesCreadas.find(c => c.id === claseId);
+    const clase = this.clasesCreadas.find((c) => c.id === claseId);
     if (clase) {
-      const estudiante = clase.estudiantes.find(e => e.id === estudianteId);
+      const estudiante = clase.estudiantes.find((e) => e.id === estudianteId);
       if (estudiante) {
         estudiante.presente = !estudiante.presente;
         this.guardarEnStorage();
 
-        this.claseService.registrarAsistencia(claseId, {
-          claseSesionId: claseId,
-          estudianteId: estudianteId,
-          presente: estudiante.presente
-        }).subscribe();
+        this.claseService
+          .registrarAsistencia(claseId, {
+            claseSesionId: claseId,
+            estudianteId: estudianteId,
+            presente: estudiante.presente,
+          })
+          .subscribe();
       }
     }
   }
 
   getClaseById(id: number): ClaseCreada | undefined {
-    return this.clasesCreadas.find(c => c.id === id);
+    return this.clasesCreadas.find((c) => c.id === id);
   }
 
   contarPresentes(clase: any): number {
@@ -959,12 +1160,12 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   }
 
   calcularPorcentajeAsistencia(estudianteId: number, materiaId: number): string {
-    const clasesDeMateria = this.clasesCreadas.filter(c => c.materiaId === materiaId);
+    const clasesDeMateria = this.clasesCreadas.filter((c) => c.materiaId === materiaId);
     if (clasesDeMateria.length === 0) return '0%';
 
     let presentes = 0;
     for (const clase of clasesDeMateria) {
-      const estudiante = clase.estudiantes.find(e => e.id === estudianteId);
+      const estudiante = clase.estudiantes.find((e) => e.id === estudianteId);
       if (estudiante && estudiante.presente) {
         presentes++;
       }
@@ -983,21 +1184,21 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const clase = this.clasesCreadas.find(c => c.id === claseId);
+    const clase = this.clasesCreadas.find((c) => c.id === claseId);
     if (clase && clase.estudiantes) {
-      clase.estudiantes = clase.estudiantes.filter(e => e.id !== estudianteId);
+      clase.estudiantes = clase.estudiantes.filter((e) => e.id !== estudianteId);
       this.guardarEnStorage();
     }
 
     this.claseService.eliminarEstudiante(claseId, estudianteId).subscribe({
       next: () => {
         this.successMessage = 'Estudiante eliminado de la clase exitosamente.';
-        setTimeout(() => this.successMessage = '', 4000);
+        setTimeout(() => (this.successMessage = ''), 4000);
       },
       error: () => {
         this.successMessage = 'Estudiante eliminado de la clase.';
-        setTimeout(() => this.successMessage = '', 4000);
-      }
+        setTimeout(() => (this.successMessage = ''), 4000);
+      },
     });
   }
 
@@ -1011,7 +1212,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       nombre: '',
       correo: '',
       cedula: '',
-      matricula: ''
+      matricula: '',
     };
   }
 
@@ -1023,11 +1224,13 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
     const nombre = this.nuevoEstudianteClase.nombre.trim();
     const correo = this.nuevoEstudianteClase.correo.trim();
-    const username = correo.includes('@') ? correo.split('@')[0] : nombre.toLowerCase().replace(/\s+/g, '.');
+    const username = correo.includes('@')
+      ? correo.split('@')[0]
+      : nombre.toLowerCase().replace(/\s+/g, '.');
     const tempPassword = `Uteq${new Date().getFullYear()}*`;
 
     const nuevoId = Date.now();
-    const clase = this.clasesCreadas.find(c => c.id === claseId);
+    const clase = this.clasesCreadas.find((c) => c.id === claseId);
     if (clase) {
       if (!clase.estudiantes) clase.estudiantes = [];
       clase.estudiantes.push({
@@ -1035,7 +1238,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         nombre,
         correo,
         presente: true,
-        username
+        username,
       });
       this.guardarEnStorage();
     }
@@ -1045,9 +1248,11 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       nombre,
       correo,
       username,
-      cedula: this.nuevoEstudianteClase.cedula || `17${Math.floor(10000000 + Math.random() * 90000000)}`,
-      matricula: this.nuevoEstudianteClase.matricula || `2024-EST-${Math.floor(100 + Math.random() * 900)}`,
-      estado: 'Regular'
+      cedula:
+        this.nuevoEstudianteClase.cedula || `17${Math.floor(10000000 + Math.random() * 90000000)}`,
+      matricula:
+        this.nuevoEstudianteClase.matricula || `2024-EST-${Math.floor(100 + Math.random() * 900)}`,
+      estado: 'Regular',
     });
 
     // Emitir la recarga de datos en el servicio del Directorio (cargarDirectorio())
@@ -1059,7 +1264,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       mostrar: true,
       mensaje: notifMsg,
       username,
-      tempPassword
+      tempPassword,
     };
     this.successMessage = notifMsg;
 
@@ -1071,7 +1276,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     if (navigator?.clipboard) {
       navigator.clipboard.writeText(texto);
       this.copiadoCredenciales = true;
-      setTimeout(() => this.copiadoCredenciales = false, 3000);
+      setTimeout(() => (this.copiadoCredenciales = false), 3000);
     }
   }
 
@@ -1085,7 +1290,9 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
   actualizarRecursosYActividades() {
     this.recursosMateria = this.materiaService.getRecursosSnapshot(this.materiaSeleccionadaId);
-    this.actividadesMateria = this.materiaService.getActividadesSnapshot(this.materiaSeleccionadaId);
+    this.actividadesMateria = this.materiaService.getActividadesSnapshot(
+      this.materiaSeleccionadaId,
+    );
   }
 
   onArchivoRecursoChange(event: Event): void {
@@ -1097,7 +1304,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       this.archivoRecurso = {
         nombre: file.name,
         tamanoKb: Math.round(file.size / 1024),
-        dataUrl: reader.result as string
+        dataUrl: reader.result as string,
       };
       if (!this.nuevoRecurso.titulo.trim()) {
         this.nuevoRecurso.titulo = file.name.replace(/\.[^/.]+$/, '');
@@ -1111,7 +1318,9 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         next: (res) => {
           if (res?.url) {
             this.nuevoRecurso.url = res.url;
-            this.mostrarMensajeExito('Archivo subido correctamente. La URL fue añadida al recurso.');
+            this.mostrarMensajeExito(
+              'Archivo subido correctamente. La URL fue añadida al recurso.',
+            );
           }
           if (res?.key) {
             // opcional: guardar key localmente en archivoRecurso
@@ -1120,7 +1329,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
         },
         error: () => {
           // Silenciar error de upload (backend puede no estar disponible en dev)
-        }
+        },
       });
     } catch (e) {
       // noop
@@ -1140,7 +1349,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       this.archivoActividad = {
         nombre: file.name,
         tamanoKb: Math.round(file.size / 1024),
-        dataUrl: reader.result as string
+        dataUrl: reader.result as string,
       };
       if (!this.nuevaActividad.titulo.trim()) {
         this.nuevaActividad.titulo = file.name.replace(/\.[^/.]+$/, '');
@@ -1155,7 +1364,10 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
   descargarRecursoDocumento(rec: RecursoDto): void {
     if (rec.archivoDataUrl) {
-      this.descargaService.descargarArchivo(rec.nombreArchivo || `${rec.titulo}.pdf`, rec.archivoDataUrl);
+      this.descargaService.descargarArchivo(
+        rec.nombreArchivo || `${rec.titulo}.pdf`,
+        rec.archivoDataUrl,
+      );
       return;
     }
     // Generar documento oficial descargable con los datos del recurso
@@ -1183,7 +1395,10 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
   descargarActividadDocumento(act: ActividadDto): void {
     if (act.archivoDataUrl) {
-      this.descargaService.descargarArchivo(act.nombreArchivo || `${act.titulo}.pdf`, act.archivoDataUrl);
+      this.descargaService.descargarArchivo(
+        act.nombreArchivo || `${act.titulo}.pdf`,
+        act.archivoDataUrl,
+      );
       return;
     }
     const html = `<!DOCTYPE html>
@@ -1205,7 +1420,10 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   <p style="font-size:11px;color:#64748b;">Documento de evaluación formativa emitido por la Carrera de Ingeniería de Software - UTEQ.</p>
 </body>
 </html>`;
-    this.descargaService.descargarArchivo(`${act.titulo.replace(/\s+/g, '_')}_Guia_UTEQ.html`, html);
+    this.descargaService.descargarArchivo(
+      `${act.titulo.replace(/\s+/g, '_')}_Guia_UTEQ.html`,
+      html,
+    );
   }
 
   crearRecursoPedagogico() {
@@ -1217,36 +1435,42 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     this.isLoading = true;
 
     const rawLinks = (this.nuevoRecurso as any).linksString || '';
-    const links = rawLinks.split(/\r?\n|,/) .map((s: string) => s.trim()).filter(Boolean);
+    const links = rawLinks
+      .split(/\r?\n|,/)
+      .map((s: string) => s.trim())
+      .filter(Boolean);
 
-    this.materiaService.addRecurso(this.materiaSeleccionadaId, {
-      titulo: this.nuevoRecurso.titulo.trim(),
-      materiaId: this.materiaSeleccionadaId,
-      url: this.nuevoRecurso.url.trim() || 'https://repositorio.uteq.edu.ec/material.pdf',
-      tipo: this.nuevoRecurso.tipo,
-      esEsencial: this.nuevoRecurso.esEsencial,
-      descripcion: this.nuevoRecurso.descripcion.trim(),
-      temaNombre: this.nuevoRecurso.temaNombre,
-      nombreArchivo: this.archivoRecurso?.nombre,
-      archivoDataUrl: this.archivoRecurso?.dataUrl,
-      tamanoArchivoKb: this.archivoRecurso?.tamanoKb,
-      links: links
-    }).subscribe({
-      next: () => {
-        this.isLoading = false;
-        this.actualizarRecursosYActividades();
-        this.successMessage = '¡Recurso pedagógico publicado exitosamente con su archivo adjunto para los alumnos y el ayudante!';
-        setTimeout(() => this.successMessage = '', 4000);
-        this.nuevoRecurso.titulo = '';
-        this.nuevoRecurso.descripcion = '';
-        (this.nuevoRecurso as any).linksString = '';
-        this.archivoRecurso = null;
-      },
-      error: () => {
-        this.isLoading = false;
-        this.actualizarRecursosYActividades();
-      }
-    });
+    this.materiaService
+      .addRecurso(this.materiaSeleccionadaId, {
+        titulo: this.nuevoRecurso.titulo.trim(),
+        materiaId: this.materiaSeleccionadaId,
+        url: this.nuevoRecurso.url.trim() || 'https://repositorio.uteq.edu.ec/material.pdf',
+        tipo: this.nuevoRecurso.tipo,
+        esEsencial: this.nuevoRecurso.esEsencial,
+        descripcion: this.nuevoRecurso.descripcion.trim(),
+        temaNombre: this.nuevoRecurso.temaNombre,
+        nombreArchivo: this.archivoRecurso?.nombre,
+        archivoDataUrl: this.archivoRecurso?.dataUrl,
+        tamanoArchivoKb: this.archivoRecurso?.tamanoKb,
+        links: links,
+      })
+      .subscribe({
+        next: () => {
+          this.isLoading = false;
+          this.actualizarRecursosYActividades();
+          this.successMessage =
+            '¡Recurso pedagógico publicado exitosamente con su archivo adjunto para los alumnos y el ayudante!';
+          setTimeout(() => (this.successMessage = ''), 4000);
+          this.nuevoRecurso.titulo = '';
+          this.nuevoRecurso.descripcion = '';
+          (this.nuevoRecurso as any).linksString = '';
+          this.archivoRecurso = null;
+        },
+        error: () => {
+          this.isLoading = false;
+          this.actualizarRecursosYActividades();
+        },
+      });
   }
 
   crearActividadPedagogica() {
@@ -1256,30 +1480,34 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     }
 
     this.isLoading = true;
-    this.materiaService.addActividad(this.materiaSeleccionadaId, {
-      titulo: this.nuevaActividad.titulo.trim(),
-      descripcion: this.nuevaActividad.descripcion.trim() || 'Actividad asignada por el docente titular.',
-      fechaEntrega: this.nuevaActividad.fechaEntrega || '2026-09-30',
-      tipo: this.nuevaActividad.tipo,
-      materiaId: this.materiaSeleccionadaId,
-      nombreArchivo: this.archivoActividad?.nombre,
-      archivoDataUrl: this.archivoActividad?.dataUrl,
-      tamanoArchivoKb: this.archivoActividad?.tamanoKb
-    }).subscribe({
-      next: () => {
-        this.isLoading = false;
-        this.actualizarRecursosYActividades();
-        this.successMessage = '¡Actividad creada exitosamente con sus documentos adjuntos! Los alumnos ya pueden consultar la guía.';
-        setTimeout(() => this.successMessage = '', 4000);
-        this.nuevaActividad.titulo = '';
-        this.nuevaActividad.descripcion = '';
-        this.archivoActividad = null;
-      },
-      error: () => {
-        this.isLoading = false;
-        this.actualizarRecursosYActividades();
-      }
-    });
+    this.materiaService
+      .addActividad(this.materiaSeleccionadaId, {
+        titulo: this.nuevaActividad.titulo.trim(),
+        descripcion:
+          this.nuevaActividad.descripcion.trim() || 'Actividad asignada por el docente titular.',
+        fechaEntrega: this.nuevaActividad.fechaEntrega || '2026-09-30',
+        tipo: this.nuevaActividad.tipo,
+        materiaId: this.materiaSeleccionadaId,
+        nombreArchivo: this.archivoActividad?.nombre,
+        archivoDataUrl: this.archivoActividad?.dataUrl,
+        tamanoArchivoKb: this.archivoActividad?.tamanoKb,
+      })
+      .subscribe({
+        next: () => {
+          this.isLoading = false;
+          this.actualizarRecursosYActividades();
+          this.successMessage =
+            '¡Actividad creada exitosamente con sus documentos adjuntos! Los alumnos ya pueden consultar la guía.';
+          setTimeout(() => (this.successMessage = ''), 4000);
+          this.nuevaActividad.titulo = '';
+          this.nuevaActividad.descripcion = '';
+          this.archivoActividad = null;
+        },
+        error: () => {
+          this.isLoading = false;
+          this.actualizarRecursosYActividades();
+        },
+      });
   }
 
   toggleRecursoEsencial(recursoId?: number) {
@@ -1295,9 +1523,483 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       this.actualizarRecursosYActividades();
     }
   }
+  abrirModalCrearEvaluacionDiagnostica(): void {
+    this.errorMessage = '';
+    this.mostrarModalCrearDiagnostica = true;
+  }
+
+  cerrarModalCrearEvaluacionDiagnostica(): void {
+    this.mostrarModalCrearDiagnostica = false;
+    this.errorMessage = '';
+  }
+
+  cerrarModalRevisionDiagnostica(): void {
+    this.mostrarModalRevisionDiagnostica = false;
+    this.resultadoDiagnosticoSeleccionado = null;
+    this.errorMessage = '';
+  }
+
+  seleccionarResultadoDiagnostico(resultado: ResultadoDiagnosticoFormulario): void {
+    this.resultadoDiagnosticoSeleccionado = resultado;
+    this.errorMessage = '';
+  }
+
+  agregarPreguntaDiagnostica(): void {
+    const pregunta = this.nuevaPreguntaCuestionario.trim();
+
+    if (!pregunta) {
+      this.errorMessage = 'Escribe la pregunta antes de agregarla.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const siguienteId =
+      this.preguntasNuevaEvaluacion.length > 0
+        ? Math.max(...this.preguntasNuevaEvaluacion.map((p) => Number(p.id) || 0)) + 1
+        : 1;
+
+    this.preguntasNuevaEvaluacion.push({
+      id: siguienteId,
+      pregunta,
+      tipo: 'Texto',
+    });
+
+    this.nuevaPreguntaCuestionario = '';
+    this.errorMessage = '';
+  }
+
+  eliminarPreguntaDiagnostica(indice: number): void {
+    this.preguntasNuevaEvaluacion.splice(indice, 1);
+
+    this.preguntasNuevaEvaluacion = this.preguntasNuevaEvaluacion.map((pregunta, index) => ({
+      ...pregunta,
+      id: index + 1,
+    }));
+  }
+
+  cambiarTipoEvaluacionDiagnostica(tipo: 'Archivo' | 'Cuestionario'): void {
+    this.nuevaEvaluacionDiagnostica.tipoEvaluacion = tipo;
+
+    if (tipo === 'Archivo') {
+      this.preguntasNuevaEvaluacion = [];
+      this.nuevaPreguntaCuestionario = '';
+    }
+  }
+
+  obtenerPreguntasCuestionario(
+    evaluacion: EvaluacionDto | null = this.evaluacionDiagnosticaSeleccionada,
+  ): PreguntaCuestionarioDto[] {
+    if (!evaluacion?.preguntasCuestionario) {
+      return [];
+    }
+
+    try {
+      const preguntas = JSON.parse(evaluacion.preguntasCuestionario);
+
+      return Array.isArray(preguntas)
+        ? preguntas.map((pregunta: any, index: number) => ({
+          id: Number(pregunta?.id) || index + 1,
+          pregunta: String(pregunta?.pregunta || ''),
+          tipo: String(pregunta?.tipo || 'Texto'),
+        }))
+        : [];
+    } catch (error) {
+      console.error('No se pudieron interpretar las preguntas del cuestionario:', error);
+      return [];
+    }
+  }
+
+  obtenerRespuestasCuestionario(
+    resultado: ResultadoDiagnosticoFormulario,
+  ): RespuestaCuestionarioVisual[] {
+    if (resultado.respuestas.length > 0) {
+      return resultado.respuestas;
+    }
+
+    if (!resultado.respuestasCuestionario) {
+      return [];
+    }
+
+    return this.parsearRespuestasCuestionario(resultado.respuestasCuestionario);
+  }
+
+  obtenerTextoPregunta(preguntaId: number): string {
+    const pregunta = this.obtenerPreguntasCuestionario().find(
+      (item) => Number(item.id) === Number(preguntaId),
+    );
+
+    return pregunta?.pregunta || `Pregunta ${preguntaId}`;
+  }
+
+  abrirArchivoEntrega(resultado: ResultadoDiagnosticoFormulario): void {
+    if (!resultado.archivoEntregaUrl || typeof window === 'undefined') {
+      return;
+    }
+
+    window.open(this.construirUrlBackend(resultado.archivoEntregaUrl), '_blank', 'noopener,noreferrer');
+  }
+
+  abrirArchivoDocente(evaluacion: EvaluacionDto): void {
+    if (!evaluacion.archivoDocenteUrl || typeof window === 'undefined') {
+      return;
+    }
+
+    window.open(this.construirUrlBackend(evaluacion.archivoDocenteUrl), '_blank', 'noopener,noreferrer');
+  }
+
+  seleccionarEvaluacionDiagnostica(evaluacion: EvaluacionDto): void {
+    if (!evaluacion.id) {
+      return;
+    }
+
+    const catedraId = this.catedraSeleccionadaId;
+
+    if (!catedraId) {
+      this.errorMessage = 'No se pudo identificar la cátedra.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.evaluacionDiagnosticaSeleccionada = evaluacion;
+    this.resultadosDiagnosticosFormulario = [];
+    this.resultadoDiagnosticoSeleccionado = null;
+    this.resumenEvaluacionDiagnostica = null;
+    this.mostrarModalRevisionDiagnostica = true;
+    this.cargandoResultadosDiagnosticos = true;
+    this.errorMessage = '';
+
+    this.docenteService.obtenerResultadosEvaluacionDiagnostica(catedraId, evaluacion.id).subscribe({
+      next: (respuesta) => {
+        this.cargandoResultadosDiagnosticos = false;
+
+        if (respuesta?.evaluacion) {
+          this.evaluacionDiagnosticaSeleccionada = {
+            ...evaluacion,
+            ...respuesta.evaluacion,
+          };
+        }
+
+        const resultadosGuardados = Array.isArray(respuesta?.resultados)
+          ? respuesta.resultados
+          : [];
+
+        this.resultadosDiagnosticosFormulario = resultadosGuardados
+          .filter(
+            (resultado) =>
+              resultado.fechaEntrega != null ||
+              !!resultado.archivoEntregaUrl ||
+              !!resultado.respuestasCuestionario ||
+              resultado.calificacion != null ||
+              resultado.estado === 'Entregado' ||
+              resultado.estado === 'Calificado',
+          )
+          .map((resultado) => ({
+            estudianteId: Number(resultado.estudianteId),
+            nombreEstudiante: resultado.nombreEstudiante || 'Estudiante',
+            calificacion:
+              resultado.calificacion === null || resultado.calificacion === undefined
+                ? null
+                : Number(resultado.calificacion),
+            observacion: resultado.observacion || '',
+            estado: resultado.estado || 'Pendiente',
+            archivoEntregaUrl: resultado.archivoEntregaUrl ?? null,
+            fechaEntrega: resultado.fechaEntrega ?? null,
+            respuestasCuestionario: resultado.respuestasCuestionario ?? null,
+            respuestas: this.parsearRespuestasCuestionario(resultado.respuestasCuestionario),
+          }));
+
+        this.resultadoDiagnosticoSeleccionado =
+          this.resultadosDiagnosticosFormulario.length > 0
+            ? this.resultadosDiagnosticosFormulario[0]
+            : null;
+
+        this.resumenEvaluacionDiagnostica = respuesta?.resumen || null;
+        this.cdr.detectChanges();
+      },
+
+      error: (error) => {
+        this.cargandoResultadosDiagnosticos = false;
+        console.error('Error cargando resultados diagnósticos:', error);
+        this.errorMessage =
+          error?.error?.message || 'No se pudieron cargar los resultados diagnósticos.';
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  guardarResultadosDiagnosticos(): void {
+    const catedraId = this.catedraSeleccionadaId;
+    const evaluacionId = this.evaluacionDiagnosticaSeleccionada?.id;
+
+    if (!catedraId || !evaluacionId) {
+      this.errorMessage = 'Selecciona una evaluación diagnóstica.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    if (this.resultadosDiagnosticosFormulario.length === 0) {
+      this.errorMessage = 'Aún no existen entregas para esta evaluación diagnóstica.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const resultadosConCalificacion = this.resultadosDiagnosticosFormulario.filter(
+      (resultado) =>
+        resultado.calificacion !== null && resultado.calificacion !== undefined,
+    );
+
+    if (resultadosConCalificacion.length === 0) {
+      this.errorMessage = 'Ingresa al menos una calificación antes de guardar.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const notasInvalidas = resultadosConCalificacion.some(
+      (resultado) =>
+        Number(resultado.calificacion) < 0 || Number(resultado.calificacion) > 10,
+    );
+
+    if (notasInvalidas) {
+      this.errorMessage = 'Las calificaciones diagnósticas deben estar entre 0 y 10.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const payload: RegistrarResultadosDiagnosticosDto = {
+      resultados: resultadosConCalificacion.map((resultado) => ({
+        estudianteId: resultado.estudianteId,
+        calificacion: Number(resultado.calificacion),
+        observacion: resultado.observacion.trim(),
+      })),
+    };
+
+    this.guardandoResultadosDiagnosticos = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.docenteService
+      .guardarResultadosEvaluacionDiagnostica(catedraId, evaluacionId, payload)
+      .subscribe({
+        next: (respuesta) => {
+          this.guardandoResultadosDiagnosticos = false;
+
+          this.resultadosDiagnosticosFormulario = this.resultadosDiagnosticosFormulario.map(
+            (resultado) =>
+              resultado.calificacion !== null && resultado.calificacion !== undefined
+                ? { ...resultado, estado: 'Calificado' }
+                : resultado,
+          );
+
+          if (this.resultadoDiagnosticoSeleccionado) {
+            const estudianteSeleccionadoId = this.resultadoDiagnosticoSeleccionado.estudianteId;
+            this.resultadoDiagnosticoSeleccionado =
+              this.resultadosDiagnosticosFormulario.find(
+                (resultado) => resultado.estudianteId === estudianteSeleccionadoId,
+              ) || null;
+          }
+
+          this.resumenEvaluacionDiagnostica = {
+            estudiantesEvaluados: respuesta.estudiantesEvaluados,
+            promedioDiagnostico: respuesta.promedioDiagnostico,
+            calificacionMinima: respuesta.calificacionMinima,
+            calificacionMaxima: respuesta.calificacionMaxima,
+            afectaPromedioAcademico: respuesta.afectaPromedioAcademico,
+          };
+
+          this.successMessage =
+            'Resultados diagnósticos guardados correctamente. No afectan el promedio académico.';
+
+          this.cdr.detectChanges();
+
+          setTimeout(() => {
+            this.successMessage = '';
+            this.cdr.detectChanges();
+          }, 4000);
+        },
+
+        error: (error) => {
+          this.guardandoResultadosDiagnosticos = false;
+          console.error('Error guardando resultados diagnósticos:', error);
+          this.errorMessage =
+            error?.error?.message || 'No se pudieron guardar los resultados diagnósticos.';
+          this.cdr.detectChanges();
+        },
+      });
+  }
+
+  crearEvaluacionDiagnostica(): void {
+    const catedraId = this.catedraSeleccionadaId;
+
+    if (!catedraId) {
+      this.errorMessage =
+        'No se pudo identificar la cátedra correspondiente a la materia seleccionada.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const nombre = this.nuevaEvaluacionDiagnostica.nombre.trim();
+
+    if (!nombre) {
+      this.errorMessage = 'Ingresa el nombre de la evaluación diagnóstica.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    if (
+      !this.nuevaEvaluacionDiagnostica.fechaInicio ||
+      !this.nuevaEvaluacionDiagnostica.fechaFin
+    ) {
+      this.errorMessage = 'Debes indicar la fecha de inicio y la fecha de finalización.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const fechaInicio = new Date(this.nuevaEvaluacionDiagnostica.fechaInicio);
+    const fechaFin = new Date(this.nuevaEvaluacionDiagnostica.fechaFin);
+
+    if (
+      Number.isNaN(fechaInicio.getTime()) ||
+      Number.isNaN(fechaFin.getTime()) ||
+      fechaFin <= fechaInicio
+    ) {
+      this.errorMessage = 'La fecha de finalización debe ser posterior a la fecha de inicio.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const tipoEvaluacion = this.nuevaEvaluacionDiagnostica.tipoEvaluacion;
+
+    if (tipoEvaluacion === 'Cuestionario' && this.preguntasNuevaEvaluacion.length === 0) {
+      this.errorMessage = 'Agrega al menos una pregunta al cuestionario.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const payload: EvaluacionDto = {
+      nombre,
+      catedraId,
+      esDiagnostica: true,
+      fechaInicio: fechaInicio.toISOString(),
+      fechaFin: fechaFin.toISOString(),
+      tipoEvaluacion,
+      instrucciones: this.nuevaEvaluacionDiagnostica.instrucciones.trim(),
+      archivoDocenteUrl: this.nuevaEvaluacionDiagnostica.archivoDocenteUrl.trim() || null,
+      preguntasCuestionario:
+        tipoEvaluacion === 'Cuestionario'
+          ? JSON.stringify(this.preguntasNuevaEvaluacion)
+          : null,
+    };
+
+    this.isLoading = true;
+    this.successMessage = '';
+    this.errorMessage = '';
+
+    this.docenteService.registrarEvaluacionDiagnostica(catedraId, payload).subscribe({
+      next: (evaluacion) => {
+        this.isLoading = false;
+        this.evaluacionesDiagnosticas.unshift(evaluacion);
+
+        this.successMessage =
+          '¡Evaluación diagnóstica registrada correctamente! No afecta el promedio académico.';
+
+        this.nuevaEvaluacionDiagnostica = {
+          nombre: '',
+          instrucciones: '',
+          tipoEvaluacion: 'Archivo',
+          fechaInicio: '',
+          fechaFin: '',
+          archivoDocenteUrl: '',
+        };
+
+        this.preguntasNuevaEvaluacion = [];
+        this.nuevaPreguntaCuestionario = '';
+        this.mostrarModalCrearDiagnostica = false;
+        this.cdr.detectChanges();
+
+        setTimeout(() => {
+          this.successMessage = '';
+          this.cdr.detectChanges();
+        }, 4000);
+      },
+
+      error: (error) => {
+        this.isLoading = false;
+        console.error('Error al registrar evaluación diagnóstica:', error);
+        this.errorMessage =
+          error?.error?.message || 'No se pudo registrar la evaluación diagnóstica.';
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  cargarEvaluacionesDiagnosticas(
+    materiaId: number = this.materiaSeleccionadaId,
+  ): void {
+    // IMPORTANTE: primero tomamos la materia seleccionada en el SELECT
+    // y luego buscamos el catedraId que le corresponde.
+    const materiaIdSeleccionada = Number(materiaId);
+    const catedraId = this.obtenerCatedraIdPorMateria(materiaIdSeleccionada);
+
+    if (!catedraId) {
+      this.evaluacionesDiagnosticas = [];
+      this.evaluacionDiagnosticaSeleccionada = null;
+      this.resultadosDiagnosticosFormulario = [];
+      this.resultadoDiagnosticoSeleccionado = null;
+      this.resumenEvaluacionDiagnostica = null;
+      this.mostrarModalCrearDiagnostica = false;
+      this.mostrarModalRevisionDiagnostica = false;
+      return;
+    }
+
+    this.docenteService.obtenerEvaluacionesDiagnosticas(catedraId).subscribe({
+      next: (evaluaciones) => {
+        this.evaluacionesDiagnosticas = Array.isArray(evaluaciones) ? evaluaciones : [];
+        this.cdr.detectChanges();
+      },
+
+      error: (error) => {
+        console.error('Error cargando evaluaciones diagnósticas:', error);
+        this.evaluacionesDiagnosticas = [];
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  private parsearRespuestasCuestionario(
+    raw: string | null | undefined,
+  ): RespuestaCuestionarioVisual[] {
+    if (!raw) {
+      return [];
+    }
+
+    try {
+      const respuestas = JSON.parse(raw);
+
+      return Array.isArray(respuestas)
+        ? respuestas.map((respuesta: any, index: number) => ({
+          preguntaId: Number(respuesta?.preguntaId) || index + 1,
+          respuesta: String(respuesta?.respuesta || ''),
+        }))
+        : [];
+    } catch (error) {
+      console.error('No se pudieron interpretar las respuestas del cuestionario:', error);
+      return [];
+    }
+  }
+
+  private construirUrlBackend(url: string): string {
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+
+    const base = getApiBase().replace(/\/$/, '');
+    const ruta = url.startsWith('/') ? url : `/${url}`;
+
+    return `${base}${ruta}`;
+  }
 
   private mostrarMensajeExito(msg: string): void {
     this.successMessage = msg;
-    setTimeout(() => this.successMessage = '', 4000);
+    setTimeout(() => (this.successMessage = ''), 4000);
   }
 }
