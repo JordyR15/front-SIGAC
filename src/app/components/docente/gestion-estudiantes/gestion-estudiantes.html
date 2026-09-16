@@ -533,18 +533,18 @@
 
                         <div class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs border border-indigo-200 shrink-0">
 
-                          {{ getIniciales(est.nombreCompleto || est.nombre) }}
+                          {{ getIniciales(est.nombreCompleto || (est.nombre + ' ' + (est.apellido || '')) || est.username) }}
 
                         </div>
 
                         <div class="min-w-0">
 
                           <p class="font-bold text-slate-900">
-                            {{ est.nombreCompleto || est.nombre }}
+                            {{ est.nombreCompleto || (est.nombre + ' ' + (est.apellido || '')) || est.username }}
                           </p>
 
                           <p class="text-[11px] text-slate-400">
-                            {{ est.correo || 'Sin correo registrado' }}
+                            {{ est.correo || est.email || 'Sin correo registrado' }}
                           </p>
 
                         </div>
@@ -557,17 +557,7 @@
 
                     <td class="py-3 px-4 font-mono text-slate-600">
 
-                      @if (est.cedula) {
-
-                        {{ est.cedula }}
-
-                      } @else {
-
-                        <span class="text-slate-400">
-                          —
-                        </span>
-
-                      }
+                      {{ est.cedula || est.ci || '—' }}
 
                     </td>
 
@@ -999,7 +989,8 @@
               getIniciales(
                 expedienteDetalle?.nombreEstudiante ||
                 estudianteDetalle.nombreCompleto ||
-                estudianteDetalle.nombre
+                (estudianteDetalle.nombre + ' ' + (estudianteDetalle.apellido || '')) ||
+                estudianteDetalle.username
               )
             }}
 
@@ -1016,19 +1007,20 @@
               {{
                 expedienteDetalle?.nombreEstudiante ||
                 estudianteDetalle.nombreCompleto ||
-                estudianteDetalle.nombre
+                (estudianteDetalle.nombre + ' ' + (estudianteDetalle.apellido || '')) ||
+                estudianteDetalle.username
               }}
 
             </h3>
 
             <p class="text-xs text-slate-500">
-              {{ estudianteDetalle.correo || 'Sin correo registrado' }}
+              {{ estudianteDetalle.correo || estudianteDetalle.email || 'Sin correo registrado' }}
             </p>
 
-            @if (estudianteDetalle.cedula) {
+            @if (estudianteDetalle.cedula || estudianteDetalle.ci) {
 
               <p class="text-[11px] text-slate-400 font-mono">
-                CI: {{ estudianteDetalle.cedula }}
+                CI: {{ estudianteDetalle.cedula || estudianteDetalle.ci }}
               </p>
 
             }

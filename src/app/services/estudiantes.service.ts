@@ -9,6 +9,7 @@ export interface BulkUploadResponseDto {
   errors: string[];
   jobId?: string;
   totalFilasProcesadas?: number;
+  claseId?: number;
 }
 
 export interface ImportJobResultDto {
@@ -46,34 +47,37 @@ export class EstudiantesService {
       createdUsernames: res?.CreatedUsernames ?? res?.createdUsernames ?? [],
       errors: res?.Errors ?? res?.errors ?? [],
       jobId: res?.JobId ?? res?.jobId,
-      totalFilasProcesadas: res?.TotalFilasProcesadas ?? res?.totalFilasProcesadas
+      totalFilasProcesadas: res?.TotalFilasProcesadas ?? res?.totalFilasProcesadas,
+      claseId: res?.ClaseId ?? res?.claseId
     };
   }
 
   /**
-   * POST /api/estudiantes/bulk-upload
+   * POST /api/estudiantes/bulk-upload?claseId=...
    * Roles: Admin, Decano, Coord, Docente
    * Recibe multipart/form-data (.xlsx o .csv) con columnas: nombres, apellidos, cedula, correo.
    * Retorna: { CreatedCount, CreatedUsernames, Errors }
    */
-  bulkUpload(archivo: File): Observable<BulkUploadResponseDto> {
+  bulkUpload(archivo: File, claseId?: number): Observable<BulkUploadResponseDto> {
     const formData = new FormData();
     formData.append('file', archivo, archivo.name);
+    const query = (claseId && Number(claseId) > 0) ? `?claseId=${claseId}` : '';
 
-    return this.http.post<any>(`${this.apiUrl}/bulk-upload`, formData).pipe(
+    return this.http.post<any>(`${this.apiUrl}/bulk-upload${query}`, formData).pipe(
       map((res: any) => this.mapBulkUploadResponse(res)),
       catchError((err) => throwError(() => err))
     );
   }
 
   /**
-   * Carga masiva con reporte de progreso de carga (0 a 100%)
+   * Carga masiva con reporte de progreso de carga (0 a 100%) y vinculación a claseId
    */
-  bulkUploadConProgreso(archivo: File): Observable<{ progreso: number; respuesta?: BulkUploadResponseDto }> {
+  bulkUploadConProgreso(archivo: File, claseId?: number): Observable<{ progreso: number; respuesta?: BulkUploadResponseDto }> {
     const formData = new FormData();
     formData.append('file', archivo, archivo.name);
+    const query = (claseId && Number(claseId) > 0) ? `?claseId=${claseId}` : '';
 
-    const req = new HttpRequest('POST', `${this.apiUrl}/bulk-upload`, formData, {
+    const req = new HttpRequest('POST', `${this.apiUrl}/bulk-upload${query}`, formData, {
       reportProgress: true
     });
 

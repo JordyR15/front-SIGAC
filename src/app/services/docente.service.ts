@@ -69,8 +69,11 @@ export interface EstudianteClaseDocenteDto {
   username: string;
   nombreCompleto: string;
   nombre: string;
+  apellido?: string;
   correo: string;
+  email?: string;
   cedula: string;
+  ci?: string;
   catedraId: number | null;
   promedioActual: number | null;
   alertaRendimiento: boolean | null;

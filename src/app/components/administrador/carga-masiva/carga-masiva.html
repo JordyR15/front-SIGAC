@@ -7,7 +7,7 @@
       </div>
       <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Carga Masiva de Estudiantes</h1>
       <p class="text-sm text-slate-500 mt-1">
-        Importación masiva de estudiantes mediante archivo Excel (.xlsx) o CSV (.csv) con creación automática de credenciales y roles institucionales.
+        Importación masiva de estudiantes mediante archivo Excel (.xlsx) o CSV (.csv) con creación automática de credenciales y matriculación directa en la clase seleccionada.
       </p>
     </div>
 
@@ -22,6 +22,43 @@
       <i class="fa-solid fa-spinner fa-spin text-accent" *ngIf="isDownloadingTemplate"></i>
       <span>Descargar Plantilla CSV</span>
     </button>
+  </div>
+
+  <!-- SELECTOR OBLIGATORIO DE CLASE / CURSO DESTINO -->
+  <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div>
+        <label class="block text-sm font-bold text-slate-800">
+          Clase / Curso Destino <span class="text-red-500">*</span>
+        </label>
+        <p class="text-xs text-slate-500">
+          Selecciona el aula o paralelo donde los estudiantes del archivo quedarán matriculados oficialmente.
+        </p>
+      </div>
+
+      <div *ngIf="cargandoClases" class="text-xs text-slate-400 flex items-center gap-1.5">
+        <i class="fa-solid fa-spinner fa-spin text-accent"></i> Cargando clases...
+      </div>
+    </div>
+
+    <div class="relative">
+      <select
+        [(ngModel)]="claseSeleccionadaId"
+        name="claseSeleccionadaId"
+        required
+        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent cursor-pointer transition-all"
+      >
+        <option value="" disabled selected>-- Selecciona obligatoriamente la clase o curso destino --</option>
+        <option *ngFor="let c of clases" [value]="c.id">
+          {{ c.nombre }} &bull; {{ c.materiaNombre || 'Materia Oficial' }} ({{ c.semestre || '2026-2' }})
+        </option>
+      </select>
+    </div>
+
+    <div *ngIf="claseSeleccionadaObj" class="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-center gap-2">
+      <i class="fa-solid fa-chalkboard-user text-indigo-600 text-sm"></i>
+      <span><strong>Clase activa para importación:</strong> {{ claseSeleccionadaObj.nombre }} &mdash; Docente: {{ claseSeleccionadaObj.docenteNombre || 'Docente Responsable' }}</span>
+    </div>
   </div>
 
   <!-- REQUISITOS DE LA PLANTILLA -->
@@ -97,7 +134,7 @@
     <!-- BARRA DE PROGRESO DE CARGA -->
     <div *ngIf="isUploading" class="mt-6 space-y-2">
       <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
-        <span>Procesando registros en backend .NET...</span>
+        <span>Procesando registros y matriculando en la clase seleccionada...</span>
         <span>{{ progreso }}%</span>
       </div>
       <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
@@ -121,7 +158,7 @@
       <button
         type="button"
         (click)="subirArchivo()"
-        [disabled]="!archivoSeleccionado || isUploading"
+        [disabled]="!archivoSeleccionado || !claseSeleccionadaId || isUploading"
         class="px-6 py-3 bg-accent hover:bg-accent-dim disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs shadow-md shadow-accent/20 transition-all flex items-center gap-2 ml-auto"
       >
         <i class="fa-solid fa-upload" *ngIf="!isUploading"></i>
@@ -133,6 +170,31 @@
 
   <!-- RESULTADOS DE LA IMPORTACIÓN -->
   <div *ngIf="resultado" class="space-y-6">
+
+    <!-- RESUMEN DE ÉXITO CON BOTÓN IR A LA CLASE -->
+    <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-start gap-3">
+        <div class="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shrink-0">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div>
+          <h2 class="text-base font-bold text-emerald-950">¡Carga Masiva y Matriculación Completadas!</h2>
+          <p class="text-xs text-emerald-800 mt-1">
+            Se registraron <strong class="font-black">{{ resultado.createdCount }}</strong> estudiantes en la clase
+            <strong>{{ claseSeleccionadaObj?.nombre || ('ID: ' + claseSeleccionadaId) }}</strong>.
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        (click)="irAClase()"
+        class="px-5 py-3 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black rounded-xl shadow-md shadow-emerald-700/20 transition-all flex items-center gap-2 shrink-0 justify-center"
+      >
+        <i class="fa-solid fa-users-viewfinder"></i>
+        <span>Ir a la Clase</span>
+      </button>
+    </div>
 
     <!-- MÉTRICAS DE RESULTADO -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -151,7 +213,7 @@
           <i class="fa-solid fa-user-plus"></i>
         </div>
         <div>
-          <span class="text-xs text-slate-500 font-medium">Estudiantes Creados</span>
+          <span class="text-xs text-slate-500 font-medium">Estudiantes Creados / Matriculados</span>
           <p class="text-2xl font-black text-emerald-600">{{ resultado.createdCount }}</p>
         </div>
       </div>
@@ -171,9 +233,9 @@
     <div *ngIf="resultado.createdUsernames.length > 0" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-3">
       <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
         <i class="fa-solid fa-circle-check text-emerald-600"></i>
-        Cuentas Creadas Exitosamente ({{ resultado.createdUsernames.length }})
+        Cuentas Creadas y Matriculadas ({{ resultado.createdUsernames.length }})
       </h3>
-      <p class="text-xs text-slate-500">Se han habilitado las credenciales y perfiles académicos para los siguientes usuarios:</p>
+      <p class="text-xs text-slate-500">Se han habilitado credenciales y perfiles académicos para los siguientes usuarios:</p>
 
       <div class="flex flex-wrap gap-2 pt-2">
         <span
