@@ -4,13 +4,84 @@ import { BehaviorSubject, Observable, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { getApiBase } from '../api';
 
+export interface PreguntaCuestionarioDto {
+  id: number;
+  pregunta: string;
+  tipo: string;
+}
+
 export interface EvaluacionDto {
   id?: number;
   nombre: string;
   catedraId: number;
   esDiagnostica: boolean;
-  adaptadaConIA: boolean;
-  descripcionIA: string;
+  fechaInicio?: string | null;
+  fechaFin?: string | null;
+  tipoEvaluacion: 'Archivo' | 'Cuestionario';
+  instrucciones: string;
+  archivoDocenteUrl?: string | null;
+  preguntasCuestionario?: string | null;
+}
+
+export interface ResultadoDiagnosticoEntradaDto {
+  estudianteId: number;
+  calificacion: number | null;
+  observacion: string;
+}
+
+export interface RegistrarResultadosDiagnosticosDto {
+  resultados: ResultadoDiagnosticoEntradaDto[];
+}
+
+export interface ResultadoEvaluacionDiagnosticaDto {
+  id: number;
+  evaluacionId: number;
+  estudianteId: number;
+  nombreEstudiante: string;
+  calificacion: number | null;
+  observacion: string;
+  archivoEntregaUrl: string | null;
+  fechaEntrega: string | null;
+  estado: string;
+  respuestasCuestionario: string | null;
+  fechaRegistro: string;
+}
+
+export interface ResumenEvaluacionDiagnosticaDto {
+  estudiantesEvaluados: number;
+  promedioDiagnostico: number;
+  calificacionMinima: number;
+  calificacionMaxima: number;
+  afectaPromedioAcademico: boolean;
+}
+
+export interface GuardarResultadosDiagnosticosResponse {
+  message: string;
+  evaluacionId: number;
+  estudiantesEvaluados: number;
+  promedioDiagnostico: number;
+  calificacionMinima: number;
+  calificacionMaxima: number;
+  afectaPromedioAcademico: boolean;
+}
+
+export interface DetalleEvaluacionDiagnosticaResponse {
+  evaluacion: {
+    id: number;
+    nombre: string;
+    catedraId: number;
+    esDiagnostica: boolean;
+    fechaInicio: string | null;
+    fechaFin: string | null;
+    tipoEvaluacion: 'Archivo' | 'Cuestionario';
+    instrucciones: string;
+    archivoDocenteUrl: string | null;
+    preguntasCuestionario: string | null;
+  };
+
+  resultados: ResultadoEvaluacionDiagnosticaDto[];
+
+  resumen: ResumenEvaluacionDiagnosticaDto;
 }
 
 export interface CronogramaActividadDto {
@@ -84,6 +155,7 @@ export interface ClaseDocenteDto {
   claseId: number;
   nombre: string;
   materiaId: number;
+  catedraId?: number | null;
   materia: string;
   nombreMateria: string;
   codigoMateria: string;
@@ -225,7 +297,6 @@ export class DocenteService {
 
   /* =========================================================
      MATRÍCULA DE ESTUDIANTES
-     Todo se guarda mediante backend.
      ========================================================= */
 
   matricularEstudianteClase(claseId: number, dto: MatricularEstudianteDto): Observable<any> {
@@ -237,26 +308,44 @@ export class DocenteService {
   }
 
   /* =========================================================
-     EVALUACIÓN DIAGNÓSTICA
-     Código existente conservado.
+     EVALUACIÓN DIAGNÓSTICA - RF-004
      ========================================================= */
 
   registrarEvaluacionDiagnostica(catedraId: number, dto: EvaluacionDto): Observable<EvaluacionDto> {
-    return this.http
-      .post<EvaluacionDto>(`${this.apiUrl}/catedras/${catedraId}/evaluacion-diagnostica`, dto)
-      .pipe(
-        catchError(() =>
-          of({
-            id: Math.floor((Date.now() / 1000) % 2000000000) + 1,
-            ...dto,
-          }),
-        ),
-      );
+    return this.http.post<EvaluacionDto>(
+      `${this.apiUrl}/catedras/${catedraId}/evaluacion-diagnostica`,
+      dto,
+    );
+  }
+
+  obtenerEvaluacionesDiagnosticas(catedraId: number): Observable<EvaluacionDto[]> {
+    return this.http.get<EvaluacionDto[]>(
+      `${this.apiUrl}/catedras/${catedraId}/evaluaciones-diagnosticas`,
+    );
+  }
+
+  guardarResultadosEvaluacionDiagnostica(
+    catedraId: number,
+    evaluacionId: number,
+    dto: RegistrarResultadosDiagnosticosDto,
+  ): Observable<GuardarResultadosDiagnosticosResponse> {
+    return this.http.post<GuardarResultadosDiagnosticosResponse>(
+      `${this.apiUrl}/catedras/${catedraId}/evaluaciones-diagnosticas/${evaluacionId}/resultados`,
+      dto,
+    );
+  }
+
+  obtenerResultadosEvaluacionDiagnostica(
+    catedraId: number,
+    evaluacionId: number,
+  ): Observable<DetalleEvaluacionDiagnosticaResponse> {
+    return this.http.get<DetalleEvaluacionDiagnosticaResponse>(
+      `${this.apiUrl}/catedras/${catedraId}/evaluaciones-diagnosticas/${evaluacionId}/resultados`,
+    );
   }
 
   /* =========================================================
      CRONOGRAMA
-     Código existente conservado.
      ========================================================= */
 
   getCronogramaByCatedra(catedraId: number): Observable<CronogramaActividadDto[]> {
@@ -289,7 +378,6 @@ export class DocenteService {
 
   /* =========================================================
      AYUDANTÍAS
-     Código existente conservado.
      ========================================================= */
 
   planificarActividadAyudantia(
@@ -299,6 +387,7 @@ export class DocenteService {
     const itemGuardado: ActividadAyudantiaDto = {
       ...dto,
       id: dto.id || Math.floor((Date.now() / 1000) % 2000000000) + 1,
+
       ayudantiaId: Number(ayudantiaId),
     };
 
@@ -311,6 +400,7 @@ export class DocenteService {
     currentMap[ayudantiaId] = [itemGuardado, ...listaActual];
 
     this.planificacionesSubject.next(currentMap);
+
     this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
 
     return this.http
@@ -323,6 +413,7 @@ export class DocenteService {
             this.saveStorage(this.STORAGE_PLANIFICACION, this.planificacionesSubject.value);
           }
         }),
+
         catchError(() => of(itemGuardado)),
       );
   }
@@ -406,16 +497,24 @@ export class DocenteService {
       .pipe(
         map((backendRes) => ({
           ayudantiaId,
+
           nombreAyudante: backendRes?.nombreAyudante || 'Ayudante de Cátedra',
+
           nombreCatedra: backendRes?.nombreCatedra,
+
           planificacion: backendRes?.planificacion || planLocal,
+
           bitacoras: backendRes?.bitacoras || [],
         })),
+
         catchError(() =>
           of({
             ayudantiaId,
+
             nombreAyudante: 'Ayudante de Cátedra',
+
             planificacion: planLocal,
+
             bitacoras: [],
           }),
         ),
@@ -424,7 +523,6 @@ export class DocenteService {
 
   /* =========================================================
      HORARIOS
-     Código existente conservado.
      ========================================================= */
 
   getHorariosOcupadosAlumnos(claseId?: number): Observable<HorarioOcupadoAlumnoDto[]> {
@@ -476,8 +574,6 @@ export class DocenteService {
 
   /* =========================================================
      MÉTODOS INTERNOS LEGACY
-     Se mantienen únicamente por otros módulos.
-     Gestión de Estudiantes NO los utiliza.
      ========================================================= */
 
   private loadStorage<T>(key: string, fallback: T): T {
