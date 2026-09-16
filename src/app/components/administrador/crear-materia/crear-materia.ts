@@ -136,17 +136,13 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
 
     this.materiaService.crearMateria(payload).subscribe({
       next: () => {
-        this.isLoading = false;
-        this.successMessage = `¡Materia "${payload.nombre}" creada y registrada exitosamente!`;
-
         Swal.fire({
           icon: 'success',
-          title: 'Materia creada',
-          text: `La materia "${payload.nombre}" ha sido registrada exitosamente.`,
+          title: 'Materia registrada',
+          text: `La materia "${payload.nombre}" fue creada y asignada a la clase exitosamente.`,
           timer: 1500,
           showConfirmButton: false
         });
-
         setTimeout(() => {
           this.router.navigate(['/admin/materias']);
         }, 1200);
