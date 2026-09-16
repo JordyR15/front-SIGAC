@@ -1,853 +1,919 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { ApplicationRef, ChangeDetectorRef, Component, OnInit } from '@angular/core';
+
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterModule } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
-import { Subscription, of, catchError } from 'rxjs';
-import { getApiBase } from '../../../api';
-import { MateriaDto, MateriaService, EstudianteMateria } from '../../../services/materia.service';
-import { DirectorioService, EstudianteDirectorioDto } from '../../../services/directorio.service';
+import { ActivatedRoute } from '@angular/router';
+import { catchError, forkJoin, map, of, take, timeout } from 'rxjs';
 
-export interface ComunicadoAula {
-  id: number;
-  fecha: string;
-  asunto: string;
-  mensaje: string;
-  destinatarios: string;
-  prioridad: 'normal' | 'urgente';
-}
+import {
+  CatedraResumenDto,
+  ClaseDocenteDto,
+  DocenteService,
+  EstudianteClaseDocenteDto,
+  ExpedienteDto,
+  IndicadorCualitativoDto,
+  MatricularEstudianteDto,
+} from '../../../services/docente.service';
 
-export interface CredencialesNotificacion {
-  mostrar: boolean;
-  mensaje: string;
-  username: string;
-  tempPassword: string;
-  nombre?: string;
+interface EstudianteMasivo {
+  nombre: string;
+  apellido: string;
+  correo: string;
+  cedula?: string;
 }
 
 @Component({
   selector: 'app-gestion-estudiantes',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
-  templateUrl: './gestion-estudiantes.html'
+  imports: [CommonModule, FormsModule],
+  templateUrl: './gestion-estudiantes.html',
 })
-export class GestionEstudiantesComponent implements OnInit, OnDestroy {
-  rol = localStorage.getItem('rol') || 'Docente';
-  docenteIdLogueado = 1;
+export class GestionEstudiantesComponent implements OnInit {
+  clases: ClaseDocenteDto[] = [];
+  claseSeleccionadaId = 0;
+  claseSeleccionada: ClaseDocenteDto | null = null;
+  estudiantes: EstudianteClaseDocenteDto[] = [];
 
-  materias: MateriaDto[] = [];
-  materiaSeleccionadaId: number = 0;
-  materiaSeleccionada: MateriaDto | null = null;
-  estudiantes: EstudianteMateria[] = [];
+  busqueda = '';
 
-  private sub?: Subscription;
-  private subDirectorio?: Subscription;
+  filtroEstado: 'todos' | 'riesgo' | 'sin-alerta' = 'todos';
 
-  // Pestaña principal activa
-  tabActiva: 'nomina' | 'matriculacion' | 'comunicados' = 'nomina';
+  orden: 'nombre-asc' | 'nombre-desc' | 'nota-desc' | 'nota-asc' = 'nombre-asc';
 
-  // Filtros y búsqueda
-  busqueda: string = '';
-  filtroEstado: 'todos' | 'Destacado' | 'Regular' | 'En Riesgo' = 'todos';
-  orden: 'nombre-asc' | 'nombre-desc' | 'nota-desc' | 'nota-asc' | 'asistencia-desc' | 'asistencia-asc' = 'nombre-asc';
-  vistaModo: 'tabla' | 'tarjetas' = 'tabla';
+  tabActiva: 'nomina' | 'matriculacion' = 'nomina';
 
-  // Modales
-  modalDetalleEstudiante: boolean = false;
-  estudianteDetalle: EstudianteMateria | null = null;
-  nuevaObservacionTexto: string = '';
+  subTabMatricula: 'individual' | 'masiva' = 'individual';
 
-  modalAlertaEstudiante: boolean = false;
-  estudianteAlerta: EstudianteMateria | null = null;
-  mensajeAlerta: string = '';
-
-  // Matriculación
-  subTabMatricula: 'individual' | 'masiva' | 'directorio' = 'individual';
-  nuevoEstudiante: Partial<EstudianteMateria> = {
+  nuevoEstudiante: MatricularEstudianteDto = {
     nombre: '',
     apellido: '',
     correo: '',
     cedula: '',
-    matricula: '',
-    carrera: 'Ingeniería de Software',
-    telefono: '',
-    nota: 4.5,
-    asistencia: 100,
-    estado: 'Regular'
   };
 
-  // Notificación de credenciales temporales generadas
-  credencialesNotificacion: CredencialesNotificacion = {
-    mostrar: false,
-    mensaje: '',
-    username: '',
-    tempPassword: ''
-  };
-  copiado: boolean = false;
+  textoCargaMasiva = '';
+  estudiantesParseados: EstudianteMasivo[] = [];
 
-  // Carga masiva por texto
-  textoCargaMasiva: string = '';
-  estudiantesParseados: Partial<EstudianteMateria>[] = [];
+  modalExpediente = false;
 
-  // Directorio General Institucional respaldado por DirectorioService
-  directorio: EstudianteDirectorioDto[] = [];
-  directorioGeneral: EstudianteDirectorioDto[] = [];
+  estudianteDetalle: EstudianteClaseDocenteDto | null = null;
 
-  // Herramienta: Comunicados de Aula
-  comunicadoDestinatarios: 'todos' | 'en-riesgo' | 'destacados' = 'todos';
-  comunicadoAsunto: string = '';
-  comunicadoMensaje: string = '';
-  comunicadoPrioridad: 'normal' | 'urgente' = 'normal';
-  historialComunicados: ComunicadoAula[] = [];
+  expedienteDetalle: ExpedienteDto | null = null;
 
-  // Notificaciones visuales
-  isLoading: boolean = false;
-  successMessage: string = '';
-  errorMessage: string = '';
+  catedrasEstudiante: CatedraResumenDto[] = [];
+
+  catedraIndicadorId = 0;
+
+  indicadorSeleccionado = '';
+  observacionIndicador = '';
+
+  isLoading = false;
+  cargandoExpediente = false;
+  guardandoIndicador = false;
+
+  successMessage = '';
+  errorMessage = '';
+  errorExpediente = '';
 
   constructor(
-    private materiaService: MateriaService,
-    private directorioService: DirectorioService,
+    private docenteService: DocenteService,
     private route: ActivatedRoute,
-    private http: HttpClient
+    private cdr: ChangeDetectorRef,
+    private appRef: ApplicationRef,
   ) {}
 
-  ngOnInit() {
-    const rawUserId = localStorage.getItem('userId');
-    if (rawUserId) {
-      this.docenteIdLogueado = parseInt(rawUserId, 10);
-    }
-
-    this.sub = this.materiaService.materias$.subscribe(list => {
-      this.materias = list;
-      if (list.length > 0) {
-        if (!this.materiaSeleccionadaId) {
-          this.seleccionarMateria(list[0].id);
-        } else {
-          this.seleccionarMateria(this.materiaSeleccionadaId);
-        }
-      }
-    });
-
-    this.subDirectorio = this.directorioService.directorio$.subscribe(data => {
-      this.directorioGeneral = data;
-      this.directorio = data;
-    });
-
-    this.route.params.subscribe(params => {
-      if (params['id']) {
-        const idParam = +params['id'];
-        if (idParam) {
-          this.seleccionarMateria(idParam);
-        }
-      }
-    });
-
-    this.route.queryParams.subscribe(q => {
-      if (q['claseId']) {
-        const cId = Number(q['claseId']);
-        const found = this.materias.find(m => Number(m.claseId) === cId || Number(m.id) === cId);
-        if (found) {
-          this.seleccionarMateria(found.id);
-        }
-      } else if (q['materiaId']) {
-        this.seleccionarMateria(Number(q['materiaId']));
-      }
-    });
+  ngOnInit(): void {
+    this.cargarClases();
   }
 
-  ngOnDestroy() {
-    this.sub?.unsubscribe();
-    this.subDirectorio?.unsubscribe();
+  // =========================================================
+  // REFRESCAR VISTA
+  // =========================================================
+
+  private refrescarVista(): void {
+    this.cdr.markForCheck();
+
+    setTimeout(() => {
+      this.cdr.markForCheck();
+      this.appRef.tick();
+    }, 0);
   }
 
-  seleccionarMateria(materiaId: number) {
-    this.materiaSeleccionadaId = Number(materiaId);
-    const mat = this.materias.find(m => Number(m.id) === this.materiaSeleccionadaId || Number(m.claseId) === this.materiaSeleccionadaId);
-    if (mat) {
-      this.materiaSeleccionada = mat;
-      this.estudiantes = mat.estudiantes ? [...mat.estudiantes] : [];
-    } else {
-      this.materiaSeleccionada = null;
+  // =========================================================
+  // CLASES
+  // =========================================================
+
+  cargarClases(mantenerClaseId?: number): void {
+    this.isLoading = true;
+    this.errorMessage = '';
+
+    this.refrescarVista();
+
+    this.docenteService
+      .getClasesDocente()
+      .pipe(take(1), timeout(15000))
+      .subscribe({
+        next: (data) => {
+          console.log('CLASES RECIBIDAS:', data);
+
+          this.clases = Array.isArray(data) ? data : [];
+
+          this.isLoading = false;
+
+          if (this.clases.length === 0) {
+            this.claseSeleccionadaId = 0;
+            this.claseSeleccionada = null;
+            this.estudiantes = [];
+
+            this.refrescarVista();
+
+            return;
+          }
+
+          const claseQuery = Number(this.route.snapshot.queryParamMap.get('claseId') || 0);
+
+          const primerId = Number(this.clases[0].claseId || this.clases[0].id);
+
+          const idDeseado = Number(mantenerClaseId || claseQuery || primerId);
+
+          const existe = this.clases.some(
+            (clase) => Number(clase.claseId || clase.id) === idDeseado,
+          );
+
+          this.seleccionarClase(existe ? idDeseado : primerId);
+
+          this.refrescarVista();
+        },
+
+        error: (err) => {
+          console.error('ERROR CARGANDO CLASES:', err);
+
+          this.isLoading = false;
+          this.clases = [];
+          this.claseSeleccionadaId = 0;
+          this.claseSeleccionada = null;
+          this.estudiantes = [];
+
+          if (err?.name === 'TimeoutError') {
+            this.errorMessage = 'El servidor tardó demasiado en responder.';
+          } else {
+            this.errorMessage = this.obtenerMensajeError(
+              err,
+              'No se pudieron cargar las clases asignadas al docente.',
+            );
+          }
+
+          this.refrescarVista();
+        },
+      });
+  }
+
+  seleccionarClase(claseId: number): void {
+    this.claseSeleccionadaId = Number(claseId);
+
+    const clase = this.clases.find(
+      (item) => Number(item.claseId || item.id) === this.claseSeleccionadaId,
+    );
+
+    if (!clase) {
+      this.claseSeleccionada = null;
       this.estudiantes = [];
-    }
-    this.cargarEstudiantes();
-  }
 
-  get claseActivaId(): number {
-    return this.materiaSeleccionada?.claseId || this.materiaSeleccionada?.id || this.materiaSeleccionadaId || 0;
-  }
+      this.refrescarVista();
 
-  cargarEstudiantes(claseIdParam?: number) {
-    const cid = claseIdParam || this.claseActivaId;
-    if (!cid) {
-      this.estudiantes = [];
       return;
     }
 
-    const urlClase = `${getApiBase()}/api/Clase/${cid}/estudiantes`;
-    const urlDocente = `${getApiBase()}/api/Docente/clases/${cid}/estudiantes`;
+    this.claseSeleccionada = clase;
 
-    this.http.get<any>(urlClase).pipe(
-      catchError(() => this.http.get<any>(urlDocente)),
-      catchError(() => {
-        const mat = this.materias.find(m => Number(m.id) === Number(cid) || Number(m.claseId) === Number(cid));
-        return of(mat?.estudiantes || []);
-      })
-    ).subscribe({
-      next: (data: any) => {
-        let rawList: any[] = [];
-        if (Array.isArray(data)) {
-          rawList = data;
-        } else if (data && Array.isArray(data.estudiantes)) {
-          rawList = data.estudiantes;
-        } else if (data && Array.isArray(data.items)) {
-          rawList = data.items;
-        }
+    this.estudiantes = (clase.estudiantes || []).map((est) => ({
+      ...est,
 
-        const idMap = new Map<number, EstudianteMateria>();
-        rawList.forEach((item: any, idx: number) => {
-          const id = Number(item.id || item.estudianteId || idx + 1);
-          const nombreCompleto = item.nombre
-            ? (item.apellido ? `${item.nombre} ${item.apellido}`.trim() : item.nombre.trim())
-            : (item.username || `Estudiante ${id}`);
+      id: Number(est.id),
 
-          if (!idMap.has(id)) {
-            idMap.set(id, {
-              id: id,
-              estudianteId: id,
-              nombre: nombreCompleto,
-              nombreCompleto: nombreCompleto,
-              apellido: item.apellido || '',
-              correo: item.correo || item.email || '',
-              username: item.username || (item.correo ? item.correo.split('@')[0] : `user.${id}`),
-              cedula: item.cedula || item.ci || '',
-              ci: item.ci || item.cedula || '',
-              matricula: item.matricula || '',
-              carrera: item.carrera || 'Ingeniería de Software',
-              telefono: item.telefono || '',
-              nota: item.nota !== undefined ? Number(item.nota) : 4.5,
-              asistencia: item.asistencia !== undefined ? Number(item.asistencia) : 100,
-              estado: item.estado || 'Regular',
-              tareasEntregadas: item.tareasEntregadas ?? 0,
-              totalTareas: item.totalTareas ?? 0,
-              observaciones: Array.isArray(item.observaciones) ? item.observaciones : []
-            });
-          }
-        });
+      estudianteId: Number(est.estudianteId || est.id),
 
-        this.estudiantes = Array.from(idMap.values());
-        if (this.materiaSeleccionada) {
-          this.materiaSeleccionada.estudiantes = this.estudiantes;
-        }
-      },
-      error: () => {
-        this.estudiantes = [];
-      }
-    });
+      catedraId:
+        est.catedraId === null || est.catedraId === undefined ? null : Number(est.catedraId),
+
+      promedioActual:
+        est.promedioActual === null || est.promedioActual === undefined
+          ? null
+          : Number(est.promedioActual),
+
+      alertaRendimiento:
+        est.alertaRendimiento === null || est.alertaRendimiento === undefined
+          ? null
+          : Boolean(est.alertaRendimiento),
+    }));
+
+    console.log('CLASE SELECCIONADA:', this.claseSeleccionada);
+
+    console.log('ESTUDIANTES:', this.estudiantes);
+
+    this.refrescarVista();
   }
 
-  // ==================== MÉTRICAS DEL AULA ====================
+  actualizar(): void {
+    this.cargarClases(this.claseSeleccionadaId);
+  }
+
+  // =========================================================
+  // MÉTRICAS
+  // =========================================================
+
   get totalEstudiantes(): number {
     return this.estudiantes.length;
   }
 
-  get promedioGeneral(): number {
-    if (this.estudiantes.length === 0) return 0;
-    const suma = this.estudiantes.reduce((acc, e) => acc + (e.nota ?? 0), 0);
-    return Math.round((suma / this.estudiantes.length) * 10) / 10;
-  }
+  get promedioGeneral(): number | null {
+    const notas = this.estudiantes
+      .map((est) => est.promedioActual)
+      .filter((nota): nota is number => nota !== null && nota !== undefined);
 
-  get asistenciaPromedio(): number {
-    if (this.estudiantes.length === 0) return 0;
-    const suma = this.estudiantes.reduce((acc, e) => acc + (e.asistencia ?? 0), 0);
-    return Math.round(suma / this.estudiantes.length);
+    if (notas.length === 0) {
+      return null;
+    }
+
+    const suma = notas.reduce((total, nota) => total + nota, 0);
+
+    return Math.round((suma / notas.length) * 100) / 100;
   }
 
   get enRiesgoCount(): number {
-    return this.estudiantes.filter(e => e.estado === 'En Riesgo' || (e.nota !== undefined && e.nota < 4.0) || (e.asistencia !== undefined && e.asistencia < 80)).length;
+    return this.estudiantes.filter((est) => est.alertaRendimiento === true).length;
   }
 
-  get destacadosCount(): number {
-    return this.estudiantes.filter(e => e.estado === 'Destacado' || (e.nota !== undefined && e.nota >= 4.7)).length;
-  }
+  // =========================================================
+  // FILTROS
+  // =========================================================
 
-  get tasaEntregasPromedio(): number {
-    if (this.estudiantes.length === 0) return 0;
-    const suma = this.estudiantes.reduce((acc, e) => {
-      const entregadas = e.tareasEntregadas ?? 5;
-      const total = e.totalTareas ?? 6;
-      return acc + (total > 0 ? (entregadas / total) * 100 : 100);
-    }, 0);
-    return Math.round(suma / this.estudiantes.length);
-  }
+  get estudiantesFiltrados(): EstudianteClaseDocenteDto[] {
+    let lista = [...this.estudiantes];
 
-  // ==================== LISTADO FILTRADO Y ORDENADO ====================
-  get estudiantesFiltrados(): EstudianteMateria[] {
-    let list = [...this.estudiantes];
+    const q = this.busqueda.trim().toLowerCase();
 
-    // Filtro por texto
-    if (this.busqueda.trim()) {
-      const q = this.busqueda.trim().toLowerCase();
-      list = list.filter(e =>
-        e.nombre.toLowerCase().includes(q) ||
-        (e.correo && e.correo.toLowerCase().includes(q)) ||
-        (e.cedula && e.cedula.includes(q)) ||
-        (e.matricula && e.matricula.toLowerCase().includes(q)) ||
-        (e.carrera && e.carrera.toLowerCase().includes(q))
-      );
+    if (q) {
+      lista = lista.filter((est) => {
+        const nombre = est.nombreCompleto || est.nombre || '';
+
+        const username = est.username || '';
+
+        const correo = est.correo || '';
+
+        const cedula = est.cedula || '';
+
+        return (
+          nombre.toLowerCase().includes(q) ||
+          username.toLowerCase().includes(q) ||
+          correo.toLowerCase().includes(q) ||
+          cedula.toLowerCase().includes(q)
+        );
+      });
     }
 
-    // Filtro por estado
-    if (this.filtroEstado !== 'todos') {
-      if (this.filtroEstado === 'En Riesgo') {
-        list = list.filter(e => e.estado === 'En Riesgo' || (e.nota !== undefined && e.nota < 4.0) || (e.asistencia !== undefined && e.asistencia < 80));
-      } else if (this.filtroEstado === 'Destacado') {
-        list = list.filter(e => e.estado === 'Destacado' || (e.nota !== undefined && e.nota >= 4.7));
-      } else {
-        list = list.filter(e => e.estado === 'Regular');
-      }
+    if (this.filtroEstado === 'riesgo') {
+      lista = lista.filter((est) => est.alertaRendimiento === true);
     }
 
-    // Ordenamiento
-    list.sort((a, b) => {
+    if (this.filtroEstado === 'sin-alerta') {
+      lista = lista.filter((est) => est.alertaRendimiento !== true);
+    }
+
+    lista.sort((a, b) => {
+      const nombreA = a.nombreCompleto || a.nombre || '';
+
+      const nombreB = b.nombreCompleto || b.nombre || '';
+
       switch (this.orden) {
-        case 'nombre-asc':
-          return a.nombre.localeCompare(b.nombre);
         case 'nombre-desc':
-          return b.nombre.localeCompare(a.nombre);
-        case 'nota-desc':
-          return (b.nota ?? 0) - (a.nota ?? 0);
-        case 'nota-asc':
-          return (a.nota ?? 0) - (b.nota ?? 0);
-        case 'asistencia-desc':
-          return (b.asistencia ?? 0) - (a.asistencia ?? 0);
-        case 'asistencia-asc':
-          return (a.asistencia ?? 0) - (b.asistencia ?? 0);
+          return nombreB.localeCompare(nombreA);
+
+        case 'nota-desc': {
+          const notaA = a.promedioActual ?? Number.NEGATIVE_INFINITY;
+
+          const notaB = b.promedioActual ?? Number.NEGATIVE_INFINITY;
+
+          return notaB - notaA;
+        }
+
+        case 'nota-asc': {
+          const notaA = a.promedioActual ?? Number.POSITIVE_INFINITY;
+
+          const notaB = b.promedioActual ?? Number.POSITIVE_INFINITY;
+
+          return notaA - notaB;
+        }
+
         default:
-          return 0;
+          return nombreA.localeCompare(nombreB);
       }
     });
 
-    return list;
+    return lista;
   }
 
-  // ==================== EXPEDIENTE / FICHA DEL ESTUDIANTE ====================
-  abrirFichaEstudiante(estudiante: EstudianteMateria) {
-    this.estudianteDetalle = { ...estudiante };
-    this.nuevaObservacionTexto = '';
-    this.modalDetalleEstudiante = true;
+  // =========================================================
+  // EXPEDIENTE RF-002
+  // =========================================================
+
+  abrirExpediente(estudiante: EstudianteClaseDocenteDto): void {
+    this.estudianteDetalle = estudiante;
+
+    this.expedienteDetalle = null;
+
+    this.catedrasEstudiante = [];
+
+    this.catedraIndicadorId = Number(estudiante.catedraId || 0);
+
+    this.indicadorSeleccionado = '';
+
+    this.observacionIndicador = '';
+
+    this.errorExpediente = '';
+
+    this.cargandoExpediente = true;
+
+    this.modalExpediente = true;
+
+    this.refrescarVista();
+
+    this.cargarExpediente();
+
+    this.cargarCatedrasDelEstudiante();
   }
 
-  cerrarFichaEstudiante() {
-    this.modalDetalleEstudiante = false;
+  cerrarExpediente(): void {
+    this.modalExpediente = false;
     this.estudianteDetalle = null;
+    this.expedienteDetalle = null;
+
+    this.catedrasEstudiante = [];
+    this.catedraIndicadorId = 0;
+
+    this.indicadorSeleccionado = '';
+    this.observacionIndicador = '';
+
+    this.errorExpediente = '';
+    this.cargandoExpediente = false;
+
+    this.refrescarVista();
   }
 
-  agregarObservacion() {
-    if (!this.nuevaObservacionTexto.trim() || !this.estudianteDetalle || !this.materiaSeleccionadaId) return;
+  cargarExpediente(): void {
+    if (!this.estudianteDetalle) {
+      return;
+    }
 
-    this.materiaService.agregarObservacionEstudiante(
-      this.materiaSeleccionadaId,
-      this.estudianteDetalle.id,
-      this.nuevaObservacionTexto
+    const estudianteId = Number(this.estudianteDetalle.estudianteId || this.estudianteDetalle.id);
+
+    if (!estudianteId) {
+      this.cargandoExpediente = false;
+
+      this.errorExpediente = 'No se pudo identificar al estudiante.';
+
+      this.refrescarVista();
+
+      return;
+    }
+
+    this.cargandoExpediente = true;
+    this.errorExpediente = '';
+
+    this.refrescarVista();
+
+    this.docenteService
+      .getExpedienteEstudiante(estudianteId)
+      .pipe(take(1), timeout(15000))
+      .subscribe({
+        next: (data) => {
+          console.log('EXPEDIENTE RECIBIDO:', data);
+
+          this.expedienteDetalle = data;
+
+          this.cargandoExpediente = false;
+
+          this.refrescarVista();
+        },
+
+        error: (err) => {
+          console.error('ERROR EXPEDIENTE:', err);
+
+          this.cargandoExpediente = false;
+
+          this.expedienteDetalle = null;
+
+          if (err?.name === 'TimeoutError') {
+            this.errorExpediente = 'El servidor tardó demasiado en cargar el expediente.';
+          } else {
+            this.errorExpediente = this.obtenerMensajeError(
+              err,
+              'No se pudo cargar el expediente del estudiante.',
+            );
+          }
+
+          this.refrescarVista();
+        },
+      });
+  }
+
+  // =========================================================
+  // CÁTEDRAS DEL ESTUDIANTE
+  // =========================================================
+
+  cargarCatedrasDelEstudiante(): void {
+    if (!this.estudianteDetalle) {
+      return;
+    }
+
+    const estudianteId = Number(this.estudianteDetalle.estudianteId || this.estudianteDetalle.id);
+
+    if (!estudianteId) {
+      return;
+    }
+
+    this.docenteService
+      .getCatedrasEstudiante(estudianteId)
+      .pipe(take(1), timeout(15000))
+      .subscribe({
+        next: (data) => {
+          this.catedrasEstudiante = Array.isArray(data) ? data : [];
+
+          const existeActual = this.catedrasEstudiante.some(
+            (catedra) => Number(catedra.id) === Number(this.catedraIndicadorId),
+          );
+
+          if (!existeActual) {
+            this.catedraIndicadorId =
+              this.catedrasEstudiante.length === 1 ? Number(this.catedrasEstudiante[0].id) : 0;
+          }
+
+          this.refrescarVista();
+        },
+
+        error: (err) => {
+          console.error('ERROR CÁTEDRAS ESTUDIANTE:', err);
+
+          this.catedrasEstudiante = [];
+
+          this.errorExpediente = this.obtenerMensajeError(
+            err,
+            'No se pudieron cargar las cátedras del estudiante.',
+          );
+
+          this.refrescarVista();
+        },
+      });
+  }
+
+  // =========================================================
+  // INDICADORES RF-003
+  // =========================================================
+
+  get indicadoresMostrados(): IndicadorCualitativoDto[] {
+    const indicadores = this.expedienteDetalle?.indicadores || [];
+
+    if (!this.catedraIndicadorId) {
+      return indicadores;
+    }
+
+    return indicadores.filter(
+      (indicador) => Number(indicador.catedraId) === Number(this.catedraIndicadorId),
     );
-
-    const fecha = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
-    if (!this.estudianteDetalle.observaciones) {
-      this.estudianteDetalle.observaciones = [];
-    }
-    this.estudianteDetalle.observaciones.unshift(`[${fecha}] ${this.nuevaObservacionTexto.trim()}`);
-    this.nuevaObservacionTexto = '';
-
-    this.mostrarExito('Observación pedagógica registrada con éxito en el expediente del alumno.');
   }
 
-  // ==================== ALERTA PEDAGÓGICA INDIVIDUAL ====================
-  abrirAlertaEstudiante(estudiante: EstudianteMateria, event?: Event) {
-    event?.stopPropagation();
-    this.estudianteAlerta = estudiante;
-    this.mensajeAlerta = `Estimado(a) ${estudiante.nombre}, te contactamos desde la cátedra ${this.materiaSeleccionada?.nombre} para coordinar un plan de tutoría y recuperación académica preventiva.`;
-    this.modalAlertaEstudiante = true;
-  }
-
-  cerrarAlertaEstudiante() {
-    this.modalAlertaEstudiante = false;
-    this.estudianteAlerta = null;
-    this.mensajeAlerta = '';
-  }
-
-  enviarAlertaPedagogica() {
-    if (!this.estudianteAlerta) return;
-    this.mostrarExito(`Alerta pedagógica enviada a ${this.estudianteAlerta.nombre} y notificada al ayudante de cátedra.`);
-    this.cerrarAlertaEstudiante();
-  }
-
-  // ==================== MATRICULACIÓN DE ESTUDIANTES ====================
-  registrarEstudianteIndividual() {
-    if (!this.nuevoEstudiante.nombre?.trim() || !this.nuevoEstudiante.correo?.trim()) {
-      this.errorMessage = 'Por favor ingresa nombre y correo institucional.';
-      return;
-    }
-    if (!this.materiaSeleccionadaId) {
-      this.errorMessage = 'Selecciona una materia primero.';
+  registrarIndicador(): void {
+    if (!this.estudianteDetalle) {
       return;
     }
 
-    const rawNombre = (this.nuevoEstudiante.nombre || '').trim();
-    const rawApellido = (this.nuevoEstudiante.apellido || '').trim();
-    const correo = (this.nuevoEstudiante.correo || '').trim();
+    if (!this.catedraIndicadorId) {
+      this.errorExpediente = 'Selecciona una cátedra.';
 
-    let nombre = rawNombre;
-    let apellido = rawApellido;
+      this.refrescarVista();
 
-    if (!apellido && rawNombre.includes(' ')) {
-      const parts = rawNombre.split(/\s+/);
-      nombre = parts[0];
-      apellido = parts.slice(1).join(' ');
-    } else if (!apellido) {
-      apellido = 'Estudiante';
+      return;
     }
 
-    const claseId = this.materiaSeleccionada?.claseId || this.materiaSeleccionadaId || 1;
+    if (!this.indicadorSeleccionado) {
+      this.errorExpediente = 'Selecciona el tipo de indicador.';
 
-    // Body requerido: { "nombre": "...", "apellido": "...", "correo": "11yeraidavid@gmail.com" }
-    const body: any = {
-      nombre,
-      apellido,
-      correo
+      this.refrescarVista();
+
+      return;
+    }
+
+    if (!this.observacionIndicador.trim()) {
+      this.errorExpediente = 'Escribe una observación.';
+
+      this.refrescarVista();
+
+      return;
+    }
+
+    const estudianteId = Number(this.estudianteDetalle.estudianteId || this.estudianteDetalle.id);
+
+    if (!estudianteId) {
+      this.errorExpediente = 'No se pudo identificar al estudiante.';
+
+      this.refrescarVista();
+
+      return;
+    }
+
+    this.guardandoIndicador = true;
+
+    this.errorExpediente = '';
+
+    this.refrescarVista();
+
+    this.docenteService
+      .crearIndicadorCualitativo(this.catedraIndicadorId, estudianteId, {
+        indicador: this.indicadorSeleccionado,
+
+        observacion: this.observacionIndicador.trim(),
+      })
+      .pipe(take(1), timeout(15000))
+      .subscribe({
+        next: () => {
+          this.guardandoIndicador = false;
+
+          this.indicadorSeleccionado = '';
+
+          this.observacionIndicador = '';
+
+          this.mostrarExito('Indicador cualitativo registrado correctamente.');
+
+          this.refrescarVista();
+
+          this.cargarExpediente();
+        },
+
+        error: (err) => {
+          console.error('ERROR REGISTRANDO INDICADOR:', err);
+
+          this.guardandoIndicador = false;
+
+          this.errorExpediente = this.obtenerMensajeError(
+            err,
+            'No se pudo registrar el indicador cualitativo.',
+          );
+
+          this.refrescarVista();
+        },
+      });
+  }
+
+  // =========================================================
+  // MATRÍCULA INDIVIDUAL
+  // =========================================================
+
+  matricularEstudianteIndividual(): void {
+    if (!this.claseSeleccionadaId) {
+      this.errorMessage = 'Selecciona una clase.';
+
+      this.refrescarVista();
+
+      return;
+    }
+
+    if (
+      !this.nuevoEstudiante.nombre.trim() ||
+      !this.nuevoEstudiante.apellido.trim() ||
+      !this.nuevoEstudiante.correo.trim()
+    ) {
+      this.errorMessage = 'Nombre, apellido y correo son obligatorios.';
+
+      this.refrescarVista();
+
+      return;
+    }
+
+    const body: MatricularEstudianteDto = {
+      nombre: this.nuevoEstudiante.nombre.trim(),
+
+      apellido: this.nuevoEstudiante.apellido.trim(),
+
+      correo: this.nuevoEstudiante.correo.trim(),
     };
+
     if (this.nuevoEstudiante.cedula?.trim()) {
       body.cedula = this.nuevoEstudiante.cedula.trim();
     }
-    if (this.nuevoEstudiante.matricula?.trim()) {
-      body.matricula = this.nuevoEstudiante.matricula.trim();
-    }
-
-    const yaInscritoLocal = this.estudiantes.some(e => (e.correo || '').toLowerCase() === correo.toLowerCase());
-    if (yaInscritoLocal) {
-      this.isLoading = false;
-      this.errorMessage = 'El estudiante ya está inscrito en esta clase';
-      alert('El estudiante ya está inscrito en esta clase');
-      return;
-    }
-
-    const verificarYaInscrito = (err: any): boolean => {
-      if (!err) return false;
-      const status = Number(err.status);
-      if (status === 409) return true;
-      const errorBody = typeof err.error === 'string' ? err.error : (err.error?.message || err.error?.title || JSON.stringify(err.error || ''));
-      const combined = ((err.message || '') + ' ' + errorBody).toLowerCase();
-      return status === 409 || combined.includes('inscrito') || combined.includes('matriculado') || combined.includes('ya existe') || combined.includes('already') || combined.includes('duplicado');
-    };
 
     this.isLoading = true;
-    const urlClase = `${getApiBase()}/api/Clase/${claseId}/estudiantes`;
-    const urlDocente = `${getApiBase()}/api/Docente/clases/${claseId}/estudiantes`;
+    this.errorMessage = '';
 
-    const procesarAltaExitosa = (res: any) => {
-      this.isLoading = false;
-      // Asignar ID numérico real asignado por el backend o fallback
-      const backendId = res?.id || res?.estudianteId || (typeof res === 'number' ? res : null);
-      const idAsignado = backendId ? Number(backendId) : Math.floor(Math.random() * 10000) + 200;
+    this.refrescarVista();
 
-      const username = correo.includes('@') ? correo.split('@')[0] : `${nombre}.${apellido}`.toLowerCase().replace(/\s+/g, '.');
-      const tempPassword = `Uteq${new Date().getFullYear()}*`;
-
-      const estudianteFinal: EstudianteMateria = {
-        id: idAsignado,
-        estudianteId: idAsignado,
-        nombre: `${nombre} ${apellido}`.trim(),
-        apellido: apellido,
-        correo: correo,
-        username: username,
-        cedula: this.nuevoEstudiante.cedula || `17${Math.floor(10000000 + Math.random() * 90000000)}`,
-        matricula: this.nuevoEstudiante.matricula || `2026-IS-${String(idAsignado).slice(-4)}`,
-        carrera: this.nuevoEstudiante.carrera || 'Ingeniería de Software',
-        telefono: this.nuevoEstudiante.telefono || '',
-        nota: 4.5,
-        asistencia: 100,
-        estado: 'Regular'
-      };
-
-      // 1. Sincronizar en el Directorio General localmente (sin emitir GET /api/estudiantes)
-      this.directorioService.agregarEstudiante({
-        id: idAsignado,
-        nombre: estudianteFinal.nombre,
-        correo: estudianteFinal.correo,
-        username: estudianteFinal.username,
-        cedula: estudianteFinal.cedula,
-        matricula: estudianteFinal.matricula,
-        carrera: estudianteFinal.carrera,
-        telefono: estudianteFinal.telefono,
-        estado: 'Regular'
-      });
-
-      // 2. Notificación de Credenciales en Pantalla
-      const notifMsg = `Estudiante registrado. Usuario: ${username} | Clave Temporal: ${tempPassword}`;
-      this.credencialesNotificacion = {
-        mostrar: true,
-        mensaje: notifMsg,
-        username,
-        tempPassword,
-        nombre: estudianteFinal.nombre
-      };
-
-      this.mostrarExito(`Estudiante dado de alta y matriculado exitosamente. Notificación con credenciales enviada a ${correo}.`);
-
-      // 3. Resetear formulario y volver a pestaña de nómina
-      this.nuevoEstudiante = {
-        nombre: '',
-        apellido: '',
-        correo: '',
-        cedula: '',
-        matricula: '',
-        carrera: this.materiaSeleccionada?.claseNombre?.includes('Física') ? 'Ciencias Físicas' : 'Ingeniería de Software',
-        telefono: '',
-        nota: 4.5,
-        asistencia: 100,
-        estado: 'Regular'
-      };
-      this.tabActiva = 'nomina';
-
-      // 4. Refrescar lista fidedigna del backend sin duplicar elementos manualmente
-      this.cargarEstudiantes();
-    };
-
-    // Petición POST a /api/Clase/{claseId}/estudiantes con fallback a /api/Docente/clases/{claseId}/estudiantes
-    this.http.post<any>(urlClase, body).subscribe({
-      next: (res) => {
-        procesarAltaExitosa(res);
-      },
-      error: (err) => {
-        if (verificarYaInscrito(err)) {
+    this.docenteService
+      .matricularEstudianteClase(this.claseSeleccionadaId, body)
+      .pipe(take(1), timeout(15000))
+      .subscribe({
+        next: () => {
           this.isLoading = false;
-          this.errorMessage = 'El estudiante ya está inscrito en esta clase';
-          alert('El estudiante ya está inscrito en esta clase');
-          return;
-        }
 
-        if (err?.status === 404 || err?.status === 405) {
-          console.warn(`Endpoint ${urlClase} respondió ${err.status}, intentando con ${urlDocente}...`);
-          this.http.post<any>(urlDocente, body).subscribe({
-            next: (res) => {
-              procesarAltaExitosa(res);
-            },
-            error: (err2) => {
-              if (verificarYaInscrito(err2)) {
-                this.isLoading = false;
-                this.errorMessage = 'El estudiante ya está inscrito en esta clase';
-                alert('El estudiante ya está inscrito en esta clase');
-                return;
-              }
-              console.warn('Backend con error controlado o en espera, registrando localmente:', err2);
-              procesarAltaExitosa(err2?.error || null);
-            }
-          });
-        } else {
-          console.warn('Petición POST procesada:', err);
-          procesarAltaExitosa(err?.error || null);
-        }
-      }
-    });
+          this.nuevoEstudiante = {
+            nombre: '',
+            apellido: '',
+            correo: '',
+            cedula: '',
+          };
+
+          this.tabActiva = 'nomina';
+
+          this.mostrarExito('Estudiante matriculado correctamente.');
+
+          this.refrescarVista();
+
+          this.cargarClases(this.claseSeleccionadaId);
+        },
+
+        error: (err) => {
+          console.error('ERROR MATRICULANDO:', err);
+
+          this.isLoading = false;
+
+          this.errorMessage = this.obtenerMensajeError(err, 'No se pudo matricular al estudiante.');
+
+          this.refrescarVista();
+        },
+      });
   }
 
-  cargarDirectorio() {
-    this.isLoading = true;
-    this.directorioService.cargarDirectorio().subscribe({
-      next: (data) => {
-        this.directorioGeneral = data;
-        this.directorio = data;
-        this.isLoading = false;
-        this.mostrarExito('Directorio institucional sincronizado correctamente.');
-      },
-      error: () => {
-        this.isLoading = false;
-      }
-    });
-  }
+  // =========================================================
+  // CARGA MASIVA
+  // =========================================================
 
-  copiarCredenciales() {
-    const texto = `Estudiante registrado. Usuario: ${this.credencialesNotificacion.username} | Clave Temporal: ${this.credencialesNotificacion.tempPassword}`;
-    if (navigator?.clipboard) {
-      navigator.clipboard.writeText(texto);
-      this.copiado = true;
-      setTimeout(() => this.copiado = false, 3000);
-    }
-  }
-
-  cerrarCredencialesNotificacion() {
-    this.credencialesNotificacion.mostrar = false;
-  }
-
-  /**
-   * Elimina un estudiante de la clase enviando el ID numérico real al backend:
-   * DELETE /api/Clase/{claseId}/estudiantes/{estudianteId}
-   * Tras recibir la respuesta de éxito, elimina el elemento de la lista visual.
-   */
-  eliminarEstudiante(target: number | EstudianteMateria, idParam?: number) {
-    let estudianteId: number;
-    let cid = this.materiaSeleccionada?.claseId || this.materiaSeleccionadaId || 1;
-
-    if (typeof target === 'object' && target !== null) {
-      estudianteId = Number(target.id || (target as any).estudianteId);
-    } else if (idParam !== undefined) {
-      cid = Number(target) || cid;
-      estudianteId = Number(idParam);
-    } else {
-      estudianteId = Number(target);
-    }
-
-    if (!estudianteId || isNaN(estudianteId)) {
-      this.errorMessage = 'ID de estudiante no válido para la eliminación.';
-      return;
-    }
-
-    if (!confirm('¿Estás seguro de que deseas eliminar este estudiante de la cátedra?')) {
-      return;
-    }
-
-    this.isLoading = true;
-    const urlClase = `${getApiBase()}/api/Clase/${cid}/estudiantes/${estudianteId}`;
-    const urlDocente = `${getApiBase()}/api/Docente/clases/${cid}/estudiantes/${estudianteId}`;
-
-    const aplicarEliminacionVisual = () => {
-      this.isLoading = false;
-      this.materiaService.eliminarEstudianteDeMateria(this.materiaSeleccionadaId, estudianteId);
-      this.cargarEstudiantes();
-      this.mostrarExito('Estudiante eliminado de la cátedra exitosamente.');
-    };
-
-    this.http.delete(urlClase).subscribe({
-      next: () => {
-        aplicarEliminacionVisual();
-      },
-      error: (err) => {
-        if (err?.status === 404 || err?.status === 405) {
-          this.http.delete(urlDocente).subscribe({
-            next: () => {
-              aplicarEliminacionVisual();
-            },
-            error: () => {
-              aplicarEliminacionVisual();
-            }
-          });
-        } else {
-          aplicarEliminacionVisual();
-        }
-      }
-    });
-  }
-
-  /**
-   * Elimina un estudiante del Directorio General Institucional
-   * Invoca a DELETE /api/Persona/{id} y, tras el 200 OK, filtra la lista visual:
-   * this.directorio = this.directorio.filter(p => p.id !== id)
-   */
-  eliminarEstudianteDelDirectorio(estudianteId: number) {
-    if (!confirm('¿Estás seguro de que deseas eliminar este estudiante del Directorio Institucional?')) {
-      return;
-    }
-
-    this.isLoading = true;
-    const urlPersona = `${getApiBase()}/api/Persona/${estudianteId}`;
-
-    this.http.delete(urlPersona).subscribe({
-      next: () => {
-        this.isLoading = false;
-        this.directorio = this.directorio.filter(p => Number(p.id) !== Number(estudianteId));
-        this.directorioGeneral = this.directorioGeneral.filter(p => Number(p.id) !== Number(estudianteId));
-        this.directorioService.eliminarDelDirectorio(estudianteId).subscribe();
-        this.mostrarExito('Estudiante eliminado del Directorio institucional.');
-      },
-      error: (err) => {
-        // En caso de modo simulado/offline o error controlado
-        this.isLoading = false;
-        this.directorio = this.directorio.filter(p => Number(p.id) !== Number(estudianteId));
-        this.directorioGeneral = this.directorioGeneral.filter(p => Number(p.id) !== Number(estudianteId));
-        this.directorioService.eliminarDelDirectorio(estudianteId).subscribe();
-        this.mostrarExito('Estudiante eliminado del Directorio.');
-      }
-    });
-  }
-
-  procesarTextoMasivo() {
-    if (!this.textoCargaMasiva.trim()) {
-      this.estudiantesParseados = [];
-      return;
-    }
-
-    const lineas = this.textoCargaMasiva.split('\n');
-    const parseados: Partial<EstudianteMateria>[] = [];
-
-    lineas.forEach((linea, idx) => {
-      const limpia = linea.trim();
-      if (!limpia) return;
-
-      // Soporta formatos separados por coma, tabulador o punto y coma
-      const partes = limpia.split(/[,;\t]/).map(p => p.trim());
-      if (partes.length >= 2) {
-        parseados.push({
-          id: Date.now() + idx,
-          nombre: partes[0],
-          correo: partes[1],
-          cedula: partes[2] || `17${Math.floor(10000000 + Math.random() * 90000000)}`,
-          matricula: partes[3] || `2024-MAS-${100 + idx}`,
-          carrera: this.materiaSeleccionada?.claseNombre || 'Ingeniería',
-          nota: 4.5,
-          asistencia: 100,
-          estado: 'Regular'
-        });
-      } else if (limpia.includes('@')) {
-        // Solo un correo pegado
-        const nombreSugerido = limpia.split('@')[0].replace('.', ' ');
-        parseados.push({
-          id: Date.now() + idx,
-          nombre: nombreSugerido.charAt(0).toUpperCase() + nombreSugerido.slice(1),
-          correo: limpia,
-          cedula: `17${Math.floor(10000000 + Math.random() * 90000000)}`,
-          matricula: `2024-MAS-${100 + idx}`,
-          carrera: this.materiaSeleccionada?.claseNombre || 'Ingeniería',
-          nota: 4.5,
-          asistencia: 100,
-          estado: 'Regular'
-        });
-      }
-    });
-
-    this.estudiantesParseados = parseados;
-  }
-
-  confirmarCargaMasiva() {
-    if (!this.materiaSeleccionadaId || this.estudiantesParseados.length === 0) return;
-
-    this.estudiantesParseados.forEach(est => {
-      this.materiaService.agregarEstudianteDirecto(this.materiaSeleccionadaId, est);
-    });
-
-    this.mostrarExito(`¡Se han incorporado ${this.estudiantesParseados.length} estudiantes al aula exitosamente!`);
-    this.textoCargaMasiva = '';
+  procesarTextoMasivo(): void {
     this.estudiantesParseados = [];
-    this.tabActiva = 'nomina';
-  }
 
-  matricularDelDirectorio(estudianteDir: EstudianteMateria) {
-    if (!this.materiaSeleccionadaId) return;
+    this.errorMessage = '';
 
-    const yaExiste = this.estudiantes.some(e => Number(e.id) === Number(estudianteDir.id) || e.correo === estudianteDir.correo);
-    if (yaExiste) {
-      this.errorMessage = `${estudianteDir.nombre} ya se encuentra matriculado en esta cátedra.`;
-      return;
+    const lineas = this.textoCargaMasiva
+      .split('\n')
+      .map((linea) => linea.trim())
+      .filter(Boolean);
+
+    for (const linea of lineas) {
+      const partes = linea.split(/[,;\t]/).map((valor) => valor.trim());
+
+      if (partes.length < 2 || !partes[1].includes('@')) {
+        this.errorMessage = 'Cada línea debe tener como mínimo: Nombre completo, correo.';
+
+        continue;
+      }
+
+      const datosNombre = this.separarNombre(partes[0]);
+
+      this.estudiantesParseados.push({
+        nombre: datosNombre.nombre,
+
+        apellido: datosNombre.apellido,
+
+        correo: partes[1],
+
+        cedula: partes[2] || undefined,
+      });
     }
 
-    const claseId = this.materiaSeleccionada?.claseId || this.materiaSeleccionadaId || 1;
-    const body = {
-      nombre: estudianteDir.nombre,
-      apellido: estudianteDir.apellido || 'Estudiante',
-      correo: estudianteDir.correo
-    };
+    this.refrescarVista();
+  }
+
+  confirmarCargaMasiva(): void {
+    if (!this.claseSeleccionadaId || this.estudiantesParseados.length === 0) {
+      return;
+    }
 
     this.isLoading = true;
-    this.http.post(`${getApiBase()}/api/Clase/${claseId}/estudiantes`, body).subscribe({
-      next: () => {
-        this.isLoading = false;
-        this.materiaService.agregarEstudianteDirecto(this.materiaSeleccionadaId, estudianteDir);
-        this.cargarEstudiantes();
-        this.mostrarExito(`Estudiante ${estudianteDir.nombre} añadido al aula.`);
-      },
-      error: () => {
-        this.isLoading = false;
-        this.materiaService.agregarEstudianteDirecto(this.materiaSeleccionadaId, estudianteDir);
-        this.cargarEstudiantes();
-        this.mostrarExito(`Estudiante ${estudianteDir.nombre} añadido al aula.`);
-      }
-    });
+    this.errorMessage = '';
+
+    this.refrescarVista();
+
+    const peticiones = this.estudiantesParseados.map((estudiante) =>
+      this.docenteService.matricularEstudianteClase(this.claseSeleccionadaId, estudiante).pipe(
+        map(() => ({
+          ok: true,
+          estudiante,
+          error: null,
+        })),
+
+        catchError((error) =>
+          of({
+            ok: false,
+            estudiante,
+            error,
+          }),
+        ),
+      ),
+    );
+
+    forkJoin(peticiones)
+      .pipe(timeout(30000))
+      .subscribe({
+        next: (resultados) => {
+          this.isLoading = false;
+
+          const correctos = resultados.filter((item) => item.ok);
+
+          const fallidos = resultados.filter((item) => !item.ok);
+
+          if (correctos.length > 0) {
+            this.mostrarExito(`${correctos.length} estudiante(s) matriculado(s) correctamente.`);
+          }
+
+          if (fallidos.length > 0) {
+            this.errorMessage = `${fallidos.length} estudiante(s) no pudieron matricularse.`;
+
+            this.estudiantesParseados = fallidos.map((item) => item.estudiante);
+          } else {
+            this.textoCargaMasiva = '';
+
+            this.estudiantesParseados = [];
+
+            this.tabActiva = 'nomina';
+          }
+
+          this.refrescarVista();
+
+          this.cargarClases(this.claseSeleccionadaId);
+        },
+
+        error: (err) => {
+          console.error('ERROR CARGA MASIVA:', err);
+
+          this.isLoading = false;
+
+          this.errorMessage =
+            err?.name === 'TimeoutError'
+              ? 'El servidor tardó demasiado en procesar la carga.'
+              : 'No se pudo realizar la carga masiva.';
+
+          this.refrescarVista();
+        },
+      });
   }
 
-  // ==================== COMUNICADOS DE AULA ====================
-  enviarComunicado() {
-    if (!this.comunicadoAsunto.trim() || !this.comunicadoMensaje.trim()) {
-      this.errorMessage = 'Por favor escribe el asunto y el mensaje del comunicado.';
+  // =========================================================
+  // ELIMINAR
+  // =========================================================
+
+  eliminarEstudiante(estudiante: EstudianteClaseDocenteDto): void {
+    if (!this.claseSeleccionadaId) {
       return;
     }
 
-    let destinatarioLabel = 'Todo el Curso';
-    if (this.comunicadoDestinatarios === 'en-riesgo') {
-      destinatarioLabel = `Estudiantes en Riesgo (${this.enRiesgoCount} alumnos)`;
-    } else if (this.comunicadoDestinatarios === 'destacados') {
-      destinatarioLabel = `Estudiantes Destacados (${this.destacadosCount} alumnos)`;
-    } else {
-      destinatarioLabel = `Todo el Curso (${this.estudiantes.length} alumnos)`;
+    const estudianteId = Number(estudiante.estudianteId || estudiante.id);
+
+    if (!estudianteId) {
+      return;
     }
 
-    const nuevoComunicado: ComunicadoAula = {
-      id: Date.now(),
-      fecha: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }),
-      asunto: this.comunicadoAsunto.trim(),
-      mensaje: this.comunicadoMensaje.trim(),
-      destinatarios: destinatarioLabel,
-      prioridad: this.comunicadoPrioridad
-    };
+    const nombre = estudiante.nombreCompleto || estudiante.nombre || 'este estudiante';
 
-    this.historialComunicados.unshift(nuevoComunicado);
-    this.comunicadoAsunto = '';
-    this.comunicadoMensaje = '';
-    this.mostrarExito(`¡Comunicado enviado a ${destinatarioLabel} y notificado por correo!`);
+    if (!window.confirm(`¿Deseas eliminar a ${nombre} de esta clase?`)) {
+      return;
+    }
+
+    this.isLoading = true;
+
+    this.refrescarVista();
+
+    this.docenteService
+      .eliminarEstudianteClase(this.claseSeleccionadaId, estudianteId)
+      .pipe(take(1), timeout(15000))
+      .subscribe({
+        next: () => {
+          this.isLoading = false;
+
+          this.mostrarExito('Estudiante eliminado correctamente.');
+
+          this.refrescarVista();
+
+          this.cargarClases(this.claseSeleccionadaId);
+        },
+
+        error: (err) => {
+          this.isLoading = false;
+
+          this.errorMessage = this.obtenerMensajeError(err, 'No se pudo eliminar al estudiante.');
+
+          this.refrescarVista();
+        },
+      });
   }
 
-  // ==================== EXPORTACIÓN Y REPORTES ====================
-  exportarCSV() {
+  // =========================================================
+  // CSV
+  // =========================================================
+
+  exportarCSV(): void {
     if (this.estudiantes.length === 0) {
       this.errorMessage = 'No hay estudiantes para exportar.';
+
+      this.refrescarVista();
+
       return;
     }
 
-    const headers = ['ID', 'Nombre', 'Correo', 'Cedula', 'Matricula', 'Carrera', 'Nota_Promedio', 'Asistencia_Pct', 'Estado', 'Tareas_Entregadas'];
-    const rows = this.estudiantes.map(e => [
-      e.id,
-      `"${e.nombre}"`,
-      `"${e.correo || ''}"`,
-      `"${e.cedula || ''}"`,
-      `"${e.matricula || ''}"`,
-      `"${e.carrera || ''}"`,
-      e.nota ?? 0,
-      `${e.asistencia ?? 0}%`,
-      `"${e.estado || 'Regular'}"`,
-      `"${e.tareasEntregadas || 0}/${e.totalTareas || 6}"`
+    const filas = this.estudiantes.map((estudiante) => [
+      estudiante.estudianteId || estudiante.id,
+
+      `"${(estudiante.nombreCompleto || estudiante.nombre || '').replace(/"/g, '""')}"`,
+
+      `"${(estudiante.correo || '').replace(/"/g, '""')}"`,
+
+      `"${(estudiante.cedula || '').replace(/"/g, '""')}"`,
+
+      estudiante.promedioActual ?? '',
+
+      estudiante.alertaRendimiento === true ? 'En riesgo' : 'Sin alerta',
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const contenido = [
+      'ID,Nombre,Correo,Cedula,PromedioActual,AlertaRendimiento',
+      ...filas.map((fila) => fila.join(',')),
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + contenido], {
+      type: 'text/csv;charset=utf-8',
+    });
+
+    const url = URL.createObjectURL(blob);
+
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    const codMateria = this.materiaSeleccionada?.codigo || 'MATERIA';
-    link.setAttribute('download', `Nomina_Estudiantes_${codMateria}_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
+
+    link.href = url;
+
+    link.download = `Nomina_${this.claseSeleccionada?.codigoMateria || 'CLASE'}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+
     link.click();
-    document.body.removeChild(link);
 
-    this.mostrarExito('Archivo CSV de nómina y calificaciones generado exitosamente.');
+    URL.revokeObjectURL(url);
   }
 
-  imprimirActa() {
-    window.print();
-  }
-
-  // Helpers
-  private mostrarExito(msg: string) {
-    this.successMessage = msg;
-    this.errorMessage = '';
-    setTimeout(() => {
-      if (this.successMessage === msg) {
-        this.successMessage = '';
-      }
-    }, 4500);
-  }
+  // =========================================================
+  // HELPERS
+  // =========================================================
 
   getIniciales(nombre: string): string {
-    if (!nombre) return 'ES';
-    const partes = nombre.trim().split(' ');
-    if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+    if (!nombre) {
+      return 'ES';
+    }
+
+    const partes = nombre.trim().split(/\s+/);
+
+    if (partes.length === 1) {
+      return partes[0].slice(0, 2).toUpperCase();
+    }
+
     return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+  }
+
+  private separarNombre(nombreCompleto: string): {
+    nombre: string;
+    apellido: string;
+  } {
+    const partes = nombreCompleto.trim().split(/\s+/);
+
+    if (partes.length === 1) {
+      return {
+        nombre: partes[0],
+
+        apellido: '',
+      };
+    }
+
+    return {
+      nombre: partes.slice(0, -1).join(' '),
+
+      apellido: partes[partes.length - 1],
+    };
+  }
+
+  private obtenerMensajeError(error: any, fallback: string): string {
+    if (typeof error?.error === 'string' && error.error.trim()) {
+      return error.error;
+    }
+
+    return error?.error?.message || error?.error?.title || fallback;
+  }
+
+  private mostrarExito(mensaje: string): void {
+    this.successMessage = mensaje;
+
+    this.errorMessage = '';
+
+    this.refrescarVista();
+
+    setTimeout(() => {
+      if (this.successMessage === mensaje) {
+        this.successMessage = '';
+
+        this.refrescarVista();
+      }
+    }, 4000);
   }
 }

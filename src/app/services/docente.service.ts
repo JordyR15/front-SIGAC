@@ -59,215 +59,409 @@ export interface HorarioOcupadoAlumnoDto {
   carrera?: string;
 }
 
-const PLANIFICACIONES_DEFAULT: Record<number, ActividadAyudantiaDto[]> = {};
+/* =========================================================
+   GESTIÓN DE ESTUDIANTES
+   ========================================================= */
 
+export interface EstudianteClaseDocenteDto {
+  id: number;
+  estudianteId: number;
+  username: string;
+  nombreCompleto: string;
+  nombre: string;
+  correo: string;
+  cedula: string;
+  catedraId: number | null;
+  promedioActual: number | null;
+  alertaRendimiento: boolean | null;
+}
+
+export interface ClaseDocenteDto {
+  id: number;
+  claseId: number;
+  nombre: string;
+  materiaId: number;
+  materia: string;
+  nombreMateria: string;
+  codigoMateria: string;
+  docenteId: number;
+  docente: string;
+  docenteNombre: string;
+  docenteEmail: string;
+  estudiantesCount: number;
+  estudianteIds?: number[];
+  estudiantes: EstudianteClaseDocenteDto[];
+}
+
+export interface CatedraResumenDto {
+  id: number;
+  nombre: string;
+  semestre: string;
+}
+
+export interface IndicadorCualitativoDto {
+  id: number;
+  estudianteId: number;
+  catedraId: number;
+  indicador: string;
+  observacion: string;
+  fecha: string;
+}
+
+export interface CrearIndicadorCualitativoDto {
+  indicador: string;
+  observacion: string;
+}
+
+export interface HistorialAcademicoDto {
+  nombreCatedra: string;
+  calificacionFinal: number;
+  periodo: string;
+}
+
+export interface ExpedienteDto {
+  estudianteId: number;
+  nombreEstudiante: string;
+  historial: HistorialAcademicoDto[];
+  indicadores: IndicadorCualitativoDto[];
+}
+
+export interface MatricularEstudianteDto {
+  nombre: string;
+  apellido: string;
+  correo: string;
+  cedula?: string;
+}
+
+/* =========================================================
+   DATOS EXISTENTES DE OTROS MÓDULOS
+   Se mantienen para no romper funcionalidades todavía.
+   ========================================================= */
+
+const PLANIFICACIONES_DEFAULT: Record<number, ActividadAyudantiaDto[]> = {};
 const OCUPACIONES_DEFAULT: HorarioOcupadoAlumnoDto[] = [];
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class DocenteService {
   private STORAGE_PLANIFICACION = 'sigac_docente_planificaciones_v2';
   private STORAGE_OCUPACIONES = 'sigac_docente_ocupaciones_alumnos_v2';
 
   private planificacionesSubject = new BehaviorSubject<Record<number, ActividadAyudantiaDto[]>>(
-    this.loadStorage(this.STORAGE_PLANIFICACION, PLANIFICACIONES_DEFAULT)
+    this.loadStorage(this.STORAGE_PLANIFICACION, PLANIFICACIONES_DEFAULT),
   );
+
   public planificaciones$ = this.planificacionesSubject.asObservable();
 
   private ocupacionesSubject = new BehaviorSubject<HorarioOcupadoAlumnoDto[]>(
-    this.loadStorage(this.STORAGE_OCUPACIONES, OCUPACIONES_DEFAULT)
+    this.loadStorage(this.STORAGE_OCUPACIONES, OCUPACIONES_DEFAULT),
   );
+
   public ocupaciones$ = this.ocupacionesSubject.asObservable();
 
   constructor(private http: HttpClient) {}
 
-  private get apiUrl() { return `${getApiBase()}/api/Docente`; }
+  private get apiUrl(): string {
+    return `${getApiBase()}/api/Docente`;
+  }
 
-  /**
-   * GET /api/Docente/clases o GET /api/Clase/docente/{id}
-   * Consume la API para obtener las clases y materias asignadas al docente.
-   */
-  cargarClasesDocente(docenteId?: number): Observable<any[]> {
-    const docId = docenteId || 102;
-    const urlDocenteClases = `${this.apiUrl}/clases`;
-    const urlClaseDocente = `${getApiBase()}/api/Clase/docente/${docId}`;
-    const urlClaseDocenteLower = `${getApiBase()}/api/clase/docente/${docId}`;
+  /* =========================================================
+     CLASES DEL DOCENTE
+     ========================================================= */
 
-    return this.http.get<any[]>(urlDocenteClases).pipe(
-      catchError(() => this.http.get<any[]>(urlClaseDocente)),
-      catchError(() => this.http.get<any[]>(urlClaseDocenteLower)),
-      catchError(() => of([]))
+  getClasesDocente(): Observable<ClaseDocenteDto[]> {
+    return this.http.get<ClaseDocenteDto[]>(`${this.apiUrl}/clases`);
+  }
+
+  cargarClasesDocente(docenteId?: number): Observable<ClaseDocenteDto[]> {
+    return this.getClasesDocente();
+  }
+
+  /* =========================================================
+     EXPEDIENTE - RF-002
+     ========================================================= */
+
+  getExpedienteEstudiante(estudianteId: number): Observable<ExpedienteDto> {
+    return this.http.get<ExpedienteDto>(`${this.apiUrl}/estudiantes/${estudianteId}/expediente`);
+  }
+
+  /* =========================================================
+     CÁTEDRAS DEL ESTUDIANTE
+     ========================================================= */
+
+  getCatedrasEstudiante(estudianteId: number): Observable<CatedraResumenDto[]> {
+    return this.http.get<CatedraResumenDto[]>(
+      `${this.apiUrl}/estudiantes/${estudianteId}/catedras`,
     );
   }
 
-  private loadStorage<T>(key: string, fallback: T): T {
-    if (typeof window === 'undefined') return fallback;
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        return JSON.parse(stored) as T;
-      }
-    } catch (e) {
-      console.warn(`Error reading ${key}`, e);
-    }
-    return fallback;
+  /* =========================================================
+     INDICADORES CUALITATIVOS - RF-003
+     ========================================================= */
+
+  getIndicadoresCualitativos(
+    catedraId: number,
+    estudianteId: number,
+  ): Observable<IndicadorCualitativoDto[]> {
+    return this.http.get<IndicadorCualitativoDto[]>(
+      `${this.apiUrl}/catedras/${catedraId}/estudiantes/${estudianteId}/indicadores`,
+    );
   }
 
-  private saveStorage<T>(key: string, data: T) {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(key, JSON.stringify(data));
-      } catch (e) {
-        console.warn(`Error saving ${key}`, e);
-      }
-    }
+  crearIndicadorCualitativo(
+    catedraId: number,
+    estudianteId: number,
+    dto: CrearIndicadorCualitativoDto,
+  ): Observable<IndicadorCualitativoDto> {
+    return this.http.post<IndicadorCualitativoDto>(
+      `${this.apiUrl}/catedras/${catedraId}/estudiantes/${estudianteId}/indicadores`,
+      dto,
+    );
   }
+
+  /* =========================================================
+     MATRÍCULA DE ESTUDIANTES
+     Todo se guarda mediante backend.
+     ========================================================= */
+
+  matricularEstudianteClase(claseId: number, dto: MatricularEstudianteDto): Observable<any> {
+    return this.http.post(`${getApiBase()}/api/Clase/${claseId}/estudiantes`, dto);
+  }
+
+  eliminarEstudianteClase(claseId: number, estudianteId: number): Observable<any> {
+    return this.http.delete(`${getApiBase()}/api/Clase/${claseId}/estudiantes/${estudianteId}`);
+  }
+
+  /* =========================================================
+     EVALUACIÓN DIAGNÓSTICA
+     Código existente conservado.
+     ========================================================= */
 
   registrarEvaluacionDiagnostica(catedraId: number, dto: EvaluacionDto): Observable<EvaluacionDto> {
-    return this.http.post<EvaluacionDto>(`${this.apiUrl}/catedras/${catedraId}/evaluacion-diagnostica`, dto).pipe(
-      catchError(() => of({ id: Math.floor((Date.now() / 1000) % 2000000000) + 1, ...dto }))
-    );
+    return this.http
+      .post<EvaluacionDto>(`${this.apiUrl}/catedras/${catedraId}/evaluacion-diagnostica`, dto)
+      .pipe(
+        catchError(() =>
+          of({
+            id: Math.floor((Date.now() / 1000) % 2000000000) + 1,
+            ...dto,
+          }),
+        ),
+      );
   }
+
+  /* =========================================================
+     CRONOGRAMA
+     Código existente conservado.
+     ========================================================= */
 
   getCronogramaByCatedra(catedraId: number): Observable<CronogramaActividadDto[]> {
-    return this.http.get<CronogramaActividadDto[]>(`${getApiBase()}/api/Cronograma/${catedraId}`).pipe(
-      catchError(() => of([]))
-    );
+    return this.http
+      .get<CronogramaActividadDto[]>(`${getApiBase()}/api/Cronograma/${catedraId}`)
+      .pipe(catchError(() => of([])));
   }
 
-  crearCronogramaActividad(dto: Omit<CronogramaActividadDto, 'id'>): Observable<CronogramaActividadDto> {
+  crearCronogramaActividad(
+    dto: Omit<CronogramaActividadDto, 'id'>,
+  ): Observable<CronogramaActividadDto> {
     return this.http.post<CronogramaActividadDto>(`${getApiBase()}/api/Cronograma`, dto).pipe(
-      catchError(() => of({ id: Date.now(), ...dto }))
+      catchError(() =>
+        of({
+          id: Date.now(),
+          ...dto,
+        }),
+      ),
     );
   }
 
-  reprogramarCronograma(catedraId: number, dto: CronogramaActividadDto): Observable<CronogramaActividadDto> {
-    return this.http.put<CronogramaActividadDto>(`${this.apiUrl}/catedras/${catedraId}/cronograma`, dto).pipe(
-      catchError(() => of(dto))
-    );
+  reprogramarCronograma(
+    catedraId: number,
+    dto: CronogramaActividadDto,
+  ): Observable<CronogramaActividadDto> {
+    return this.http
+      .put<CronogramaActividadDto>(`${this.apiUrl}/catedras/${catedraId}/cronograma`, dto)
+      .pipe(catchError(() => of(dto)));
   }
 
-  planificarActividadAyudantia(ayudantiaId: number, dto: ActividadAyudantiaDto): Observable<ActividadAyudantiaDto> {
+  /* =========================================================
+     AYUDANTÍAS
+     Código existente conservado.
+     ========================================================= */
+
+  planificarActividadAyudantia(
+    ayudantiaId: number,
+    dto: ActividadAyudantiaDto,
+  ): Observable<ActividadAyudantiaDto> {
     const itemGuardado: ActividadAyudantiaDto = {
       ...dto,
-      id: dto.id || (Math.floor((Date.now() / 1000) % 2000000000) + 1),
-      ayudantiaId: Number(ayudantiaId)
+      id: dto.id || Math.floor((Date.now() / 1000) % 2000000000) + 1,
+      ayudantiaId: Number(ayudantiaId),
     };
 
-    const currentMap = { ...this.planificacionesSubject.value };
+    const currentMap = {
+      ...this.planificacionesSubject.value,
+    };
+
     const listaActual = currentMap[ayudantiaId] || [];
+
     currentMap[ayudantiaId] = [itemGuardado, ...listaActual];
+
     this.planificacionesSubject.next(currentMap);
     this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
 
-    return this.http.post<ActividadAyudantiaDto>(`${this.apiUrl}/ayudantias/${ayudantiaId}/planificacion`, dto).pipe(
-      tap((res) => {
-        if (res && res.id) {
-          itemGuardado.id = res.id;
-          this.saveStorage(this.STORAGE_PLANIFICACION, this.planificacionesSubject.value);
-        }
-      }),
-      catchError(() => of(itemGuardado))
-    );
+    return this.http
+      .post<ActividadAyudantiaDto>(`${this.apiUrl}/ayudantias/${ayudantiaId}/planificacion`, dto)
+      .pipe(
+        tap((res) => {
+          if (res && res.id) {
+            itemGuardado.id = res.id;
+
+            this.saveStorage(this.STORAGE_PLANIFICACION, this.planificacionesSubject.value);
+          }
+        }),
+        catchError(() => of(itemGuardado)),
+      );
   }
 
   toggleActividadPlanificada(ayudantiaId: number, actividadId: number): Observable<boolean> {
-    const currentMap = { ...this.planificacionesSubject.value };
+    const currentMap = {
+      ...this.planificacionesSubject.value,
+    };
+
     const lista = currentMap[ayudantiaId] || [];
-    currentMap[ayudantiaId] = lista.map(a => {
-      if (a.id === actividadId) {
-        return { ...a, completada: !a.completada };
+
+    currentMap[ayudantiaId] = lista.map((actividad) => {
+      if (actividad.id === actividadId) {
+        return {
+          ...actividad,
+          completada: !actividad.completada,
+        };
       }
-      return a;
+
+      return actividad;
     });
+
     this.planificacionesSubject.next(currentMap);
+
     this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
+
     return of(true);
   }
 
   eliminarActividadPlanificada(ayudantiaId: number, actividadId: number): Observable<boolean> {
-    const currentMap = { ...this.planificacionesSubject.value };
+    const currentMap = {
+      ...this.planificacionesSubject.value,
+    };
+
     const lista = currentMap[ayudantiaId] || [];
-    currentMap[ayudantiaId] = lista.filter(a => a.id !== actividadId);
+
+    currentMap[ayudantiaId] = lista.filter((actividad) => actividad.id !== actividadId);
+
     this.planificacionesSubject.next(currentMap);
+
     this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
+
     return of(true);
   }
 
   toggleActividadCompletada(ayudantiaId: number, actividadId: number): Observable<boolean> {
-    const currentMap = { ...this.planificacionesSubject.value };
+    const currentMap = {
+      ...this.planificacionesSubject.value,
+    };
+
     const lista = currentMap[ayudantiaId] || PLANIFICACIONES_DEFAULT[ayudantiaId] || [];
-    const item = lista.find(a => a.id === actividadId);
-    if (item) {
-      item.completada = !item.completada;
-      currentMap[ayudantiaId] = [...lista];
-      this.planificacionesSubject.next(currentMap);
-      this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
-      return of(true);
+
+    const item = lista.find((actividad) => actividad.id === actividadId);
+
+    if (!item) {
+      return of(false);
     }
-    return of(false);
+
+    item.completada = !item.completada;
+
+    currentMap[ayudantiaId] = [...lista];
+
+    this.planificacionesSubject.next(currentMap);
+
+    this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
+
+    return of(true);
   }
 
   getPlanificacionAyudantia(ayudantiaId: number): Observable<ActividadAyudantiaDto[]> {
     return this.planificaciones$.pipe(
-      map(mapa => mapa[ayudantiaId] || PLANIFICACIONES_DEFAULT[ayudantiaId] || [])
+      map((mapa) => mapa[ayudantiaId] || PLANIFICACIONES_DEFAULT[ayudantiaId] || []),
     );
   }
 
   monitorearAyudantia(ayudantiaId: number): Observable<MonitoreoAyudantiaDto> {
     const planLocal = this.planificacionesSubject.value[ayudantiaId] || [];
 
-    return this.http.get<MonitoreoAyudantiaDto>(`${this.apiUrl}/ayudantias/${ayudantiaId}/monitoreo`).pipe(
-      map(backendRes => {
-        return {
+    return this.http
+      .get<MonitoreoAyudantiaDto>(`${this.apiUrl}/ayudantias/${ayudantiaId}/monitoreo`)
+      .pipe(
+        map((backendRes) => ({
           ayudantiaId,
           nombreAyudante: backendRes?.nombreAyudante || 'Ayudante de Cátedra',
+          nombreCatedra: backendRes?.nombreCatedra,
           planificacion: backendRes?.planificacion || planLocal,
-          bitacoras: backendRes?.bitacoras || []
-        };
-      }),
-      catchError(() => of({
-        ayudantiaId,
-        nombreAyudante: 'Ayudante de Cátedra',
-        planificacion: planLocal,
-        bitacoras: []
-      }))
-    );
+          bitacoras: backendRes?.bitacoras || [],
+        })),
+        catchError(() =>
+          of({
+            ayudantiaId,
+            nombreAyudante: 'Ayudante de Cátedra',
+            planificacion: planLocal,
+            bitacoras: [],
+          }),
+        ),
+      );
   }
 
-  // ==================== OCUPACIÓN DE HORARIOS DE ALUMNOS ====================
+  /* =========================================================
+     HORARIOS
+     Código existente conservado.
+     ========================================================= */
 
   getHorariosOcupadosAlumnos(claseId?: number): Observable<HorarioOcupadoAlumnoDto[]> {
     return this.ocupaciones$.pipe(
-      map(list => {
-        if (!claseId) return list;
-        return list.filter(o => Number(o.claseId) === Number(claseId));
-      })
+      map((list) => {
+        if (!claseId) {
+          return list;
+        }
+
+        return list.filter((ocupacion) => Number(ocupacion.claseId) === Number(claseId));
+      }),
     );
   }
 
-  /**
-   * Valida si los alumnos tienen conflicto de horario en el día y rango de horas especificado.
-   * Retorna el item en conflicto si existe, o null si el horario está completamente libre.
-   */
-  verificarConflictoHorario(claseId: number, dia: string, horaInicio: string, horaFin: string): HorarioOcupadoAlumnoDto | null {
-    const list = this.ocupacionesSubject.value.filter(o => Number(o.claseId) === Number(claseId));
+  verificarConflictoHorario(
+    claseId: number,
+    dia: string,
+    horaInicio: string,
+    horaFin: string,
+  ): HorarioOcupadoAlumnoDto | null {
+    const list = this.ocupacionesSubject.value.filter(
+      (ocupacion) => Number(ocupacion.claseId) === Number(claseId),
+    );
 
-    const parseHora = (h: string) => {
-      const [hh, mm] = h.split(':').map(Number);
+    const parseHora = (hora: string) => {
+      const [hh, mm] = hora.split(':').map(Number);
+
       return (hh || 0) * 60 + (mm || 0);
     };
 
     const nuevoInicio = parseHora(horaInicio);
+
     const nuevoFin = parseHora(horaFin);
 
     for (const item of list) {
       if (item.dia.toLowerCase() === dia.toLowerCase()) {
         const itemInicio = parseHora(item.horaInicio);
+
         const itemFin = parseHora(item.horaFin);
 
-        // Cruce de intervalos: max(inicio1, inicio2) < min(fin1, fin2)
         if (Math.max(nuevoInicio, itemInicio) < Math.min(nuevoFin, itemFin)) {
           return item;
         }
@@ -276,5 +470,40 @@ export class DocenteService {
 
     return null;
   }
-}
 
+  /* =========================================================
+     MÉTODOS INTERNOS LEGACY
+     Se mantienen únicamente por otros módulos.
+     Gestión de Estudiantes NO los utiliza.
+     ========================================================= */
+
+  private loadStorage<T>(key: string, fallback: T): T {
+    if (typeof window === 'undefined') {
+      return fallback;
+    }
+
+    try {
+      const stored = localStorage.getItem(key);
+
+      if (stored) {
+        return JSON.parse(stored) as T;
+      }
+    } catch (error) {
+      console.warn(`Error reading ${key}`, error);
+    }
+
+    return fallback;
+  }
+
+  private saveStorage<T>(key: string, data: T): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (error) {
+      console.warn(`Error saving ${key}`, error);
+    }
+  }
+}
