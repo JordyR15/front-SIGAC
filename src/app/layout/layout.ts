@@ -4,6 +4,7 @@ import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RightSidebarComponent } from '../components/right-sidebar/right-sidebar';
 import { RightSidebarAyudanteComponent } from '../components/ayudante/right-sidebar-ayudante/right-sidebar-ayudante';
+import { RightSidebarDocenteComponent } from '../components/docente/right-sidebar-docente/right-sidebar-docente';
 import { AuthService } from '../services/auth.service';
 import { getApiBase, setApiBase, isModoAutonomo } from '../api';
 
@@ -15,10 +16,11 @@ import { getApiBase, setApiBase, isModoAutonomo } from '../api';
     RouterModule,
     FormsModule,
     RightSidebarComponent,
-    RightSidebarAyudanteComponent
+    RightSidebarAyudanteComponent,
+    RightSidebarDocenteComponent,
   ],
   templateUrl: './layout.html',
-  styleUrls: ['./layout.css']
+  styleUrls: ['./layout.css'],
 })
 export class LayoutComponent implements OnInit {
   public authService = inject(AuthService);
@@ -59,7 +61,9 @@ export class LayoutComponent implements OnInit {
 
   get isAyudante(): boolean {
     const r = this.normalizeRol(
-      this.authService.getRole() || this.authService.currentUser?.rol || this.authService.currentUser?.role
+      this.authService.getRole() ||
+        this.authService.currentUser?.rol ||
+        this.authService.currentUser?.role,
     );
     return r.includes('ayudante');
   }
@@ -85,11 +89,15 @@ export class LayoutComponent implements OnInit {
     }
     return name.substring(0, 2).toUpperCase() || 'US';
   }
-
+  abrirCentroNotificaciones(): void {
+    if (this.esRolIgual(this.rol, 'Docente')) {
+      this.router.navigate(['/docente/gestion-estudiantes']);
+    }
+  }
   actualizarBackend() {
     const base = getApiBase();
-    this.backendActual = isModoAutonomo() ? '' : (base || '');
-    this.inputBackendUrl = isModoAutonomo() ? '' : (base || 'http://localhost:5001');
+    this.backendActual = isModoAutonomo() ? '' : base || '';
+    this.inputBackendUrl = isModoAutonomo() ? '' : base || 'http://localhost:5001';
   }
 
   mostrarSeccion(seccion: string): boolean {
@@ -97,11 +105,20 @@ export class LayoutComponent implements OnInit {
     const sec = this.normalizeRol(seccion);
 
     if (sec === 'jurado' || sec === 'tribunal') {
-      return rolActual === 'jurado' || rolActual === 'tribunal' || rolActual.includes('jurado') || rolActual.includes('tribunal');
+      return (
+        rolActual === 'jurado' ||
+        rolActual === 'tribunal' ||
+        rolActual.includes('jurado') ||
+        rolActual.includes('tribunal')
+      );
     }
 
     if (sec === 'ayudante') {
-      return rolActual.includes('ayudante') || this.authService.hasRole('Ayudante') || this.authService.hasRole('AYUDANTE');
+      return (
+        rolActual.includes('ayudante') ||
+        this.authService.hasRole('Ayudante') ||
+        this.authService.hasRole('AYUDANTE')
+      );
     }
 
     return rolActual === sec || rolActual.includes(sec) || this.authService.hasRole(seccion);
@@ -151,7 +168,11 @@ export class LayoutComponent implements OnInit {
   }
 
   actualizarEstadoAyudante() {
-    this.esAyudante = this.isAyudante || this.esRolIgual(this.rol, 'Ayudante') || this.authService.hasRole('Ayudante') || this.authService.hasRole('AYUDANTE');
+    this.esAyudante =
+      this.isAyudante ||
+      this.esRolIgual(this.rol, 'Ayudante') ||
+      this.authService.hasRole('Ayudante') ||
+      this.authService.hasRole('AYUDANTE');
     this.esEstudianteNormal = this.esRolIgual(this.rol, 'Estudiante') && !this.esAyudante;
     if (this.rol) {
       this.rol = this.rol.trim();
@@ -161,7 +182,8 @@ export class LayoutComponent implements OnInit {
   activarModoAutonomo() {
     setApiBase('OFFLINE');
     this.actualizarBackend();
-    this.mensajeBackend = '✓ Modo Autónomo activado con éxito. Se usará almacenamiento local en memoria sin errores de red.';
+    this.mensajeBackend =
+      '✓ Modo Autónomo activado con éxito. Se usará almacenamiento local en memoria sin errores de red.';
     this.esExitoBackend = true;
     setTimeout(() => {
       window.location.reload();
@@ -199,7 +221,7 @@ export class LayoutComponent implements OnInit {
     const timer = setTimeout(() => controller.abort(), 4000);
 
     fetch(testUrl, { method: 'GET', signal: controller.signal, mode: 'cors' })
-      .then(res => {
+      .then((res) => {
         clearTimeout(timer);
         this.probandoConexion = false;
         if (res.status >= 200 && res.status < 500) {

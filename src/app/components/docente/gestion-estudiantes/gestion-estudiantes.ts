@@ -2,7 +2,7 @@ import { ApplicationRef, ChangeDetectorRef, Component, OnInit } from '@angular/c
 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { catchError, forkJoin, map, of, take, timeout } from 'rxjs';
 
 import {
@@ -33,7 +33,7 @@ export class GestionEstudiantesComponent implements OnInit {
   claseSeleccionadaId = 0;
   claseSeleccionada: ClaseDocenteDto | null = null;
   estudiantes: EstudianteClaseDocenteDto[] = [];
-
+  private estudianteObjetivoId = 0;
   busqueda = '';
 
   filtroEstado: 'todos' | 'riesgo' | 'sin-alerta' = 'todos';
@@ -78,12 +78,27 @@ export class GestionEstudiantesComponent implements OnInit {
   constructor(
     private docenteService: DocenteService,
     private route: ActivatedRoute,
+    private router: Router,
     private cdr: ChangeDetectorRef,
     private appRef: ApplicationRef,
   ) {}
 
   ngOnInit(): void {
-    this.cargarClases();
+    this.route.queryParamMap.subscribe((params) => {
+      const claseId = Number(params.get('claseId') || 0);
+      const estudianteId = Number(params.get('estudianteId') || 0);
+
+      this.estudianteObjetivoId = estudianteId;
+
+      if (this.clases.length === 0) {
+        this.cargarClases(claseId || undefined);
+        return;
+      }
+
+      if (claseId) {
+        this.seleccionarClase(claseId);
+      }
+    });
   }
 
   // =========================================================
@@ -212,6 +227,7 @@ export class GestionEstudiantesComponent implements OnInit {
     console.log('ESTUDIANTES:', this.estudiantes);
 
     this.refrescarVista();
+    this.abrirEstudianteObjetivo();
   }
 
   actualizar(): void {
@@ -312,7 +328,25 @@ export class GestionEstudiantesComponent implements OnInit {
 
     return lista;
   }
+  private abrirEstudianteObjetivo(): void {
+    if (!this.estudianteObjetivoId) {
+      return;
+    }
 
+    const estudiante = this.estudiantes.find(
+      (est) => Number(est.estudianteId || est.id) === this.estudianteObjetivoId,
+    );
+
+    if (!estudiante) {
+      return;
+    }
+
+    this.estudianteObjetivoId = 0;
+
+    setTimeout(() => {
+      this.abrirExpediente(estudiante);
+    }, 0);
+  }
   // =========================================================
   // EXPEDIENTE RF-002
   // =========================================================
