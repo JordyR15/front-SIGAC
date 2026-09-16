@@ -55,11 +55,13 @@ export class CrearClaseComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.subDocentes = this.adminDocenteService.getDocentes().subscribe(list => {
-      this.docentes = list.map(d => ({
-        id: d.id,
-        nombre: `${d.nombre} ${d.apellido}`.trim() || d.username,
-        correo: d.correo
-      }));
+      const safeList = Array.isArray(list) ? list : ((list as any)?.$values || (list as any)?.data || []);
+      this.docentes = safeList.map((d: any) => ({
+        id: Number(d.id ?? d.M_ID ?? d.docenteId ?? d.personaId ?? 0),
+        nombre: `${d.nombre || ''} ${d.apellido || ''}`.trim() || d.username || 'Docente',
+        correo: d.correo || d.email || ''
+      })).filter((d: any) => d.id > 0);
+
       const docenteOficial = this.docentes.find(d => (d.correo || '').toLowerCase() === 'docente@uteq.edu.ec');
       if (docenteOficial) {
         this.nuevaClase.docenteId = docenteOficial.id;
@@ -68,8 +70,15 @@ export class CrearClaseComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.sub = this.materiaService.materias$.subscribe(list => {
-      this.materias = list;
+    // Invocando this.materiaService.getMaterias() para cargar siempre el listado fresco de la API
+    this.sub = this.materiaService.getMaterias().subscribe({
+      next: (list) => {
+        this.materias = Array.isArray(list) ? list : [];
+      },
+      error: (err) => {
+        console.error('Error al cargar materias:', err);
+        this.materias = [];
+      }
     });
   }
 
@@ -189,4 +198,3 @@ export class CrearClaseComponent implements OnInit, OnDestroy {
     });
   }
 }
-

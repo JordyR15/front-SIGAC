@@ -20,7 +20,9 @@ export interface ClaseDto {
   nombre: string;
   materiaId?: number;
   materiaIds?: number[];
+  materiaNombre?: string;
   docenteId?: number;
+  docenteNombre?: string;
   estudianteIds?: number[];
   semestre?: string;
   descripcion?: string;
@@ -71,10 +73,6 @@ export interface AsistenciaDto {
   presente: boolean;
 }
 
-const CLASES_DEFAULT: ClaseDto[] = [];
-
-const SESIONES_DEFAULT: ClaseSesionDto[] = [];
-
 @Injectable({
   providedIn: 'root'
 })
@@ -93,45 +91,19 @@ export class ClaseService {
   private get apiUrl() { return `${getApiBase()}/api/Clase`; }
   private get sesionApiUrl() { return `${getApiBase()}/api/ClaseSesion`; }
 
-  private loadStorage<T>(key: string, fallback: T): T {
-    if (typeof window === 'undefined') return fallback;
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed as unknown as T;
-        }
-      }
-    } catch (e) {
-      console.warn(`Error loading storage for ${key}`, e);
-    }
-    return fallback;
-  }
-
-  private saveStorage<T>(key: string, data: T) {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(key, JSON.stringify(data));
-      } catch (e) {
-        console.warn(`Error saving storage for ${key}`, e);
-      }
-    }
-  }
-
   // Clase
   getClases(): Observable<ClaseDto[]> {
     return this.refreshClases();
   }
 
   refreshClases(): Observable<ClaseDto[]> {
-    return this.http.get<any[]>(`${getApiBase()}/api/Clase`).pipe(
+    return this.http.get<any>(`${getApiBase()}/api/Clase`).pipe(
       timeout(10000),
       map((res) => this.normalizeClasesResponse(res)),
       tap((list) => this.clasesSubject.next(list)),
       catchError((err) => {
         console.error('No se pudieron listar las clases desde el backend:', err);
-        return throwError(() => err);
+        return of(this.clasesSubject.value);
       })
     );
   }
@@ -140,23 +112,39 @@ export class ClaseService {
     let list: any[] = [];
     if (Array.isArray(res)) {
       list = res;
+    } else if (res && Array.isArray(res.$values)) {
+      list = res.$values;
     } else if (res && Array.isArray(res.clases)) {
       list = res.clases;
     } else if (res && Array.isArray(res.items)) {
       list = res.items;
+    } else if (res && Array.isArray(res.data)) {
+      list = res.data;
     }
 
-    return list.map((item, index) => ({
-      id: Number(item.id ?? item.claseId ?? index + 1),
-      nombre: String(item.nombre ?? item.nombreClase ?? `Clase ${index + 1}`),
-      materiaId: item.materiaId ?? item.materia?.id ?? undefined,
-      materiaIds: Array.isArray(item.materiaIds) ? item.materiaIds : (item.materiaId ? [Number(item.materiaId)] : []),
-      docenteId: item.docenteId ?? item.docente?.id ?? undefined,
-      estudianteIds: Array.isArray(item.estudianteIds) ? item.estudianteIds : (Array.isArray(item.estudiantes) ? item.estudiantes.map((e: any) => Number(e.id ?? e.estudianteId ?? 0)).filter(Boolean) : []),
-      semestre: item.semestre ?? item.periodo ?? '2026-2',
-      descripcion: item.descripcion ?? '',
-      carrera: item.carrera ?? item.programa ?? 'Ingeniería de Software'
-    }));
+    return list.map((item, index) => {
+      const docNombre = item.docenteNombre
+        ?? (item.docente ? (`${item.docente.nombre || ''} ${item.docente.apellido || ''}`.trim() || item.docente.username || item.docente.nombreDocente) : undefined)
+        ?? item.nombreDocente ?? item.profesor;
+
+      const matNombre = item.materiaNombre
+        ?? item.materia?.nombre
+        ?? item.nombreMateria;
+
+      return {
+        id: Number(item.id ?? item.claseId ?? index + 1),
+        nombre: String(item.nombre ?? item.nombreClase ?? item.paralelo ?? `Clase ${index + 1}`),
+        materiaId: item.materiaId ?? item.materia?.id ?? undefined,
+        materiaIds: Array.isArray(item.materiaIds) ? item.materiaIds : (item.materiaId ? [Number(item.materiaId)] : []),
+        materiaNombre: matNombre ? String(matNombre) : undefined,
+        docenteId: item.docenteId ?? item.docente?.id ?? undefined,
+        docenteNombre: docNombre ? String(docNombre) : undefined,
+        estudianteIds: Array.isArray(item.estudianteIds) ? item.estudianteIds : (Array.isArray(item.estudiantes) ? item.estudiantes.map((e: any) => Number(e.id ?? e.estudianteId ?? 0)).filter(Boolean) : []),
+        semestre: item.semestre ?? item.periodo ?? '2026-2',
+        descripcion: item.descripcion ?? '',
+        carrera: item.carrera ?? item.programa ?? 'Ingeniería de Software'
+      };
+    });
   }
 
   createClase(dto: CreateClaseDto): Observable<ClaseDto> {
@@ -187,12 +175,14 @@ export class ClaseService {
     return this.http.post<any>(`${getApiBase()}/api/Clase`, postPayload).pipe(
       timeout(10000),
       map((res) => {
-        const created = {
+        const created: ClaseDto = {
           id: Number(res?.id ?? res?.claseId),
           nombre: String(res?.nombre ?? dto.nombre.trim()),
           materiaId: Number(res?.materiaId ?? resolvedMateriaId),
           materiaIds: Array.isArray(res?.materiaIds) ? res.materiaIds : (matIds.length > 0 ? matIds : [resolvedMateriaId]),
+          materiaNombre: res?.materiaNombre || res?.materia?.nombre,
           docenteId: res?.docenteId ? Number(res.docenteId) : (resolvedDocenteId ?? undefined),
+          docenteNombre: res?.docenteNombre || res?.docente?.nombre,
           estudianteIds: Array.isArray(res?.estudianteIds) ? res.estudianteIds : (dto.estudianteIds ?? []),
           semestre: String(res?.semestre ?? dto.semestre ?? '2026-2'),
           descripcion: String(res?.descripcion ?? dto.descripcion ?? ''),
@@ -214,19 +204,76 @@ export class ClaseService {
     );
   }
 
-  deleteClase(id: number): Observable<boolean> {
-    return this.http.delete(`${this.apiUrl}/${id}`).pipe(
+  updateClase(id: number, dto: Partial<CreateClaseDto> & { materiaId?: number; materiaNombre?: string }): Observable<any> {
+    const payload: any = { ...dto };
+    if (dto.materiaId) {
+      payload.materiaId = Number(dto.materiaId);
+      payload.materiaIds = [Number(dto.materiaId)];
+    }
+    return this.http.put<any>(`${this.apiUrl}/${id}`, payload).pipe(
       timeout(10000),
-      map(() => {
-        const list = this.clasesSubject.value.filter(c => Number(c.id) !== Number(id));
+      tap(() => {
+        const list = this.clasesSubject.value.map(c => {
+          if (Number(c.id) === Number(id)) {
+            return {
+              ...c,
+              ...payload,
+              materiaId: payload.materiaId ?? c.materiaId,
+              materiaNombre: payload.materiaNombre ?? c.materiaNombre
+            };
+          }
+          return c;
+        });
         this.clasesSubject.next(list);
-        return true;
       }),
       catchError((err) => {
+        console.warn('Backend updateClase warning, falling back:', err);
+        const list = this.clasesSubject.value.map(c => {
+          if (Number(c.id) === Number(id)) {
+            return {
+              ...c,
+              ...payload,
+              materiaId: payload.materiaId ?? c.materiaId,
+              materiaNombre: payload.materiaNombre ?? c.materiaNombre
+            };
+          }
+          return c;
+        });
+        this.clasesSubject.next(list);
+        return of({ success: true, fallback: true });
+      })
+    );
+  }
+
+  /**
+   * DELETE /api/Clase/{id}
+   * Conectado directamente al endpoint oficial de eliminación de clase
+   */
+  deleteClase(id: number): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/${id}`).pipe(
+      timeout(10000),
+      tap(() => {
+        const list = this.clasesSubject.value.filter(c => Number(c.id) !== Number(id));
+        this.clasesSubject.next(list);
+      }),
+      catchError((err) => {
+        // En caso de que el backend requiera parámetro query en lugar de ruta
+        if (err.status === 405) {
+          return this.http.delete(`${this.apiUrl}?id=${id}`).pipe(
+            tap(() => {
+              const list = this.clasesSubject.value.filter(c => Number(c.id) !== Number(id));
+              this.clasesSubject.next(list);
+            })
+          );
+        }
         console.error('No se pudo eliminar la clase en el backend:', err);
         return throwError(() => err);
       })
     );
+  }
+
+  eliminarClase(id: number): Observable<any> {
+    return this.deleteClase(id);
   }
 
   getClaseById(id: number): Observable<ClaseDto> {
@@ -241,10 +288,6 @@ export class ClaseService {
     return this.http.post(`${this.apiUrl}/${claseId}/estudiantes`, estudianteIds);
   }
 
-  /**
-   * DELETE /api/Clase/{claseId}/estudiantes/{estudianteId}
-   * Elimina un estudiante de la clase
-   */
   eliminarEstudiante(claseId: number, estudianteId: number): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${claseId}/estudiantes/${estudianteId}`);
   }
@@ -289,3 +332,4 @@ export class ClaseService {
     return this.http.get<any>(`${this.sesionApiUrl}/estudiante/asistencia/${claseSesionId}`);
   }
 }
+

@@ -2,10 +2,9 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { combineLatest, Subscription } from 'rxjs';
+import { Subscription } from 'rxjs';
 import { MateriaDto, MateriaService } from '../../../services/materia.service';
 import { ClaseDto, ClaseService } from '../../../services/clase.service';
-import { normalizarTexto } from '../../../utils/search.utils';
 
 export interface GrupoClaseMaterias {
   claseNombre: string;
@@ -24,13 +23,17 @@ export interface GrupoClaseMaterias {
 })
 export class MateriasAdminComponent implements OnInit, OnDestroy {
   materias: MateriaDto[] = [];
+  materiasFiltradas: MateriaDto[] = [];
   clases: ClaseDto[] = [];
-  filtroTexto = '';
-  filtroClase = 'todas';
+
+  // Píldora y selector de clase: 'Todas' predeterminado
+  claseSeleccionada: any = 'Todas';
+  terminoBusqueda = '';
   filtroSemestre = 'todos';
-  modoVista: 'grid' | 'por_clase' = 'grid'; // 'grid' | 'por_clase'
-  
-  private sub?: Subscription;
+  modoVista: 'grid' | 'por_clase' = 'grid';
+
+  private subMaterias?: Subscription;
+  private subClases?: Subscription;
 
   constructor(
     private materiaService: MateriaService,
@@ -38,27 +41,165 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.sub = combineLatest([
-      this.materiaService.materias$,
-      this.claseService.clases$
-    ]).subscribe(([materias, clases]) => {
-      this.materias = materias;
-      this.clases = clases;
-    });
-    this.materiaService.refreshMaterias().subscribe();
+    this.cargarDatos();
   }
 
   ngOnDestroy() {
-    this.sub?.unsubscribe();
+    this.subMaterias?.unsubscribe();
+    this.subClases?.unsubscribe();
   }
 
-  get clasesDisponibles(): string[] {
-    const nombres = new Set<string>();
-    this.clases.forEach(c => nombres.add(c.nombre));
-    this.materias.forEach(m => {
-      if (m.claseNombre) nombres.add(m.claseNombre);
+  cargarDatos(): void {
+    this.cargarMaterias();
+    this.cargarClases();
+  }
+
+  cargarMaterias(): void {
+    this.subMaterias?.unsubscribe();
+    this.subMaterias = this.materiaService.getMaterias().subscribe({
+      next: (materias) => {
+        this.materias = Array.isArray(materias) ? materias : [];
+        this.actualizarRelacionClasesMaterias();
+        this.aplicarFiltros();
+      },
+      error: (err) => {
+        console.error('Error al cargar materias:', err);
+        this.materias = [];
+        this.aplicarFiltros();
+      }
     });
-    return Array.from(nombres);
+  }
+
+  cargarClases(): void {
+    this.subClases?.unsubscribe();
+    this.subClases = this.claseService.getClases().subscribe({
+      next: (clases) => {
+        this.clases = Array.isArray(clases) ? clases : [];
+        this.actualizarRelacionClasesMaterias();
+        this.aplicarFiltros();
+      },
+      error: (err) => {
+        console.error('Error al cargar clases:', err);
+        this.clases = [];
+        this.aplicarFiltros();
+      }
+    });
+  }
+
+  actualizarRelacionClasesMaterias(): void {
+    if (this.materias.length > 0) {
+      this.materias.forEach(m => {
+        if (!m.clases) {
+          m.clases = [];
+        }
+
+        // Asociar clases encontradas que apunten a esta materia
+        const clasesAsociadas = this.clases.filter(c =>
+          Number(c.materiaId) === Number(m.id) ||
+          (Array.isArray(c.materiaIds) && c.materiaIds.some(id => Number(id) === Number(m.id))) ||
+          Number(m.claseId) === Number(c.id) ||
+          (c.nombre && m.claseNombre && c.nombre.trim().toLowerCase() === m.claseNombre.trim().toLowerCase())
+        );
+
+        clasesAsociadas.forEach(c => {
+          const yaExiste = (m.clases as any[]).some(mc => {
+            const mcId = typeof mc === 'object' ? mc.id : null;
+            const mcNombre = typeof mc === 'string' ? mc : mc?.nombre;
+            return (mcId && Number(mcId) === Number(c.id)) ||
+                   (mcNombre && mcNombre.trim().toLowerCase() === c.nombre.trim().toLowerCase());
+          });
+
+          if (!yaExiste) {
+            (m.clases as any[]).push({
+              id: c.id,
+              nombre: c.nombre,
+              semestre: c.semestre,
+              docenteNombre: c.docenteNombre
+            });
+          }
+        });
+
+        if (m.clases.length > 0 && !m.claseNombre) {
+          const primera = m.clases[0];
+          m.claseNombre = typeof primera === 'string' ? primera : primera.nombre;
+        }
+      });
+    }
+  }
+
+  getClasesList(materia: MateriaDto): any[] {
+    if (!materia.clases || !Array.isArray(materia.clases)) {
+      return [];
+    }
+    return materia.clases;
+  }
+
+  getClaseNombre(c: any): string {
+    if (!c) return 'Paralelo';
+    if (typeof c === 'string') return c;
+    return c.nombre || c.nombreClase || c.paralelo || 'Paralelo';
+  }
+
+  seleccionarClase(clase: any): void {
+    this.claseSeleccionada = clase;
+    this.aplicarFiltros();
+  }
+
+  limpiarFiltros(): void {
+    this.claseSeleccionada = 'Todas';
+    this.terminoBusqueda = '';
+    this.filtroSemestre = 'todos';
+    this.aplicarFiltros();
+  }
+
+  aplicarFiltros(): void {
+    let resultado = [...this.materias];
+
+    // Si se seleccionó una clase específica (no 'Todas'):
+    if (this.claseSeleccionada && this.claseSeleccionada !== 'Todas' && this.claseSeleccionada.id) {
+      resultado = resultado.filter(m => {
+        return Number(this.claseSeleccionada.materiaId) === Number(m.id) ||
+               (m.claseId && Number(m.claseId) === Number(this.claseSeleccionada.id)) ||
+               (m.clases && (m.clases as any[]).some(c => (c.id && Number(c.id) === Number(this.claseSeleccionada.id)) || (c.nombre && c.nombre.trim().toLowerCase() === this.claseSeleccionada.nombre.trim().toLowerCase()))) ||
+               (this.claseSeleccionada.nombre && this.claseSeleccionada.nombre.toLowerCase().includes(m.nombre.toLowerCase()));
+      });
+    }
+
+    // Filtro por término de búsqueda en texto
+    if (this.terminoBusqueda && this.terminoBusqueda.trim() !== '') {
+      const q = this.terminoBusqueda.toLowerCase().trim();
+      resultado = resultado.filter(m =>
+        m.nombre?.toLowerCase().includes(q) ||
+        m.codigo?.toLowerCase().includes(q) ||
+        (m as any).docenteNombre?.toLowerCase().includes(q) ||
+        m.docente?.toLowerCase().includes(q) ||
+        (m.clases && (m.clases as any[]).some(c => this.getClaseNombre(c).toLowerCase().includes(q)))
+      );
+    }
+
+    // Filtro adicional por semestre si aplica
+    if (this.filtroSemestre && this.filtroSemestre !== 'todos') {
+      resultado = resultado.filter(m => m.semestre === this.filtroSemestre);
+    }
+
+    this.materiasFiltradas = resultado;
+  }
+
+  eliminarMateria(id: number, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (confirm('¿Estás seguro de eliminar esta materia del sistema?')) {
+      this.materiaService.eliminarMateria(id).subscribe({
+        next: () => {
+          this.cargarMaterias();
+        },
+        error: (err) => {
+          console.error('Error al eliminar materia:', err);
+          this.cargarMaterias();
+        }
+      });
+    }
   }
 
   get semestresDisponibles(): string[] {
@@ -68,49 +209,66 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
     return Array.from(new Set(['2026-2', '2026-1', ...Array.from(semestres)]));
   }
 
-  get materiasFiltradas(): MateriaDto[] {
-    const term = normalizarTexto(this.filtroTexto);
-    return this.materias.filter(m => {
-      const matchTexto = !term ||
-        normalizarTexto(m.nombre).includes(term) ||
-        normalizarTexto(m.codigo).includes(term) ||
-        normalizarTexto(m.docente).includes(term) ||
-        normalizarTexto(m.claseNombre).includes(term);
-
-      const matchClase = this.filtroClase === 'todas' ||
-        (m.claseNombre && m.claseNombre === this.filtroClase) ||
-        (m.claseId && String(m.claseId) === this.filtroClase);
-
-      const matchSemestre = this.filtroSemestre === 'todos' ||
-        m.semestre === this.filtroSemestre;
-
-      return matchTexto && matchClase && matchSemestre;
-    });
-  }
-
   get materiasAgrupadasPorClase(): GrupoClaseMaterias[] {
     const mapGrupos = new Map<string, MateriaDto[]>();
 
-    // Inicializar con clases registradas
+    // Inicializar grupos conocidos con los nombres de clases existentes
     this.clases.forEach(c => {
-      if (!mapGrupos.has(c.nombre)) {
-        mapGrupos.set(c.nombre, []);
+      const nombre = c.nombre?.trim();
+      if (nombre && !mapGrupos.has(nombre)) {
+        mapGrupos.set(nombre, []);
       }
     });
 
-    // Agregar materias a sus grupos
     this.materiasFiltradas.forEach(m => {
-      const nombreClase = m.claseNombre || 'Otras Materias / Sin Clase Asignada';
-      if (!mapGrupos.has(nombreClase)) {
-        mapGrupos.set(nombreClase, []);
+      // Recolectar todos los nombres de paralelo / cohorte asociados a esta materia
+      const nombresClases = new Set<string>();
+
+      // 1. Clases en el array m.clases
+      if (m.clases && Array.isArray(m.clases) && m.clases.length > 0) {
+        m.clases.forEach(c => {
+          const nom = this.getClaseNombre(c)?.trim();
+          if (nom) nombresClases.add(nom);
+        });
       }
-      mapGrupos.get(nombreClase)!.push(m);
+
+      // 2. Clases en this.clases asociadas por materiaId
+      this.clases.forEach(c => {
+        if (
+          Number(c.materiaId) === Number(m.id) ||
+          (Array.isArray(c.materiaIds) && c.materiaIds.some(id => Number(id) === Number(m.id)))
+        ) {
+          if (c.nombre?.trim()) {
+            nombresClases.add(c.nombre.trim());
+          }
+        }
+      });
+
+      // 3. m.claseNombre directo
+      if (m.claseNombre?.trim()) {
+        nombresClases.add(m.claseNombre.trim());
+      }
+
+      // Si no tiene ninguna clase asignada
+      if (nombresClases.size === 0) {
+        nombresClases.add('Otras Materias / Sin Clase Asignada');
+      }
+
+      nombresClases.forEach(nombreClase => {
+        if (!mapGrupos.has(nombreClase)) {
+          mapGrupos.set(nombreClase, []);
+        }
+        const lista = mapGrupos.get(nombreClase)!;
+        if (!lista.some(existente => Number(existente.id) === Number(m.id))) {
+          lista.push(m);
+        }
+      });
     });
 
     const resultado: GrupoClaseMaterias[] = [];
     mapGrupos.forEach((mats, nombreClase) => {
-      if (mats.length > 0 || this.filtroClase === 'todas' && !this.filtroTexto.trim()) {
-        const matchingClase = this.clases.find(c => c.nombre.trim().toLowerCase() === nombreClase.trim().toLowerCase());
+      if (mats.length > 0 || (this.claseSeleccionada === 'Todas' && !this.terminoBusqueda.trim() && nombreClase !== 'Otras Materias / Sin Clase Asignada')) {
+        const matchingClase = this.clases.find(c => c.nombre?.trim().toLowerCase() === nombreClase.trim().toLowerCase());
         const totalEstudiantes = mats.reduce((acc, curr) => acc + (curr.estudiantes?.length || 0), 0);
         const totalCreditos = mats.reduce((acc, curr) => acc + (curr.creditos || 4), 0);
 
@@ -143,12 +301,4 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
     ];
     return colors[hash % colors.length];
   }
-
-  eliminarMateria(id: number, event: Event) {
-    event.stopPropagation();
-    if (confirm('¿Estás seguro de eliminar esta materia del sistema?')) {
-      this.materiaService.deleteMateria(id).subscribe();
-    }
-  }
 }
-

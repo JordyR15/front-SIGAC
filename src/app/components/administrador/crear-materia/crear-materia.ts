@@ -1,11 +1,18 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, ActivatedRoute, RouterModule } from '@angular/router';
+import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
+import Swal from 'sweetalert2';
 import { MateriaService } from '../../../services/materia.service';
-import { ClaseDto, ClaseService } from '../../../services/clase.service';
 import { AdminDocenteService } from '../../../services/admin-docente.service';
+import { ClaseService, ClaseDto } from '../../../services/clase.service';
+
+interface DocenteSelectorItem {
+  id: number;
+  nombre: string;
+  correo?: string;
+}
 
 @Component({
   selector: 'app-crear-materia',
@@ -14,11 +21,12 @@ import { AdminDocenteService } from '../../../services/admin-docente.service';
   templateUrl: './crear-materia.html'
 })
 export class CrearMateriaComponent implements OnInit, OnDestroy {
-  clases: ClaseDto[] = [];
-  private sub?: Subscription;
   private subDocentes?: Subscription;
+  private subClases?: Subscription;
+  private subParams?: Subscription;
 
-  docentes: { id: number; nombre: string; correo?: string }[] = [];
+  docentes: DocenteSelectorItem[] = [];
+  clases: ClaseDto[] = [];
 
   semestres = ['2026-2', '2026-1', '2027-1', '2025-2'];
   grupos = ['Grupo A (Diurno)', 'Grupo B (Tarde)', 'Grupo C (Nocturno)', 'Laboratorio / Práctico'];
@@ -27,11 +35,10 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
     nombre: '',
     codigo: '',
     descripcion: '',
-    claseSeleccionada: '' as string | number,
-    otraClaseNombre: '',
     semestre: '2026-2',
     grupo: 'Grupo A (Diurno)',
-    docenteResponsableId: 102,
+    docenteId: 0,
+    claseId: 0,
     creditos: 4
   };
 
@@ -43,17 +50,17 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
     private router: Router,
     private route: ActivatedRoute,
     private materiaService: MateriaService,
-    private claseService: ClaseService,
-    private adminDocenteService: AdminDocenteService
+    private adminDocenteService: AdminDocenteService,
+    private claseService: ClaseService
   ) {}
 
   ngOnInit() {
     this.subDocentes = this.adminDocenteService.getDocentes().subscribe({
       next: (list) => {
-        const safeList = Array.isArray(list) ? list : [];
+        const safeList = Array.isArray(list) ? list : ((list as any)?.$values || (list as any)?.data || []);
         this.docentes = safeList
           .filter(Boolean)
-          .map((d: any) => {
+          .map((d: any): DocenteSelectorItem => {
             const id = Number(d?.id ?? d?.M_ID ?? d?.personaId ?? d?.docenteId ?? 0);
             const nombre = [d?.nombre ?? d?.NOMBRE, d?.apellido ?? d?.APELLIDO].filter(Boolean).join(' ').trim()
               || d?.username || d?.usuario || d?.nombreCompleto || 'Docente';
@@ -64,13 +71,13 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
               correo
             };
           })
-          .filter(d => d.id > 0);
+          .filter((d: DocenteSelectorItem) => d.id > 0);
 
-        const docenteOficial = this.docentes.find(d => (d.correo || '').toLowerCase() === 'docente@uteq.edu.ec');
+        const docenteOficial = this.docentes.find((d: DocenteSelectorItem) => (d.correo || '').toLowerCase() === 'docente@uteq.edu.ec');
         if (docenteOficial) {
-          this.nuevaMateria.docenteResponsableId = docenteOficial.id;
-        } else if (this.docentes.length > 0 && !this.nuevaMateria.docenteResponsableId) {
-          this.nuevaMateria.docenteResponsableId = this.docentes[0].id;
+          this.nuevaMateria.docenteId = docenteOficial.id;
+        } else if (this.docentes.length > 0 && !this.nuevaMateria.docenteId) {
+          this.nuevaMateria.docenteId = this.docentes[0].id;
         }
       },
       error: () => {
@@ -78,26 +85,29 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.sub = this.claseService.clases$.subscribe(list => {
-      this.clases = list;
-      
-      // Chequear si viene por query params
-      const qParams = this.route.snapshot.queryParams;
-      if (qParams['claseId']) {
-        this.nuevaMateria.claseSeleccionada = Number(qParams['claseId']);
-      } else if (list.length > 0 && !this.nuevaMateria.claseSeleccionada) {
-        this.nuevaMateria.claseSeleccionada = list[0].id;
+    this.subClases = this.claseService.getClases().subscribe({
+      next: (list) => {
+        this.clases = list || [];
+      },
+      error: () => {
+        this.clases = [];
       }
+    });
 
-      if (qParams['semestre']) {
-        this.nuevaMateria.semestre = qParams['semestre'];
+    this.subParams = this.route.queryParams.subscribe((params) => {
+      if (params['claseId']) {
+        this.nuevaMateria.claseId = Number(params['claseId']);
+      }
+      if (params['semestre']) {
+        this.nuevaMateria.semestre = params['semestre'];
       }
     });
   }
 
   ngOnDestroy() {
-    this.sub?.unsubscribe();
     this.subDocentes?.unsubscribe();
+    this.subClases?.unsubscribe();
+    this.subParams?.unsubscribe();
   }
 
   guardarMateria() {
@@ -106,13 +116,9 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (!this.nuevaMateria.claseSeleccionada) {
-      this.errorMessage = 'Debes seleccionar a qué clase o cohorte académica pertenece esta materia.';
-      return;
-    }
-
-    if (this.nuevaMateria.claseSeleccionada === 'otra' && !this.nuevaMateria.otraClaseNombre.trim()) {
-      this.errorMessage = 'Por favor, escribe el nombre de la nueva clase o cohorte.';
+    const docenteId = Number(this.nuevaMateria.docenteId);
+    if (!docenteId || docenteId <= 0) {
+      this.errorMessage = 'Por favor, selecciona un docente titular responsable.';
       return;
     }
 
@@ -120,78 +126,88 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
     this.successMessage = '';
 
-    const selectedDocenteId = Number(this.nuevaMateria.docenteResponsableId) || 102;
-    let resolvedClaseId: number | undefined;
-    let resolvedClaseNombre = '';
-
-    if (this.nuevaMateria.claseSeleccionada === 'otra') {
-      resolvedClaseNombre = this.nuevaMateria.otraClaseNombre.trim();
-    } else {
-      const selected = this.clases.find(c => Number(c.id) === Number(this.nuevaMateria.claseSeleccionada));
-      if (selected) {
-        resolvedClaseId = selected.id;
-        resolvedClaseNombre = selected.nombre;
-        if (selected.semestre) {
-          this.nuevaMateria.semestre = selected.semestre;
-        }
-      }
-    }
-
-    // 1. Enviar el POST a /api/Materia incluyendo { "nombre": "...", "codigo": "...", "docenteId": <id_del_docente_seleccionado> }
-    this.materiaService.createMateria({
+    const payload = {
       nombre: this.nuevaMateria.nombre.trim(),
       codigo: this.nuevaMateria.codigo.trim().toUpperCase(),
-      docenteId: selectedDocenteId,
-      docenteResponsableId: selectedDocenteId,
       descripcion: this.nuevaMateria.descripcion?.trim() || '',
-      creditos: Number(this.nuevaMateria.creditos) || 4,
-      claseId: resolvedClaseId,
-      claseNombre: resolvedClaseNombre,
       semestre: this.nuevaMateria.semestre,
-      grupo: this.nuevaMateria.grupo
-    }).subscribe({
-      next: (creada) => {
-        // Extraer materiaId y docenteId devueltos por el backend (no valores nulos)
-        const returnedMateriaId = Number(creada.id || (creada as any).materiaId);
-        const returnedDocenteId = Number((creada as any).docenteId || creada.docenteResponsableId || selectedDocenteId);
+      creditos: Number(this.nuevaMateria.creditos) || 4,
+      docenteId: docenteId
+    };
 
-        // 2. Si se solicitó crear una nueva cohorte/clase, crearla enviando materiaId y docenteId devueltos
-        if (this.nuevaMateria.claseSeleccionada === 'otra' && resolvedClaseNombre) {
-          this.claseService.createClase({
-            nombre: resolvedClaseNombre,
-            semestre: this.nuevaMateria.semestre,
-            materiaId: returnedMateriaId,
-            materiaIds: [returnedMateriaId],
-            docenteId: returnedDocenteId,
-            carrera: 'Ingeniería',
-            descripcion: `Cohorte creada junto con la materia ${creada.nombre}`
-          }).subscribe({
-            next: (claseCreada) => {
-              creada.claseId = claseCreada.id;
-              creada.claseNombre = claseCreada.nombre;
-              this.finalizarGuardadoExitoso(creada.nombre, resolvedClaseNombre);
-            },
-            error: () => {
-              this.finalizarGuardadoExitoso(creada.nombre, resolvedClaseNombre);
-            }
-          });
-        } else {
-          this.finalizarGuardadoExitoso(creada.nombre, resolvedClaseNombre);
-        }
-      },
-      error: () => {
+    this.materiaService.crearMateria(payload).subscribe({
+      next: (res) => {
         this.isLoading = false;
-        this.errorMessage = 'Hubo un error al guardar la materia en el backend. Verifica la conexión.';
+        this.successMessage = `¡Materia "${payload.nombre}" creada y registrada exitosamente!`;
+
+        const selectedClaseId = Number(this.nuevaMateria.claseId);
+        const nuevaMateriaId = Number(res?.id ?? res?.materiaId ?? res?.data?.id ?? 0);
+
+        if (selectedClaseId > 0) {
+          const claseSeleccionada = this.clases.find(c => Number(c.id) === Number(selectedClaseId));
+
+          if (claseSeleccionada) {
+            const materiaIdEnClase = Number(claseSeleccionada.materiaId || 0);
+
+            // Caso A: La clase aún no tenía materia asignada
+            if (!materiaIdEnClase) {
+              const updateClasePayload = {
+                nombre: claseSeleccionada.nombre,
+                semestre: claseSeleccionada.semestre || payload.semestre,
+                carrera: claseSeleccionada.carrera || 'Ingeniería de Software',
+                descripcion: claseSeleccionada.descripcion || '',
+                materiaId: nuevaMateriaId > 0 ? nuevaMateriaId : undefined,
+                materiaNombre: res?.nombre || payload.nombre,
+                docenteId: payload.docenteId || claseSeleccionada.docenteId
+              };
+
+              this.claseService.updateClase(selectedClaseId, updateClasePayload).subscribe({
+                next: () => {
+                  this.claseService.refreshClases().subscribe();
+                },
+                error: (err) => console.warn('Error al actualizar clase asignada:', err)
+              });
+            }
+            // Caso B: La clase ya tenía otra materia asignada -> NO sobreescribir; crear clase duplicada para esta nueva materia
+            else if (nuevaMateriaId > 0 && materiaIdEnClase !== nuevaMateriaId) {
+              this.claseService.createClase({
+                nombre: claseSeleccionada.nombre,
+                materiaId: nuevaMateriaId,
+                docenteId: payload.docenteId || claseSeleccionada.docenteId,
+                semestre: payload.semestre || claseSeleccionada.semestre || '2026-2'
+              }).subscribe({
+                next: () => {
+                  this.claseService.refreshClases().subscribe();
+                },
+                error: (err) => console.warn('Error al crear clase vinculada para la nueva materia:', err)
+              });
+            }
+          }
+        }
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Materia creada',
+          text: `La materia "${payload.nombre}" ha sido registrada exitosamente${selectedClaseId > 0 ? ' y asignada al paralelo correspondiente' : ''}.`,
+          timer: 1600,
+          showConfirmButton: false
+        });
+
+        setTimeout(() => {
+          this.router.navigate(['/admin/materias']);
+        }, 1300);
+      },
+      error: (err) => {
+        this.isLoading = false;
+        const msg = err?.error?.message || err?.error?.title || 'Hubo un error al guardar la materia en el backend. Verifica la conexión.';
+        this.errorMessage = msg;
+        Swal.fire({
+          icon: 'error',
+          title: 'Error al registrar',
+          text: msg,
+          confirmButtonColor: '#4f46e5'
+        });
       }
     });
   }
-
-  private finalizarGuardadoExitoso(materiaNombre: string, claseNombre: string) {
-    this.isLoading = false;
-    this.successMessage = `¡Materia "${materiaNombre}" registrada y asignada a "${claseNombre || 'la cohorte'}" exitosamente!`;
-    setTimeout(() => {
-      this.router.navigate(['/admin/materias']);
-    }, 1200);
-  }
 }
-

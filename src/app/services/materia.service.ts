@@ -1,8 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
-import { timeout } from 'rxjs/operators';
+import { catchError, map, tap, timeout } from 'rxjs/operators';
 import { getApiBase } from '../api';
 import {
   RecursoDto,
@@ -41,6 +40,13 @@ export interface EstudianteMateria {
   totalTareas?: number;
 }
 
+export interface MateriaClaseItem {
+  id: number;
+  nombre: string;
+  semestre?: string;
+  docenteNombre?: string;
+}
+
 export interface MateriaDto {
   id: number;
   nombre: string;
@@ -48,11 +54,14 @@ export interface MateriaDto {
   descripcion?: string;
   docente?: string;
   docenteResponsableId?: number;
+  docenteId?: number;
+  docenteNombre?: string;
   creditos?: number;
   semana?: number;
   totalSemanas?: number;
   claseId?: number;
   claseNombre?: string;
+  clases?: (MateriaClaseItem | any)[];
   semestre?: string;
   grupo?: string;
   ayudantes?: string[];
@@ -63,13 +72,13 @@ export interface MateriaDto {
 export interface CreateMateriaDto {
   nombre: string;
   codigo: string;
+  descripcion?: string;
+  semestre?: string;
+  creditos?: number;
   docenteId?: number;
   docenteResponsableId?: number;
-  descripcion?: string;
-  creditos?: number;
   claseId?: number;
   claseNombre?: string;
-  semestre?: string;
   grupo?: string;
 }
 
@@ -98,28 +107,20 @@ export interface RegistroAsistenciaDto {
   asistentes: AsistenteRegistro[];
 }
 
-const ESTUDIANTES_CALCULO_24: EstudianteMateria[] = [];
-
-const MATERIAS_DEFAULT: MateriaDto[] = [];
-
 const RECURSOS_DEFAULT: RecursoDto[] = [];
-
 const ACTIVIDADES_DEFAULT: ActividadDto[] = [];
-
 const ASISTENCIAS_DEFAULT: RegistroAsistenciaDto[] = [];
 
 @Injectable({
   providedIn: 'root'
 })
 export class MateriaService {
-  private STORAGE_MATERIAS = 'sigac_materias_v2';
-  private STORAGE_MATERIAS_ESTUDIANTE = 'sigac_estudiante_materias_real';
   private STORAGE_RECURSOS = 'sigac_recursos_v2';
   private STORAGE_ACTIVIDADES = 'sigac_actividades_v2';
   private STORAGE_ASISTENCIAS = 'sigac_asistencias_v2';
   private STORAGE_TEMAS = 'sigac_temas_v2';
 
-  private materiasSubject = new BehaviorSubject<MateriaDto[]>(this.getInitialMaterias());
+  private materiasSubject = new BehaviorSubject<MateriaDto[]>([]);
   public materias$ = this.materiasSubject.asObservable();
 
   private recursosSubject = new BehaviorSubject<RecursoDto[]>(this.loadStorage(this.STORAGE_RECURSOS, RECURSOS_DEFAULT));
@@ -133,29 +134,54 @@ export class MateriaService {
 
   constructor(private http: HttpClient) {}
 
-  private getInitialMaterias(): MateriaDto[] {
-    return [];
-  }
-
   private get apiUrl() { return `${getApiBase()}/api`; }
 
-  private mapToMateriaDto(item: any, idx: number): MateriaDto {
+  private mapToMateriaDto(item: any, idx: number = 0): MateriaDto {
+    const rawDocente = typeof item.docente === 'object' && item.docente
+      ? `${item.docente.nombre || ''} ${item.docente.apellido || ''}`.trim() || item.docente.nombreCompleto || item.docente.username
+      : String(item.docenteNombre || item.docente || item.profesor || 'Docente Titular');
+    const docId = Number(item.docenteResponsableId || item.docenteId || item.profesorId || (typeof item.docente === 'object' ? item.docente?.id : 0) || 0);
+
+    let rawClases: any[] = [];
+    if (Array.isArray(item.clases)) {
+      rawClases = item.clases;
+    } else if (item.clases && Array.isArray(item.clases.$values)) {
+      rawClases = item.clases.$values;
+    } else if (Array.isArray(item.paralelos)) {
+      rawClases = item.paralelos;
+    } else if (item.paralelos && Array.isArray(item.paralelos.$values)) {
+      rawClases = item.paralelos.$values;
+    }
+
+    const mappedClases = rawClases.map((c: any, cIdx: number) => {
+      if (typeof c === 'string') return { id: cIdx + 1, nombre: c };
+      return {
+        id: Number(c.id || c.claseId || (cIdx + 1)),
+        nombre: String(c.nombre || c.nombreClase || c.paralelo || `Paralelo ${cIdx + 1}`),
+        semestre: c.semestre || undefined,
+        docenteNombre: c.docenteNombre || c.docente?.nombre || undefined
+      };
+    });
+
     return {
       id: Number(item.id || item.materiaId || item.catedraId || item.claseId || (idx + 101)),
       nombre: item.nombre || item.nombreMateria || item.nombreCatedra || item.nombreAsignatura || item.materia || `Asignatura ${idx + 1}`,
       codigo: item.codigo || item.codigoMateria || item.codigoAsignatura || item.sigla || `MAT-${101 + idx}`,
-      descripcion: item.descripcion || item.descripcionMateria || item.detalle || 'Asignatura inscrita en el periodo académico activo.',
-      docente: item.docente || item.nombreDocente || item.docenteCatedra || item.profesor || 'Docente Titular',
-      docenteResponsableId: item.docenteResponsableId || item.docenteId || 1,
+      descripcion: item.descripcion || item.descripcionMateria || item.detalle || '',
+      docente: rawDocente,
+      docenteResponsableId: docId > 0 ? docId : undefined,
+      docenteId: docId > 0 ? docId : undefined,
+      docenteNombre: rawDocente,
       creditos: Number(item.creditos || item.creditosMateria || 4),
-      semana: Number(item.semana || item.semanaActual || 8),
+      semana: Number(item.semana || item.semanaActual || 1),
       totalSemanas: Number(item.totalSemanas || 16),
       claseId: item.claseId ? Number(item.claseId) : undefined,
       claseNombre: item.claseNombre || item.nombreClase || undefined,
+      clases: mappedClases,
       semestre: item.semestre || item.semestreCatedra || item.periodo || '2026-2',
-      grupo: item.grupo || item.paralelo || 'Grupo A (Diurno)',
-      ayudantes: Array.isArray(item.ayudantes) ? item.ayudantes : [],
-      estudiantes: Array.isArray(item.estudiantes) ? item.estudiantes : []
+      grupo: item.grupo || item.paralelo || 'Grupo A',
+      ayudantes: Array.isArray(item.ayudantes) ? item.ayudantes : (item.ayudantes?.$values || []),
+      estudiantes: Array.isArray(item.estudiantes) ? item.estudiantes : (item.estudiantes?.$values || [])
     };
   }
 
@@ -191,9 +217,42 @@ export class MateriaService {
     }
   }
 
-  // ==================== MATERIAS ====================\n
+  // ==================== MATERIAS (API OFICIAL /api/Materia) ====================
+
   getMaterias(): Observable<MateriaDto[]> {
-    return this.materias$;
+    return this.http.get<any>(`${this.apiUrl}/Materia`).pipe(
+      map(res => {
+        const raw = Array.isArray(res) ? res : (res?.$values || res?.data || []);
+        const mapped: MateriaDto[] = raw.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
+        this.materiasSubject.next(mapped);
+        return mapped;
+      }),
+      catchError((err) => {
+        console.error('Error al obtener materias de la API /api/Materia:', err);
+        return of(this.materiasSubject.value);
+      })
+    );
+  }
+
+  crearMateria(dto: { nombre: string; codigo: string; descripcion?: string; semestre?: string; creditos?: number; docenteId?: number }): Observable<any> {
+    return this.http.post(`${this.apiUrl}/Materia`, dto);
+  }
+
+  createMateria(dto: { nombre: string; codigo: string; descripcion?: string; semestre?: string; creditos?: number; docenteId?: number } | any): Observable<any> {
+    return this.crearMateria(dto);
+  }
+
+  eliminarMateria(id: number): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/Materia/${id}`).pipe(
+      tap(() => {
+        const updated = this.materiasSubject.value.filter(m => Number(m.id) !== Number(id));
+        this.materiasSubject.next(updated);
+      })
+    );
+  }
+
+  deleteMateria(id: number): Observable<any> {
+    return this.eliminarMateria(id);
   }
 
   getMateriasSnapshot(): MateriaDto[] {
@@ -209,156 +268,12 @@ export class MateriaService {
     return list.find(m => Number(m.id) === Number(id));
   }
 
-  /**
-   * Obtiene las materias desde el backend real, sin localStorage, sin mocks ni datos de relleno.
-   * El frontend debe consultar siempre la API del servidor y no inventar listas locales.
-   */
   refreshMaterias(): Observable<MateriaDto[]> {
-   const rol = typeof window !== 'undefined' ? (localStorage.getItem('rol') || 'Estudiante') : 'Estudiante';
-   const userId = typeof window !== 'undefined' ? (Number(localStorage.getItem('userId')) || 0) : 0;
-
-   if (rol === 'Docente') {
-     const urlDocenteMaterias = `${getApiBase()}/api/Docente/${userId}/materias`;
-     return this.http.get<any[]>(urlDocenteMaterias).pipe(
-       map((res) => {
-         const materiasBackend: any[] = Array.isArray(res) ? res : (res && Array.isArray((res as any).materias) ? (res as any).materias : []);
-         const mapped = materiasBackend.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
-         this.materiasSubject.next(mapped);
-         return mapped;
-       }),
-       catchError(() => {
-         this.materiasSubject.next([]);
-         return of([]);
-       })
-     );
-   }
-
-   if (rol === 'Administrador') {
-     const urlMaterias = `${getApiBase()}/api/Materias`;
-     const urlMateria = `${getApiBase()}/api/Materia`;
-     return this.http.get<any[]>(urlMaterias).pipe(
-       catchError(() => this.http.get<any[]>(urlMateria)),
-       map((res) => {
-         const materiasBackend: any[] = Array.isArray(res) ? res : (res && Array.isArray((res as any).materias) ? (res as any).materias : []);
-         const mapped = materiasBackend.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
-         this.materiasSubject.next(mapped);
-         return mapped;
-       }),
-       catchError(() => {
-         this.materiasSubject.next([]);
-         return of([]);
-       })
-     );
-   }
-
-   if (rol !== 'Estudiante' && rol !== 'Ayudante') {
-     return of([]);
-   }
-
-   const endpointMisMaterias = `${getApiBase()}/api/Estudiante/mis-materias`;
-   return this.http.get<any>(endpointMisMaterias).pipe(
-     map((res) => {
-       const materiasBackend: any[] = Array.isArray(res) ? res : (res && Array.isArray((res as any).materias) ? (res as any).materias : []);
-       const mapped = materiasBackend.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
-       this.materiasSubject.next(mapped);
-       return mapped;
-     }),
-     catchError(() => {
-       this.materiasSubject.next([]);
-       return of([]);
-     })
-   );
+    return this.getMaterias();
   }
 
   getMateriasEstudiante(): Observable<MateriaDto[]> {
-   return this.refreshMaterias();
-  }
-
-  createMateria(dto: CreateMateriaDto): Observable<MateriaDto> {
-    const docenteMap: Record<number, string> = {
-      1: 'Dra. Evelyn Vance',
-      2: 'Dr. Marcus Thorne',
-      3: 'Prof. Sarah Chen',
-      102: 'Docente Titular'
-    };
-
-    const docId = Number(dto.docenteId || dto.docenteResponsableId || 1);
-    const newId = Date.now();
-    const nuevaMateria: MateriaDto = {
-      id: newId,
-      nombre: dto.nombre.trim(),
-      codigo: dto.codigo.trim().toUpperCase(),
-      descripcion: dto.descripcion?.trim() || 'Sin descripción detallada.',
-      docente: docenteMap[docId] || 'Docente Titular',
-      docenteResponsableId: docId,
-      creditos: dto.creditos || 4,
-      semana: 1,
-      totalSemanas: 16,
-      claseId: dto.claseId ? Number(dto.claseId) : undefined,
-      claseNombre: dto.claseNombre || 'Ingeniería de Software 2026-2',
-      semestre: dto.semestre || '2026-2',
-      grupo: dto.grupo || 'Grupo A',
-      ayudantes: [],
-      estudiantes: [
-        { id: 1, nombre: 'Alejandro García', correo: 'a.garcia@uni.edu', nota: 4.8, asistencia: 100 },
-        { id: 2, nombre: 'María López', correo: 'm.lopez@uni.edu', nota: 4.6, asistencia: 95 }
-      ]
-    };
-
-    const currentList = this.materiasSubject.value;
-    const updated = [nuevaMateria, ...currentList];
-    this.materiasSubject.next(updated);
-    this.saveStorage(this.STORAGE_MATERIAS, updated);
-
-    // Inicializar temas por defecto para la nueva materia
-    this.ensureDefaultTemasAndContent(nuevaMateria.id, nuevaMateria.nombre);
-
-    // Payload explícito con { nombre, codigo, docenteId }
-    const postPayload = {
-      nombre: dto.nombre.trim(),
-      codigo: dto.codigo.trim().toUpperCase(),
-      docenteId: docId,
-      descripcion: dto.descripcion?.trim() || '',
-      creditos: Number(dto.creditos) || 4,
-      semestre: dto.semestre || '2026-2',
-      grupo: dto.grupo || 'Grupo A'
-    };
-
-    const urlMateria = `${getApiBase()}/api/Materia`;
-    const urlMateriaLower = `${getApiBase()}/api/materia`;
-    const urlMaterias = `${getApiBase()}/api/Materias`;
-
-    return this.http.post<any>(urlMateria, postPayload).pipe(
-      catchError(() => this.http.post<any>(urlMateriaLower, postPayload)),
-      catchError(() => this.http.post<any>(urlMaterias, postPayload)),
-      tap((backendRes) => {
-        if (backendRes && (backendRes.id || backendRes.materiaId)) {
-          const idDevuelto = Number(backendRes.id || backendRes.materiaId);
-          nuevaMateria.id = idDevuelto;
-          if (backendRes.docenteId) {
-            nuevaMateria.docenteResponsableId = Number(backendRes.docenteId);
-          }
-          this.saveStorage(this.STORAGE_MATERIAS, this.materiasSubject.value);
-        }
-      }),
-      catchError(() => of(nuevaMateria))
-    );
-  }
-
-  deleteMateria(id: number): Observable<boolean> {
-    const updated = this.materiasSubject.value.filter(m => Number(m.id) !== Number(id));
-    this.materiasSubject.next(updated);
-    this.saveStorage(this.STORAGE_MATERIAS, updated);
-
-    // Limpiar recursos asociados
-    const recs = this.recursosSubject.value.filter(r => Number(r.materiaId) !== Number(id));
-    this.recursosSubject.next(recs);
-    this.saveStorage(this.STORAGE_RECURSOS, recs);
-
-    return this.http.delete(`${this.apiUrl}/Materia/${id}`).pipe(
-      map(() => true),
-      catchError(() => of(true))
-    );
+    return this.getMaterias();
   }
 
   syncMaterias(nuevas: MateriaDto[]): void {
@@ -368,7 +283,6 @@ export class MateriaService {
     nuevas.forEach(m => mapById.set(m.id, m));
     const merged = Array.from(mapById.values());
     this.materiasSubject.next(merged);
-    this.saveStorage(this.STORAGE_MATERIAS, merged);
   }
 
   private buildAyudantePayload(ayudanteEmail?: string, ayudanteId?: number): { ayudanteEmail?: string; ayudanteId?: number } {
@@ -433,7 +347,8 @@ export class MateriaService {
     );
   }
 
-  // ==================== TEMAS ====================\n
+  // ==================== TEMAS ====================
+
   getTemasByMateria(materiaId: number): string[] {
     const key = `${this.STORAGE_TEMAS}_${materiaId}`;
     const stored = this.loadStorage<string[]>(key, []);
@@ -487,15 +402,8 @@ export class MateriaService {
     return [...actuales, titulo];
   }
 
-  private ensureDefaultTemasAndContent(materiaId: number, nombreMateria: string) {
-    const key = `${this.STORAGE_TEMAS}_${materiaId}`;
-    const stored = this.loadStorage<string[]>(key, []);
-    if (!stored || stored.length === 0) {
-      this.saveStorage(key, []);
-    }
-  }
+  // ==================== RECURSOS ====================
 
-  // ==================== RECURSOS ====================\n
   getRecursos(materiaId: number): Observable<RecursoDto[]> {
     return this.http.get<RecursoDto[]>(`${this.apiUrl}/Materia/${materiaId}/recursos`);
   }
@@ -581,7 +489,8 @@ export class MateriaService {
     this.saveStorage(this.STORAGE_RECURSOS, list);
   }
 
-  // ==================== ACTIVIDADES ====================\n
+  // ==================== ACTIVIDADES ====================
+
   getActividadesSnapshot(materiaId?: number): ActividadDto[] {
     if (materiaId !== undefined) {
       return this.actividadesSubject.value.filter(a => Number(a.materiaId) === Number(materiaId));
@@ -599,7 +508,7 @@ export class MateriaService {
         const list = Array.isArray(mapped) ? mapped : [];
         const currentOther = this.actividadesSubject.value.filter(a => Number(a.materiaId) !== Number(materiaId));
         const combined = [...list, ...currentOther];
-        this.actividadesSubject.next(combined);
+        this.recursosSubject.next(combined);
         this.saveStorage(this.STORAGE_ACTIVIDADES, combined);
       }),
       catchError(() => of([]))
@@ -636,7 +545,8 @@ export class MateriaService {
     this.saveStorage(this.STORAGE_ACTIVIDADES, list);
   }
 
-  // ==================== ASISTENCIA Y CLASES ====================\n
+  // ==================== ASISTENCIA Y CLASES ====================
+
   getAsistenciasByMateria(materiaId: number): Observable<RegistroAsistenciaDto[]> {
     return this.asistencias$.pipe(
       map(regs => regs.filter(reg => Number(reg.materiaId) === Number(materiaId)))
@@ -692,7 +602,8 @@ export class MateriaService {
     return this.recursosSubject.value;
   }
 
-  // ==================== ASIGNACIÓN Y GESTIÓN INTEGRAL DE ESTUDIANTES ====================\n
+  // ==================== ASIGNACIÓN Y GESTIÓN DE ESTUDIANTES ====================
+
   agregarEstudiantesAMateria(materiaId: number, estudiantes: ({ id: number; nombre?: string; correo?: string } | number)[]): Observable<any> {
     const materias = this.materiasSubject.value.map(m => {
       if (Number(m.id) === Number(materiaId)) {
@@ -725,7 +636,6 @@ export class MateriaService {
     });
 
     this.materiasSubject.next(materias);
-    this.saveStorage(this.STORAGE_MATERIAS, materias);
 
     const estudianteIds = estudiantes.map(e => typeof e === 'number' ? e : e.id);
     return this.http.post(`${this.apiUrl}/Materia/${materiaId}/estudiantes`, { estudianteIds }).pipe(
@@ -758,7 +668,6 @@ export class MateriaService {
       return m;
     });
     this.materiasSubject.next(materias);
-    this.saveStorage(this.STORAGE_MATERIAS, materias);
   }
 
   actualizarEstudianteEnMateria(materiaId: number, estudianteActualizado: EstudianteMateria): void {
@@ -772,7 +681,6 @@ export class MateriaService {
       return m;
     });
     this.materiasSubject.next(materias);
-    this.saveStorage(this.STORAGE_MATERIAS, materias);
   }
 
   eliminarEstudianteDeMateria(materiaOrClaseId: number, estudianteId: number): void {
@@ -784,7 +692,6 @@ export class MateriaService {
       return m;
     });
     this.materiasSubject.next(materias);
-    this.saveStorage(this.STORAGE_MATERIAS, materias);
   }
 
   /**
@@ -816,6 +723,5 @@ export class MateriaService {
       return m;
     });
     this.materiasSubject.next(materias);
-    this.saveStorage(this.STORAGE_MATERIAS, materias);
   }
 }

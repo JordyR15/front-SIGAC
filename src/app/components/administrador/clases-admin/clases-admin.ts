@@ -2,12 +2,11 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
-import { combineLatest, of, Subscription } from 'rxjs';
-import { catchError } from 'rxjs/operators';
-import { getApiBase } from '../../../api';
+import { combineLatest, Subscription } from 'rxjs';
+import Swal from 'sweetalert2';
 import { MateriaDto, MateriaService } from '../../../services/materia.service';
 import { ClaseDto, ClaseService } from '../../../services/clase.service';
+import { AdminDocenteService } from '../../../services/admin-docente.service';
 import { AuthService } from '../../../services/auth.service';
 
 export interface ClaseConMaterias extends ClaseDto {
@@ -24,18 +23,21 @@ export interface ClaseConMaterias extends ClaseDto {
 export class ClasesAdminComponent implements OnInit, OnDestroy {
   clasesConMaterias: ClaseConMaterias[] = [];
   materias: MateriaDto[] = [];
+  docentesMap: Map<number, string> = new Map();
   filtroTexto = '';
   filtroSemestre = 'todos';
   ayudanteEmailPorClase: Record<number, string> = {};
   asignandoAyudanteId: number | null = null;
   mensajeAsignacion: Record<number, string> = {};
+
   private sub?: Subscription;
+  private subDocentes?: Subscription;
 
   constructor(
     private claseService: ClaseService,
     private materiaService: MateriaService,
-    private authService: AuthService,
-    private http: HttpClient
+    private adminDocenteService: AdminDocenteService,
+    private authService: AuthService
   ) {}
 
   hasRole(role: string): boolean {
@@ -47,7 +49,41 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.cargarDocentes();
+    this.cargarDatos();
+  }
+
+  ngOnDestroy() {
+    this.sub?.unsubscribe();
+    this.subDocentes?.unsubscribe();
+  }
+
+  cargarDocentes() {
+    this.subDocentes = this.adminDocenteService.getDocentes().subscribe({
+      next: (list) => {
+        const safe = Array.isArray(list) ? list : ((list as any)?.$values || (list as any)?.data || []);
+        safe.forEach((d: any) => {
+          const id = Number(d?.id ?? d?.M_ID ?? d?.personaId ?? d?.docenteId ?? 0);
+          const nombre = [d?.nombre ?? d?.NOMBRE, d?.apellido ?? d?.APELLIDO].filter(Boolean).join(' ').trim()
+            || d?.username || d?.usuario || d?.nombreCompleto;
+          if (id > 0 && nombre) {
+            this.docentesMap.set(id, nombre);
+          }
+        });
+        if (this.clasesConMaterias.length > 0) {
+          this.clasesConMaterias = this.clasesConMaterias.map(c => ({
+            ...c,
+            docenteNombre: c.docenteNombre || (c.docenteId ? this.docentesMap.get(c.docenteId) : undefined) || 'Docente no asignado'
+          }));
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  cargarDatos() {
     this.claseService.refreshClases().subscribe();
+    this.materiaService.getMaterias().subscribe();
 
     this.sub = combineLatest([
       this.claseService.clases$,
@@ -58,19 +94,38 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
     });
   }
 
-  ngOnDestroy() {
-    this.sub?.unsubscribe();
-  }
-
   private procesarClases(clases: ClaseDto[], materias: MateriaDto[]) {
     this.clasesConMaterias = clases.map(c => {
       // Encontrar materias vinculadas a esta clase
-      const materiasList = materias.filter(m => 
+      const materiasList = materias.filter(m =>
         Number(m.claseId) === Number(c.id) ||
         (m.claseNombre && m.claseNombre.trim().toLowerCase() === c.nombre.trim().toLowerCase()) ||
         Number(c.materiaId) === Number(m.id) ||
-        (c.materiaIds && c.materiaIds.includes(m.id))
+        (Array.isArray(c.materiaIds) && c.materiaIds.includes(m.id)) ||
+        (m.clases && (m.clases as any[]).some(mc => Number(mc.id) === Number(c.id) || mc.nombre === c.nombre))
       );
+
+      // Determinar materia a la que pertenece (clase.materiaNombre)
+      let resolvedMateriaNombre = c.materiaNombre;
+      if (!resolvedMateriaNombre || resolvedMateriaNombre.trim() === '') {
+        const mat = materias.find(m =>
+          Number(m.id) === Number(c.materiaId) ||
+          (Array.isArray(c.materiaIds) && c.materiaIds.includes(m.id)) ||
+          Number(m.claseId) === Number(c.id)
+        );
+        resolvedMateriaNombre = mat?.nombre || (materiasList[0]?.nombre) || 'Sin materia asignada';
+      }
+
+      // Determinar docente responsable (clase.docenteNombre)
+      let resolvedDocenteNombre = c.docenteNombre;
+      if (!resolvedDocenteNombre || resolvedDocenteNombre.trim() === '') {
+        if (c.docenteId && this.docentesMap.has(c.docenteId)) {
+          resolvedDocenteNombre = this.docentesMap.get(c.docenteId);
+        } else {
+          const mat = materias.find(m => Number(m.id) === Number(c.materiaId) || Number(m.claseId) === Number(c.id));
+          resolvedDocenteNombre = mat?.docente || (mat as any)?.docenteNombre || (materiasList[0]?.docente) || 'Docente no asignado';
+        }
+      }
 
       // Calcular estudiantes únicos
       const estudianteSet = new Set<number>(c.estudianteIds || []);
@@ -80,6 +135,8 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
 
       return {
         ...c,
+        materiaNombre: resolvedMateriaNombre,
+        docenteNombre: resolvedDocenteNombre,
         materiasList,
         totalEstudiantes: estudianteSet.size || (c.estudianteIds?.length ?? 0)
       };
@@ -90,6 +147,8 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
     return this.clasesConMaterias.filter(c => {
       const matchTexto = !this.filtroTexto.trim() ||
         c.nombre.toLowerCase().includes(this.filtroTexto.toLowerCase()) ||
+        (c.materiaNombre && c.materiaNombre.toLowerCase().includes(this.filtroTexto.toLowerCase())) ||
+        (c.docenteNombre && c.docenteNombre.toLowerCase().includes(this.filtroTexto.toLowerCase())) ||
         c.materiasList.some(m => m.nombre.toLowerCase().includes(this.filtroTexto.toLowerCase()) || m.codigo.toLowerCase().includes(this.filtroTexto.toLowerCase())) ||
         (c.carrera && c.carrera.toLowerCase().includes(this.filtroTexto.toLowerCase()));
 
@@ -104,11 +163,46 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
     return Array.from(new Set(['2026-2', '2026-1', ...list]));
   }
 
+  /**
+   * Conectado a DELETE /api/Clase/{id}
+   */
   eliminarClase(id: number, event: Event) {
     event.stopPropagation();
-    if (confirm('¿Estás seguro de eliminar esta clase/cohorte académica?')) {
-      this.claseService.deleteClase(id).subscribe();
-    }
+    Swal.fire({
+      title: '¿Eliminar clase?',
+      text: `Esta acción eliminará la clase #${id} de la base de datos (DELETE /api/Clase/${id}).`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.claseService.deleteClase(id).subscribe({
+          next: () => {
+            Swal.fire({
+              icon: 'success',
+              title: 'Clase eliminada',
+              text: 'La clase ha sido eliminada exitosamente.',
+              timer: 1500,
+              showConfirmButton: false
+            });
+            this.claseService.refreshClases().subscribe();
+          },
+          error: (err) => {
+            console.error('Error al eliminar clase:', err);
+            const msg = err?.error?.message || err?.error?.title || err?.message || 'Error al eliminar la clase del backend.';
+            Swal.fire({
+              icon: 'error',
+              title: 'No se pudo eliminar',
+              text: msg,
+              confirmButtonColor: '#4f46e5'
+            });
+          }
+        });
+      }
+    });
   }
 
   asignarAyudante(claseId: number) {
@@ -142,4 +236,3 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
     });
   }
 }
-

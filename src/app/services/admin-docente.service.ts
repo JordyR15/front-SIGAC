@@ -81,12 +81,16 @@ export class AdminDocenteService {
        let rawList: any[] = [];
        if (Array.isArray(data)) {
          rawList = data;
+       } else if (data && Array.isArray(data.$values)) {
+         rawList = data.$values;
        } else if (data && Array.isArray(data.docentes)) {
          rawList = data.docentes;
        } else if (data && Array.isArray(data.personas)) {
          rawList = data.personas;
        } else if (data && Array.isArray(data.items)) {
          rawList = data.items;
+       } else if (data && Array.isArray(data.data)) {
+         rawList = data.data;
        }
 
        if (rawList.length === 0) {
@@ -137,12 +141,16 @@ export class AdminDocenteService {
         let rawList: any[] = [];
         if (Array.isArray(data)) {
           rawList = data;
+        } else if (data && Array.isArray(data.$values)) {
+          rawList = data.$values;
         } else if (data && Array.isArray(data.docentes)) {
           rawList = data.docentes;
         } else if (data && Array.isArray(data.personas)) {
           rawList = data.personas;
         } else if (data && Array.isArray(data.items)) {
           rawList = data.items;
+        } else if (data && Array.isArray(data.data)) {
+          rawList = data.data;
         }
 
         if (rawList.length === 0) {
