@@ -1,185 +1,302 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterModule } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { finalize, timeout } from 'rxjs/operators';
+import {
+  EstudianteService,
+  ActualizacionCronogramaEstudianteDto,
+} from '../../services/estudiante.service';
+
+type ActualizacionCronogramaConMateria = ActualizacionCronogramaEstudianteDto & {
+  materiaId?: number | null;
+  materiaNombre?: string | null;
+  catedraNombre?: string | null;
+};
 
 export interface NotificacionItem {
   id: number;
-  tipo: 'comunicado' | 'recurso' | 'clase' | 'calificacion';
+  tipo: 'cronograma';
   titulo: string;
   descripcion: string;
   fecha: string;
   materiaId: number;
   materiaNombre: string;
-  emisor?: string;
-  contenidoCompleto?: string;
-  enlaceClase?: string;
-  idReunion?: string;
-  codigoAcceso?: string;
   leida: boolean;
+  actualizacionCronogramaId: number;
+  catedraId: number;
+  actividad: string;
+  fechaAnterior: string;
+  fechaNueva: string;
+  observacion: string;
+  fechaNotificacion: string;
 }
 
 @Component({
   selector: 'app-right-sidebar',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule],
-  templateUrl: './right-sidebar.html'
+  imports: [CommonModule],
+  templateUrl: './right-sidebar.html',
 })
 export class RightSidebarComponent implements OnInit {
   filtro: 'todas' | 'pendientes' = 'todas';
-  
-  // Notificaciones interactivas y funcionales
-  notificaciones: NotificacionItem[] = [
-    {
-      id: 1,
-      tipo: 'comunicado',
-      titulo: 'Aviso de Evaluación - Cálculo Avanzado',
-      descripcion: 'Indicaciones oficiales para el primer taller sincrónico de derivadas.',
-      fecha: 'Hoy, 09:30',
-      materiaId: 101,
-      materiaNombre: 'Cálculo Avanzado',
-      emisor: 'Dr. Roberto Zambrano (Docente Titular)',
-      contenidoCompleto: 'Estimados estudiantes, el próximo lunes se llevará a cabo la sesión de resolución de casos prácticos del Tema 2. Se solicita revisar con anticipación las hojas de fórmulas subidas en el aula virtual y contar con calculadora científica habilitada. Cualquier duda puntual pueden enviarla al foro de tutorías.',
-      leida: false
-    },
-    {
-      id: 2,
-      tipo: 'recurso',
-      titulo: 'Nueva Guía Didáctica Disponible',
-      descripcion: 'Guía de laboratorio de algoritmos con problemas de grafos y árboles.',
-      fecha: 'Ayer, 16:45',
-      materiaId: 102,
-      materiaNombre: 'Estructuras de Datos y Algoritmos',
-      emisor: 'Ing. Carlos Mendoza',
-      contenidoCompleto: 'Se ha cargado la Guía de Ejercicios N° 3 con especificaciones técnicas sobre estructuras dinámicas y árboles binarios balanceados. El documento está disponible en la sección de recursos de la cátedra.',
-      leida: false
-    },
-    {
-      id: 3,
-      tipo: 'clase',
-      titulo: 'Sesión Sincrónica de Tutoría',
-      descripcion: 'Tutoría virtual de refuerzo previa al examen parcial.',
-      fecha: 'Mañana, 10:00 AM',
-      materiaId: 101,
-      materiaNombre: 'Cálculo Avanzado',
-      emisor: 'Ayudante de Cátedra',
-      enlaceClase: 'https://meet.google.com/xyz-abcd-efg',
-      idReunion: '849 2039 1102',
-      codigoAcceso: 'CALC2026',
-      contenidoCompleto: 'Sesión de tutoría personalizada para resolver dudas sobre los ejercicios del cuadernillo. Los estudiantes pueden traer sus consultas específicas.',
-      leida: false
-    },
-    {
-      id: 4,
-      tipo: 'calificacion',
-      titulo: 'Calificación Publicada: Taller 1',
-      descripcion: 'Tu nota ha sido asentada en el registro del aula virtual: 9.50/10.',
-      fecha: 'Hace 2 días',
-      materiaId: 101,
-      materiaNombre: 'Cálculo Avanzado',
-      emisor: 'Dr. Roberto Zambrano',
-      contenidoCompleto: 'Excelente demostración en el desarrollo analítico de funciones continuas y límites indeterminados. Se ha dejado feedback detallado en la entrega.',
-      leida: true
-    }
-  ];
 
-  // Modal para detalle de notificación
+  notificaciones: NotificacionItem[] = [];
+  cargandoNotificaciones = false;
+  errorNotificaciones = '';
+
   modalAbierto = false;
   notificacionSeleccionada: NotificacionItem | null = null;
-  enlaceCopiado = false;
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private estudianteService: EstudianteService,
+  ) {}
 
-  ngOnInit() {
-    this.cargarEstadoLeidas();
+  ngOnInit(): void {
+    this.cargarCacheNotificaciones();
+    this.aplicarEstadoLeidas();
+    this.cargarActualizacionesCronograma();
   }
 
   get pendientesCount(): number {
-    return this.notificaciones.filter(n => !n.leida).length;
+    return this.notificaciones.filter((n) => !n.leida).length;
   }
 
   get notificacionesFiltradas(): NotificacionItem[] {
-    if (this.filtro === 'pendientes') {
-      return this.notificaciones.filter(n => !n.leida);
-    }
-    return this.notificaciones;
+    return this.filtro === 'pendientes'
+      ? this.notificaciones.filter((n) => !n.leida)
+      : this.notificaciones;
   }
 
-  cargarEstadoLeidas() {
+  private get usuarioCacheId(): string {
+    if (typeof window === 'undefined') {
+      return 'anon';
+    }
+
+    return (
+      localStorage.getItem('userId') ||
+      localStorage.getItem('estudianteId') ||
+      localStorage.getItem('username') ||
+      'anon'
+    );
+  }
+
+  private get cacheNotificacionesKey(): string {
+    return `sigac_notificaciones_cronograma_${this.usuarioCacheId}`;
+  }
+
+  private get leidasKey(): string {
+    return `notificaciones_estudiante_leidas_${this.usuarioCacheId}`;
+  }
+
+  private cargarCacheNotificaciones(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     try {
-      const guardadas = localStorage.getItem('notificaciones_estudiante_leidas');
-      if (guardadas) {
-        const idsLeidas: number[] = JSON.parse(guardadas);
-        this.notificaciones = this.notificaciones.map(n => ({
-          ...n,
-          leida: idsLeidas.includes(n.id) || n.leida
-        }));
+      const guardadas = localStorage.getItem(this.cacheNotificacionesKey);
+      if (!guardadas) {
+        return;
+      }
+
+      const cache = JSON.parse(guardadas);
+      if (Array.isArray(cache)) {
+        this.notificaciones = cache;
       }
     } catch {
-      // Ignorar error de parsing
+      this.notificaciones = [];
     }
   }
 
-  guardarEstadoLeidas() {
+  private guardarCacheNotificaciones(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     try {
-      const idsLeidas = this.notificaciones.filter(n => n.leida).map(n => n.id);
-      localStorage.setItem('notificaciones_estudiante_leidas', JSON.stringify(idsLeidas));
+      localStorage.setItem(this.cacheNotificacionesKey, JSON.stringify(this.notificaciones));
     } catch {
-      // Ignorar error de localStorage
+      // El cache es solo una mejora de velocidad.
     }
   }
 
-  abrirNotificacion(noti: NotificacionItem) {
-    // Marcar como leída automáticamente al interactuar
+  private cargarActualizacionesCronograma(): void {
+    this.errorNotificaciones = '';
+
+    // Si ya existe cache real, se muestra inmediatamente mientras se sincroniza.
+    this.cargandoNotificaciones = this.notificaciones.length === 0;
+
+    this.estudianteService
+      .getActualizacionesCronograma()
+      .pipe(
+        timeout(8000),
+        finalize(() => {
+          this.cargandoNotificaciones = false;
+        }),
+      )
+      .subscribe({
+        next: (actualizaciones) => {
+          const cambios = Array.isArray(actualizaciones) ? actualizaciones : [];
+
+          this.notificaciones = cambios.map((cambio) =>
+            this.crearAvisoCronograma(cambio as ActualizacionCronogramaConMateria),
+          );
+
+          this.aplicarEstadoLeidas();
+          this.guardarCacheNotificaciones();
+        },
+        error: (err) => {
+          // Si ya hay cache real, no vaciamos la interfaz ni mostramos un error molesto.
+          if (this.notificaciones.length > 0) {
+            return;
+          }
+
+          this.notificaciones = [];
+          this.errorNotificaciones =
+            err?.error?.message || 'No se pudieron cargar las notificaciones del cronograma.';
+        },
+      });
+  }
+
+  private crearAvisoCronograma(cambio: ActualizacionCronogramaConMateria): NotificacionItem {
+    const materiaId = Number(cambio.materiaId || 0);
+
+    const materiaNombre =
+      cambio.materiaNombre?.trim() || cambio.catedraNombre?.trim() || `Cátedra ${cambio.catedraId}`;
+
+    const fechaAnterior = this.formatearSoloFecha(cambio.fechaAnterior);
+    const fechaNueva = this.formatearSoloFecha(cambio.fechaNueva);
+
+    const observacion = cambio.observacion?.trim() || 'Sin observación registrada.';
+
+    return {
+      id: 1_000_000 + Number(cambio.id),
+      tipo: 'cronograma',
+      titulo: 'Cronograma actualizado',
+      descripcion:
+        `${cambio.actividad} fue reprogramada del ` + `${fechaAnterior} al ${fechaNueva}.`,
+      fecha: this.formatearFechaAviso(cambio.fechaNotificacion),
+      materiaId,
+      materiaNombre,
+      leida: false,
+      actualizacionCronogramaId: Number(cambio.id),
+      catedraId: Number(cambio.catedraId),
+      actividad: cambio.actividad,
+      fechaAnterior: cambio.fechaAnterior,
+      fechaNueva: cambio.fechaNueva,
+      observacion,
+      fechaNotificacion: cambio.fechaNotificacion,
+    };
+  }
+
+  private aplicarEstadoLeidas(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const guardadas = localStorage.getItem(this.leidasKey);
+      if (!guardadas) {
+        return;
+      }
+
+      const idsLeidas: number[] = JSON.parse(guardadas);
+
+      this.notificaciones = this.notificaciones.map((n) => ({
+        ...n,
+        leida: idsLeidas.includes(n.id),
+      }));
+    } catch {
+      // No afecta las notificaciones reales.
+    }
+  }
+
+  private guardarEstadoLeidas(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const idsLeidas = this.notificaciones.filter((n) => n.leida).map((n) => n.id);
+
+      localStorage.setItem(this.leidasKey, JSON.stringify(idsLeidas));
+
+      this.guardarCacheNotificaciones();
+    } catch {
+      // No afecta la información de la BD.
+    }
+  }
+
+  abrirNotificacion(noti: NotificacionItem): void {
     noti.leida = true;
     this.guardarEstadoLeidas();
 
-    if (noti.tipo === 'recurso') {
-      // Navegar directamente a la materia
-      this.router.navigate(['/estudiante/materia', noti.materiaId]);
-    } else {
-      // Abrir modal con la información completa y opciones funcionales
-      this.notificacionSeleccionada = noti;
-      this.enlaceCopiado = false;
-      this.modalAbierto = true;
+    if (noti.materiaId > 0) {
+      this.router.navigate(['/estudiante/materia', noti.materiaId], {
+        queryParams: {
+          actualizacionCronograma: noti.actualizacionCronogramaId,
+        },
+      });
+      return;
     }
+
+    this.notificacionSeleccionada = noti;
+    this.modalAbierto = true;
   }
 
-  cerrarModal() {
+  cerrarModal(): void {
     this.modalAbierto = false;
     this.notificacionSeleccionada = null;
-    this.enlaceCopiado = false;
   }
 
-  toggleLeida(event: MouseEvent, noti: NotificacionItem) {
+  toggleLeida(event: MouseEvent, noti: NotificacionItem): void {
     event.stopPropagation();
     noti.leida = !noti.leida;
     this.guardarEstadoLeidas();
   }
 
-  marcarTodasComoLeidas() {
-    this.notificaciones.forEach(n => n.leida = true);
+  marcarTodasComoLeidas(): void {
+    this.notificaciones.forEach((n) => (n.leida = true));
     this.guardarEstadoLeidas();
   }
 
-  irAMateriaDesdeModal() {
-    if (this.notificacionSeleccionada?.materiaId) {
-      const matId = this.notificacionSeleccionada.materiaId;
-      this.cerrarModal();
-      this.router.navigate(['/estudiante/materia', matId]);
-    }
+  recargarNotificaciones(): void {
+    this.cargarActualizacionesCronograma();
   }
 
-  copiarEnlaceClase() {
-    if (!this.notificacionSeleccionada?.enlaceClase) return;
-    if (navigator?.clipboard) {
-      navigator.clipboard.writeText(this.notificacionSeleccionada.enlaceClase).then(() => {
-        this.enlaceCopiado = true;
-        setTimeout(() => this.enlaceCopiado = false, 3000);
-      });
-    } else {
-      this.enlaceCopiado = true;
-      setTimeout(() => this.enlaceCopiado = false, 3000);
+  private formatearSoloFecha(fecha?: string | null): string {
+    if (!fecha) {
+      return 'Sin fecha';
     }
+
+    const valor = new Date(fecha);
+    if (Number.isNaN(valor.getTime())) {
+      return fecha;
+    }
+
+    return valor.toLocaleDateString('es-EC', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  }
+
+  private formatearFechaAviso(fecha?: string | null): string {
+    if (!fecha) {
+      return 'Actualización reciente';
+    }
+
+    const valor = new Date(fecha);
+    if (Number.isNaN(valor.getTime())) {
+      return fecha;
+    }
+
+    return valor.toLocaleString('es-EC', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 }

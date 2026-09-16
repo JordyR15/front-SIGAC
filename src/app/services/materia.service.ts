@@ -8,16 +8,10 @@ import {
   CreateRecursoDto,
   RecursoConEstadoDto,
   ActividadDto,
-  CreateActividadDto
+  CreateActividadDto,
 } from '../models/materia/materia.dto';
 
-export type {
-  RecursoDto,
-  CreateRecursoDto,
-  RecursoConEstadoDto,
-  ActividadDto,
-  CreateActividadDto
-};
+export type { RecursoDto, CreateRecursoDto, RecursoConEstadoDto, ActividadDto, CreateActividadDto };
 
 export interface EstudianteMateria {
   id: number;
@@ -49,6 +43,7 @@ export interface MateriaClaseItem {
 
 export interface MateriaDto {
   id: number;
+  catedraId?: number;
   nombre: string;
   codigo: string;
   descripcion?: string;
@@ -112,7 +107,7 @@ const ACTIVIDADES_DEFAULT: ActividadDto[] = [];
 const ASISTENCIAS_DEFAULT: RegistroAsistenciaDto[] = [];
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class MateriaService {
   private STORAGE_RECURSOS = 'sigac_recursos_v2';
@@ -123,24 +118,41 @@ export class MateriaService {
   private materiasSubject = new BehaviorSubject<MateriaDto[]>([]);
   public materias$ = this.materiasSubject.asObservable();
 
-  private recursosSubject = new BehaviorSubject<RecursoDto[]>(this.loadStorage(this.STORAGE_RECURSOS, RECURSOS_DEFAULT));
+  private recursosSubject = new BehaviorSubject<RecursoDto[]>(
+    this.loadStorage(this.STORAGE_RECURSOS, RECURSOS_DEFAULT),
+  );
   public recursos$ = this.recursosSubject.asObservable();
 
-  private actividadesSubject = new BehaviorSubject<ActividadDto[]>(this.loadStorage(this.STORAGE_ACTIVIDADES, ACTIVIDADES_DEFAULT));
+  private actividadesSubject = new BehaviorSubject<ActividadDto[]>(
+    this.loadStorage(this.STORAGE_ACTIVIDADES, ACTIVIDADES_DEFAULT),
+  );
   public actividades$ = this.actividadesSubject.asObservable();
 
-  private asistenciasSubject = new BehaviorSubject<RegistroAsistenciaDto[]>(this.loadStorage(this.STORAGE_ASISTENCIAS, ASISTENCIAS_DEFAULT));
+  private asistenciasSubject = new BehaviorSubject<RegistroAsistenciaDto[]>(
+    this.loadStorage(this.STORAGE_ASISTENCIAS, ASISTENCIAS_DEFAULT),
+  );
   public asistencias$ = this.asistenciasSubject.asObservable();
 
   constructor(private http: HttpClient) {}
 
-  private get apiUrl() { return `${getApiBase()}/api`; }
+  private get apiUrl() {
+    return `${getApiBase()}/api`;
+  }
 
   private mapToMateriaDto(item: any, idx: number = 0): MateriaDto {
-    const rawDocente = typeof item.docente === 'object' && item.docente
-      ? `${item.docente.nombre || ''} ${item.docente.apellido || ''}`.trim() || item.docente.nombreCompleto || item.docente.username
-      : String(item.docenteNombre || item.docente || item.profesor || 'Docente Titular');
-    const docId = Number(item.docenteResponsableId || item.docenteId || item.profesorId || (typeof item.docente === 'object' ? item.docente?.id : 0) || 0);
+    const rawDocente =
+      typeof item.docente === 'object' && item.docente
+        ? `${item.docente.nombre || ''} ${item.docente.apellido || ''}`.trim() ||
+          item.docente.nombreCompleto ||
+          item.docente.username
+        : String(item.docenteNombre || item.docente || item.profesor || 'Docente Titular');
+    const docId = Number(
+      item.docenteResponsableId ||
+        item.docenteId ||
+        item.profesorId ||
+        (typeof item.docente === 'object' ? item.docente?.id : 0) ||
+        0,
+    );
 
     let rawClases: any[] = [];
     if (Array.isArray(item.clases)) {
@@ -156,20 +168,40 @@ export class MateriaService {
     const mappedClases = rawClases.map((c: any, cIdx: number) => {
       if (typeof c === 'string') return { id: cIdx + 1, nombre: c };
       return {
-        id: Number(c.id || c.claseId || (cIdx + 1)),
+        id: Number(c.id || c.claseId || cIdx + 1),
         nombre: String(c.nombre || c.nombreClase || c.paralelo || `Paralelo ${cIdx + 1}`),
         semestre: c.semestre || undefined,
-        docenteNombre: c.docenteNombre || c.docente?.nombre || undefined
+        docenteNombre: c.docenteNombre || c.docente?.nombre || undefined,
       };
     });
 
-    const parsedClaseId = item.claseId ? Number(item.claseId) : (typeof item.clase === 'object' && item.clase?.id ? Number(item.clase.id) : undefined);
-    const parsedClaseNombre = item.claseNombre || item.nombreClase || (typeof item.clase === 'object' ? item.clase?.nombre : undefined) || undefined;
+    const parsedClaseId = item.claseId
+      ? Number(item.claseId)
+      : typeof item.clase === 'object' && item.clase?.id
+        ? Number(item.clase.id)
+        : undefined;
+    const parsedClaseNombre =
+      item.claseNombre ||
+      item.nombreClase ||
+      (typeof item.clase === 'object' ? item.clase?.nombre : undefined) ||
+      undefined;
 
     return {
-      id: Number(item.id || item.materiaId || item.catedraId || item.claseId || (idx + 101)),
-      nombre: item.nombre || item.nombreMateria || item.nombreCatedra || item.nombreAsignatura || item.materia || `Asignatura ${idx + 1}`,
-      codigo: item.codigo || item.codigoMateria || item.codigoAsignatura || item.sigla || `MAT-${101 + idx}`,
+      id: Number(item.id || item.materiaId || item.catedraId || item.claseId || idx + 101),
+      catedraId: Number(item.catedraId || 0) > 0 ? Number(item.catedraId) : undefined,
+      nombre:
+        item.nombre ||
+        item.nombreMateria ||
+        item.nombreCatedra ||
+        item.nombreAsignatura ||
+        item.materia ||
+        `Asignatura ${idx + 1}`,
+      codigo:
+        item.codigo ||
+        item.codigoMateria ||
+        item.codigoAsignatura ||
+        item.sigla ||
+        `MAT-${101 + idx}`,
       descripcion: item.descripcion || item.descripcionMateria || item.detalle || '',
       docente: rawDocente,
       docenteResponsableId: docId > 0 ? docId : undefined,
@@ -183,8 +215,10 @@ export class MateriaService {
       clases: mappedClases,
       semestre: item.semestre || item.semestreCatedra || item.periodo || '2026-2',
       grupo: item.grupo || item.paralelo || 'Grupo A',
-      ayudantes: Array.isArray(item.ayudantes) ? item.ayudantes : (item.ayudantes?.$values || []),
-      estudiantes: Array.isArray(item.estudiantes) ? item.estudiantes : (item.estudiantes?.$values || [])
+      ayudantes: Array.isArray(item.ayudantes) ? item.ayudantes : item.ayudantes?.$values || [],
+      estudiantes: Array.isArray(item.estudiantes)
+        ? item.estudiantes
+        : item.estudiantes?.$values || [],
     };
   }
 
@@ -196,9 +230,9 @@ export class MateriaService {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
           if (key === this.STORAGE_RECURSOS) {
-            return (parsed as any[]).map(r => ({
+            return (parsed as any[]).map((r) => ({
               ...r,
-              id: (Number(r.id) > 2147483647) ? (Number(r.id) % 2000000000) + 1 : Number(r.id)
+              id: Number(r.id) > 2147483647 ? (Number(r.id) % 2000000000) + 1 : Number(r.id),
             })) as unknown as T;
           }
           return parsed as unknown as T;
@@ -224,33 +258,55 @@ export class MateriaService {
 
   getMaterias(): Observable<MateriaDto[]> {
     return this.http.get<any>(`${this.apiUrl}/Materia`).pipe(
-      map(res => {
-        const raw = Array.isArray(res) ? res : (res?.$values || res?.data || []);
-        const mapped: MateriaDto[] = raw.map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
+      map((res) => {
+        const raw = Array.isArray(res) ? res : res?.$values || res?.data || [];
+        const mapped: MateriaDto[] = raw.map((item: any, idx: number) =>
+          this.mapToMateriaDto(item, idx),
+        );
         this.materiasSubject.next(mapped);
         return mapped;
       }),
       catchError((err) => {
         console.error('Error al obtener materias de la API /api/Materia:', err);
         return of(this.materiasSubject.value);
-      })
+      }),
     );
   }
 
-  crearMateria(dto: { nombre: string; codigo: string; descripcion?: string; semestre?: string; creditos?: number; docenteId?: number; claseId?: number }): Observable<any> {
+  crearMateria(dto: {
+    nombre: string;
+    codigo: string;
+    descripcion?: string;
+    semestre?: string;
+    creditos?: number;
+    docenteId?: number;
+    claseId?: number;
+  }): Observable<any> {
     return this.http.post(`${this.apiUrl}/Materia`, dto);
   }
 
-  createMateria(dto: { nombre: string; codigo: string; descripcion?: string; semestre?: string; creditos?: number; docenteId?: number; claseId?: number } | any): Observable<any> {
+  createMateria(
+    dto:
+      | {
+          nombre: string;
+          codigo: string;
+          descripcion?: string;
+          semestre?: string;
+          creditos?: number;
+          docenteId?: number;
+          claseId?: number;
+        }
+      | any,
+  ): Observable<any> {
     return this.crearMateria(dto);
   }
 
   eliminarMateria(id: number): Observable<any> {
     return this.http.delete(`${this.apiUrl}/Materia/${id}`).pipe(
       tap(() => {
-        const updated = this.materiasSubject.value.filter(m => Number(m.id) !== Number(id));
+        const updated = this.materiasSubject.value.filter((m) => Number(m.id) !== Number(id));
         this.materiasSubject.next(updated);
-      })
+      }),
     );
   }
 
@@ -268,7 +324,7 @@ export class MateriaService {
 
   getMateriaById(id: number): MateriaDto | undefined {
     const list = this.materiasSubject.value;
-    return list.find(m => Number(m.id) === Number(id));
+    return list.find((m) => Number(m.id) === Number(id));
   }
 
   refreshMaterias(): Observable<MateriaDto[]> {
@@ -282,13 +338,16 @@ export class MateriaService {
   syncMaterias(nuevas: MateriaDto[]): void {
     const current = this.materiasSubject.value;
     const mapById = new Map<number, MateriaDto>();
-    current.forEach(m => mapById.set(m.id, m));
-    nuevas.forEach(m => mapById.set(m.id, m));
+    current.forEach((m) => mapById.set(m.id, m));
+    nuevas.forEach((m) => mapById.set(m.id, m));
     const merged = Array.from(mapById.values());
     this.materiasSubject.next(merged);
   }
 
-  private buildAyudantePayload(ayudanteEmail?: string, ayudanteId?: number): { ayudanteEmail?: string; ayudanteId?: number } {
+  private buildAyudantePayload(
+    ayudanteEmail?: string,
+    ayudanteId?: number,
+  ): { ayudanteEmail?: string; ayudanteId?: number } {
     const payload: { ayudanteEmail?: string; ayudanteId?: number } = {};
 
     if (Number.isFinite(Number(ayudanteId)) && Number(ayudanteId) > 0) {
@@ -304,7 +363,11 @@ export class MateriaService {
     return payload;
   }
 
-  asignarAyudanteClase(claseId: number, ayudanteEmail?: string, ayudanteId?: number): Observable<{ success: boolean; mensaje: string; fallback?: boolean }> {
+  asignarAyudanteClase(
+    claseId: number,
+    ayudanteEmail?: string,
+    ayudanteId?: number,
+  ): Observable<{ success: boolean; mensaje: string; fallback?: boolean }> {
     const payload = this.buildAyudantePayload(ayudanteEmail, ayudanteId);
     if (!payload.ayudanteEmail && payload.ayudanteId === undefined) {
       return throwError(() => new Error('Debes ingresar un correo o ID válido del ayudante.'));
@@ -316,12 +379,20 @@ export class MateriaService {
       timeout(10000),
       map((res) => ({
         success: true,
-        mensaje: res?.message || (payload.ayudanteEmail ? `Ayudante asignado: ${payload.ayudanteEmail}` : `Ayudante asignado con ID ${payload.ayudanteId}.`)
-      }))
+        mensaje:
+          res?.message ||
+          (payload.ayudanteEmail
+            ? `Ayudante asignado: ${payload.ayudanteEmail}`
+            : `Ayudante asignado con ID ${payload.ayudanteId}.`),
+      })),
     );
   }
 
-  asignarAyudanteMateria(materiaId: number, ayudanteEmail: string, ayudanteId?: number): Observable<{ success: boolean; mensaje: string; fallback?: boolean }> {
+  asignarAyudanteMateria(
+    materiaId: number,
+    ayudanteEmail: string,
+    ayudanteId?: number,
+  ): Observable<{ success: boolean; mensaje: string; fallback?: boolean }> {
     const email = (ayudanteEmail || '').trim();
     const normalizedId = Number(ayudanteId);
     const payload = this.buildAyudantePayload(email, normalizedId);
@@ -338,15 +409,25 @@ export class MateriaService {
       timeout(10000),
       map((res) => ({
         success: true,
-        mensaje: res?.message || (payload.ayudanteEmail ? `Ayudante asignado: ${payload.ayudanteEmail}` : `Ayudante asignado con ID ${payload.ayudanteId}.`)
+        mensaje:
+          res?.message ||
+          (payload.ayudanteEmail
+            ? `Ayudante asignado: ${payload.ayudanteEmail}`
+            : `Ayudante asignado con ID ${payload.ayudanteId}.`),
       })),
-      catchError(() => this.http.post<{ message?: string }>(urlMateria, payload).pipe(
-        timeout(10000),
-        map((res) => ({
-          success: true,
-          mensaje: res?.message || (payload.ayudanteEmail ? `Ayudante asignado: ${payload.ayudanteEmail}` : `Ayudante asignado con ID ${payload.ayudanteId}.`)
-        }))
-      ))
+      catchError(() =>
+        this.http.post<{ message?: string }>(urlMateria, payload).pipe(
+          timeout(10000),
+          map((res) => ({
+            success: true,
+            mensaje:
+              res?.message ||
+              (payload.ayudanteEmail
+                ? `Ayudante asignado: ${payload.ayudanteEmail}`
+                : `Ayudante asignado con ID ${payload.ayudanteId}.`),
+          })),
+        ),
+      ),
     );
   }
 
@@ -355,25 +436,23 @@ export class MateriaService {
   getTemasByMateria(materiaId: number): string[] {
     const key = `${this.STORAGE_TEMAS}_${materiaId}`;
     const stored = this.loadStorage<string[]>(key, []);
-    const localList = Array.isArray(stored) ? stored : [];
+    return Array.isArray(stored) ? stored : [];
+  }
 
-    this.http.get<any[]>(`${getApiBase()}/api/Materia/${materiaId}/temas`).pipe(
+  cargarTemasByMateria(materiaId: number): Observable<string[]> {
+    const key = `${this.STORAGE_TEMAS}_${materiaId}`;
+    const localList = this.getTemasByMateria(materiaId);
+
+    return this.http.get<any[]>(`${getApiBase()}/api/Materia/${materiaId}/temas`).pipe(
       map((res) => {
         const list = Array.isArray(res) ? res : [];
-        const mapped = list
+        return list
           .map((item: any) => String(item?.titulo ?? item?.nombre ?? '').trim())
           .filter(Boolean);
-
-        if (mapped.length > 0) {
-          this.saveStorage(key, mapped);
-          return mapped;
-        }
-        return localList;
       }),
-      catchError(() => of(localList))
-    ).subscribe();
-
-    return localList;
+      tap((mapped) => this.saveStorage(key, mapped)),
+      catchError(() => of(localList)),
+    );
   }
 
   addTemaToMateria(materiaId: number, nombreTema: string): string[] {
@@ -385,22 +464,25 @@ export class MateriaService {
     const payload = {
       titulo,
       descripcion: `Tema creado desde el frontend para materia ${materiaId}.`,
-      orden: actuales.length + 1
+      orden: actuales.length + 1,
     };
 
-    this.http.post<any>(`${getApiBase()}/api/Materia/${materiaId}/temas`, payload).pipe(
-      map((res) => {
-        const value = String(res?.titulo ?? titulo).trim();
-        const next = Array.from(new Set([...actuales, value])).filter(Boolean);
-        this.saveStorage(key, next);
-        return next;
-      }),
-      catchError(() => {
-        const updated = [...actuales, titulo];
-        this.saveStorage(key, updated);
-        return of(updated);
-      })
-    ).subscribe();
+    this.http
+      .post<any>(`${getApiBase()}/api/Materia/${materiaId}/temas`, payload)
+      .pipe(
+        map((res) => {
+          const value = String(res?.titulo ?? titulo).trim();
+          const next = Array.from(new Set([...actuales, value])).filter(Boolean);
+          this.saveStorage(key, next);
+          return next;
+        }),
+        catchError(() => {
+          const updated = [...actuales, titulo];
+          this.saveStorage(key, updated);
+          return of(updated);
+        }),
+      )
+      .subscribe();
 
     return [...actuales, titulo];
   }
@@ -411,7 +493,12 @@ export class MateriaService {
     return this.http.get<RecursoDto[]>(`${this.apiUrl}/Materia/${materiaId}/recursos`);
   }
 
-  subirRecursoArchivo(materiaId: number, file: File, titulo: string, descripcion: string = ''): Observable<any> {
+  subirRecursoArchivo(
+    materiaId: number,
+    file: File,
+    titulo: string,
+    descripcion: string = '',
+  ): Observable<any> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('archivo', file);
@@ -424,17 +511,32 @@ export class MateriaService {
     return this.getRecursos(materiaId).pipe(
       tap((mapped) => {
         const list = Array.isArray(mapped) ? mapped : [];
-        const currentOther = this.recursosSubject.value.filter(r => Number(r.materiaId) !== Number(materiaId));
+        const currentOther = this.recursosSubject.value.filter(
+          (r) => Number(r.materiaId) !== Number(materiaId),
+        );
         const combined = [...list, ...currentOther];
         this.recursosSubject.next(combined);
         this.saveStorage(this.STORAGE_RECURSOS, combined);
       }),
-      catchError(() => of([]))
+      catchError(() => of([])),
     );
   }
 
   getRecursosConEstado(materiaId: number): Observable<RecursoConEstadoDto[]> {
-    return this.getRecursos(materiaId);
+    return this.http
+      .get<RecursoConEstadoDto[]>(`${this.apiUrl}/Materia/${materiaId}/recursos/estado`)
+      .pipe(
+        tap((mapped) => {
+          const list = Array.isArray(mapped) ? mapped : [];
+          const currentOther = this.recursosSubject.value.filter(
+            (r) => Number(r.materiaId) !== Number(materiaId),
+          );
+          const combined = [...list, ...currentOther];
+          this.recursosSubject.next(combined);
+          this.saveStorage(this.STORAGE_RECURSOS, combined);
+        }),
+        catchError(() => this.getRecursosByMateria(materiaId)),
+      );
   }
 
   crearRecurso(materiaId: number, dto: CreateRecursoDto): Observable<any> {
@@ -445,19 +547,29 @@ export class MateriaService {
     return this.crearRecurso(materiaId, dto);
   }
 
-  uploadRecurso(materiaId: number, archivo: File, titulo?: string, descripcion?: string): Observable<{ url?: string; key?: string; raw?: any }> {
-    return this.subirRecursoArchivo(materiaId, archivo, titulo || archivo.name, descripcion || '').pipe(
+  uploadRecurso(
+    materiaId: number,
+    archivo: File,
+    titulo?: string,
+    descripcion?: string,
+  ): Observable<{ url?: string; key?: string; raw?: any }> {
+    return this.subirRecursoArchivo(
+      materiaId,
+      archivo,
+      titulo || archivo.name,
+      descripcion || '',
+    ).pipe(
       map((res: any) => ({
         url: res?.url || res?.Url || res?.urlArchivo || res?.enlace || undefined,
         key: res?.key || res?.Key || undefined,
-        raw: res
-      }))
+        raw: res,
+      })),
     );
   }
 
   marcarRecursoComoVisto(recursoId: number): Observable<any> {
     const safeRecursoId = Math.floor(Math.abs(Number(recursoId)) % 2147483647) || 1;
-    const list = this.recursosSubject.value.map(r => {
+    const list = this.recursosSubject.value.map((r) => {
       if (Number(r.id) === Number(recursoId)) {
         return { ...r, visto: !r.visto };
       }
@@ -467,16 +579,16 @@ export class MateriaService {
     this.saveStorage(this.STORAGE_RECURSOS, list);
 
     const payload: MarkRecursoAsSeenDto = {
-      recursoId: safeRecursoId
+      recursoId: safeRecursoId,
     };
 
-    return this.http.post(`${this.apiUrl}/Materia/recursos/marcar-visto`, payload).pipe(
-      catchError(() => of({ success: true }))
-    );
+    return this.http
+      .post(`${this.apiUrl}/Materia/recursos/marcar-visto`, payload)
+      .pipe(catchError(() => of({ success: true })));
   }
 
   toggleRecursoEsencial(recursoId: number): void {
-    const list = this.recursosSubject.value.map(r => {
+    const list = this.recursosSubject.value.map((r) => {
       if (Number(r.id) === Number(recursoId)) {
         return { ...r, esEsencial: !r.esEsencial };
       }
@@ -487,7 +599,7 @@ export class MateriaService {
   }
 
   deleteRecurso(recursoId: number): void {
-    const list = this.recursosSubject.value.filter(r => Number(r.id) !== Number(recursoId));
+    const list = this.recursosSubject.value.filter((r) => Number(r.id) !== Number(recursoId));
     this.recursosSubject.next(list);
     this.saveStorage(this.STORAGE_RECURSOS, list);
   }
@@ -496,7 +608,7 @@ export class MateriaService {
 
   getActividadesSnapshot(materiaId?: number): ActividadDto[] {
     if (materiaId !== undefined) {
-      return this.actividadesSubject.value.filter(a => Number(a.materiaId) === Number(materiaId));
+      return this.actividadesSubject.value.filter((a) => Number(a.materiaId) === Number(materiaId));
     }
     return this.actividadesSubject.value;
   }
@@ -509,12 +621,14 @@ export class MateriaService {
     return this.getActividades(materiaId).pipe(
       tap((mapped) => {
         const list = Array.isArray(mapped) ? mapped : [];
-        const currentOther = this.actividadesSubject.value.filter(a => Number(a.materiaId) !== Number(materiaId));
+        const currentOther = this.actividadesSubject.value.filter(
+          (a) => Number(a.materiaId) !== Number(materiaId),
+        );
         const combined = [...list, ...currentOther];
-        this.recursosSubject.next(combined);
+        this.actividadesSubject.next(combined);
         this.saveStorage(this.STORAGE_ACTIVIDADES, combined);
       }),
-      catchError(() => of([]))
+      catchError(() => of([])),
     );
   }
 
@@ -527,13 +641,13 @@ export class MateriaService {
   }
 
   updateActividadEstado(actividadId: number, nuevoEstado: string, nota?: number): void {
-    const list = this.actividadesSubject.value.map(a => {
+    const list = this.actividadesSubject.value.map((a) => {
       if (Number(a.id) === Number(actividadId)) {
         return {
           ...a,
           estado: nuevoEstado,
           nota: nota !== undefined ? nota : a.nota,
-          entregadoEl: nuevoEstado === 'entregada' ? new Date().toISOString() : a.entregadoEl
+          entregadoEl: nuevoEstado === 'entregada' ? new Date().toISOString() : a.entregadoEl,
         };
       }
       return a;
@@ -543,7 +657,7 @@ export class MateriaService {
   }
 
   deleteActividad(actividadId: number): void {
-    const list = this.actividadesSubject.value.filter(a => Number(a.id) !== Number(actividadId));
+    const list = this.actividadesSubject.value.filter((a) => Number(a.id) !== Number(actividadId));
     this.actividadesSubject.next(list);
     this.saveStorage(this.STORAGE_ACTIVIDADES, list);
   }
@@ -552,11 +666,15 @@ export class MateriaService {
 
   getAsistenciasByMateria(materiaId: number): Observable<RegistroAsistenciaDto[]> {
     return this.asistencias$.pipe(
-      map(regs => regs.filter(reg => Number(reg.materiaId) === Number(materiaId)))
+      map((regs) => regs.filter((reg) => Number(reg.materiaId) === Number(materiaId))),
     );
   }
 
-  addRegistroAsistencia(materiaId: number, tema: string, estudiantes?: EstudianteMateria[]): RegistroAsistenciaDto {
+  addRegistroAsistencia(
+    materiaId: number,
+    tema: string,
+    estudiantes?: EstudianteMateria[],
+  ): RegistroAsistenciaDto {
     const materia = this.getMateriaById(materiaId);
     const listaEstudiantes = estudiantes || materia?.estudiantes || [];
 
@@ -565,12 +683,12 @@ export class MateriaService {
       materiaId: Number(materiaId),
       fecha: new Date().toISOString().split('T')[0],
       tema: tema.trim(),
-      asistentes: listaEstudiantes.map(e => ({
+      asistentes: listaEstudiantes.map((e) => ({
         id: e.id,
         nombre: e.nombre,
         email: e.correo || `${e.nombre.toLowerCase().replace(/\s+/g, '.')}@uni.edu`,
-        presente: false
-      }))
+        presente: false,
+      })),
     };
 
     const current = this.asistenciasSubject.value;
@@ -581,13 +699,13 @@ export class MateriaService {
   }
 
   toggleAsistencia(registroId: number, estudianteIndex: number): void {
-    const list = this.asistenciasSubject.value.map(reg => {
+    const list = this.asistenciasSubject.value.map((reg) => {
       if (Number(reg.id) === Number(registroId)) {
         const asistentesCopy = [...reg.asistentes];
         if (asistentesCopy[estudianteIndex]) {
           asistentesCopy[estudianteIndex] = {
             ...asistentesCopy[estudianteIndex],
-            presente: !asistentesCopy[estudianteIndex].presente
+            presente: !asistentesCopy[estudianteIndex].presente,
           };
         }
         return { ...reg, asistentes: asistentesCopy };
@@ -600,23 +718,27 @@ export class MateriaService {
 
   getRecursosSnapshot(materiaId?: number): RecursoDto[] {
     if (materiaId !== undefined) {
-      return this.recursosSubject.value.filter(r => Number(r.materiaId) === Number(materiaId));
+      return this.recursosSubject.value.filter((r) => Number(r.materiaId) === Number(materiaId));
     }
     return this.recursosSubject.value;
   }
 
   // ==================== ASIGNACIÓN Y GESTIÓN DE ESTUDIANTES ====================
 
-  agregarEstudiantesAMateria(materiaId: number, estudiantes: ({ id: number; nombre?: string; correo?: string } | number)[]): Observable<any> {
-    const materias = this.materiasSubject.value.map(m => {
+  agregarEstudiantesAMateria(
+    materiaId: number,
+    estudiantes: ({ id: number; nombre?: string; correo?: string } | number)[],
+  ): Observable<any> {
+    const materias = this.materiasSubject.value.map((m) => {
       if (Number(m.id) === Number(materiaId)) {
         const actualList = m.estudiantes || [];
         const combined = [...actualList];
-        estudiantes.forEach(est => {
+        estudiantes.forEach((est) => {
           const id = typeof est === 'number' ? est : est.id;
           const nombre = typeof est === 'object' && est.nombre ? est.nombre : `Estudiante #${id}`;
-          const correo = typeof est === 'object' && est.correo ? est.correo : `estudiante${id}@uni.edu`;
-          if (!combined.some(e => Number(e.id) === Number(id) || e.correo === correo)) {
+          const correo =
+            typeof est === 'object' && est.correo ? est.correo : `estudiante${id}@uni.edu`;
+          if (!combined.some((e) => Number(e.id) === Number(id) || e.correo === correo)) {
             combined.push({
               id: id,
               nombre: nombre,
@@ -629,7 +751,7 @@ export class MateriaService {
               estado: 'Regular',
               tareasEntregadas: 5,
               totalTareas: 6,
-              observaciones: ['Matriculado oficialmente en la cátedra.']
+              observaciones: ['Matriculado oficialmente en la cátedra.'],
             });
           }
         });
@@ -640,14 +762,14 @@ export class MateriaService {
 
     this.materiasSubject.next(materias);
 
-    const estudianteIds = estudiantes.map(e => typeof e === 'number' ? e : e.id);
-    return this.http.post(`${this.apiUrl}/Materia/${materiaId}/estudiantes`, { estudianteIds }).pipe(
-      catchError(() => of({ success: true }))
-    );
+    const estudianteIds = estudiantes.map((e) => (typeof e === 'number' ? e : e.id));
+    return this.http
+      .post(`${this.apiUrl}/Materia/${materiaId}/estudiantes`, { estudianteIds })
+      .pipe(catchError(() => of({ success: true })));
   }
 
   agregarEstudianteDirecto(materiaId: number, estudiante: Partial<EstudianteMateria>): void {
-    const materias = this.materiasSubject.value.map(m => {
+    const materias = this.materiasSubject.value.map((m) => {
       if (Number(m.id) === Number(materiaId)) {
         const list = m.estudiantes || [];
         const nuevoId = estudiante.id || Date.now();
@@ -664,7 +786,9 @@ export class MateriaService {
           telefono: estudiante.telefono || '+593 99 123 4567',
           tareasEntregadas: estudiante.tareasEntregadas || 5,
           totalTareas: 6,
-          observaciones: estudiante.observaciones || ['Incorporado al aula por el docente responsable.']
+          observaciones: estudiante.observaciones || [
+            'Incorporado al aula por el docente responsable.',
+          ],
         };
         return { ...m, estudiantes: [nuevo, ...list] };
       }
@@ -674,10 +798,12 @@ export class MateriaService {
   }
 
   actualizarEstudianteEnMateria(materiaId: number, estudianteActualizado: EstudianteMateria): void {
-    const materias = this.materiasSubject.value.map(m => {
+    const materias = this.materiasSubject.value.map((m) => {
       if (Number(m.id) === Number(materiaId)) {
-        const list = (m.estudiantes || []).map(e =>
-          Number(e.id) === Number(estudianteActualizado.id) ? { ...e, ...estudianteActualizado } : e
+        const list = (m.estudiantes || []).map((e) =>
+          Number(e.id) === Number(estudianteActualizado.id)
+            ? { ...e, ...estudianteActualizado }
+            : e,
         );
         return { ...m, estudiantes: list };
       }
@@ -687,9 +813,16 @@ export class MateriaService {
   }
 
   eliminarEstudianteDeMateria(materiaOrClaseId: number, estudianteId: number): void {
-    const materias = this.materiasSubject.value.map(m => {
-      if (Number(m.id) === Number(materiaOrClaseId) || Number(m.claseId) === Number(materiaOrClaseId)) {
-        const list = (m.estudiantes || []).filter(e => Number(e.id) !== Number(estudianteId) && Number((e as any).estudianteId) !== Number(estudianteId));
+    const materias = this.materiasSubject.value.map((m) => {
+      if (
+        Number(m.id) === Number(materiaOrClaseId) ||
+        Number(m.claseId) === Number(materiaOrClaseId)
+      ) {
+        const list = (m.estudiantes || []).filter(
+          (e) =>
+            Number(e.id) !== Number(estudianteId) &&
+            Number((e as any).estudianteId) !== Number(estudianteId),
+        );
         return { ...m, estudiantes: list };
       }
       return m;
@@ -703,23 +836,25 @@ export class MateriaService {
    */
   eliminarEstudiante(claseId: number, estudianteId: number): Observable<any> {
     this.eliminarEstudianteDeMateria(claseId, estudianteId);
-    return this.http.delete(`${getApiBase()}/api/Clase/${claseId}/estudiantes/${estudianteId}`).pipe(
-      catchError(() => of({ success: true }))
-    );
+    return this.http
+      .delete(`${getApiBase()}/api/Clase/${claseId}/estudiantes/${estudianteId}`)
+      .pipe(catchError(() => of({ success: true })));
   }
 
   agregarObservacionEstudiante(materiaId: number, estudianteId: number, observacion: string): void {
     if (!observacion?.trim()) return;
-    const materias = this.materiasSubject.value.map(m => {
+    const materias = this.materiasSubject.value.map((m) => {
       if (Number(m.id) === Number(materiaId)) {
-        const list = (m.estudiantes || []).map(e =>
-          Number(e.id) === Number(estudianteId) ? {
-            ...e,
-            observaciones: [
-              `[${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}] ${observacion.trim()}`,
-              ...(e.observaciones || [])
-            ]
-          } : e
+        const list = (m.estudiantes || []).map((e) =>
+          Number(e.id) === Number(estudianteId)
+            ? {
+                ...e,
+                observaciones: [
+                  `[${new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}] ${observacion.trim()}`,
+                  ...(e.observaciones || []),
+                ],
+              }
+            : e,
         );
         return { ...m, estudiantes: list };
       }
