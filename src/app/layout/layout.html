@@ -1,3 +1,4 @@
+
 <div class="bg-surface-50 text-slate-900 antialiased min-h-screen overflow-hidden flex flex-col md:flex-row selection:bg-accent selection:text-white"
      [ngClass]="{'overflow-hidden': menuAbierto}">
 
@@ -68,7 +69,7 @@
           <i class="fa-solid fa-chalkboard-user text-sm w-5 text-center text-indigo-600"></i>
           <span class="text-sm font-medium">Gestión de Clases</span>
         </a>
-        <a routerLink="/docente/asistencia" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/docente/gestion-clases" [queryParams]="{ tab: 'horarios' }" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
           <i class="fa-solid fa-clipboard-user text-sm w-5 text-center text-indigo-600"></i>
           <span class="text-sm font-medium">Control Asistencia</span>
         </a>

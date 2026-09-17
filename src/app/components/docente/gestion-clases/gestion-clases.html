@@ -957,29 +957,64 @@
   @if (tabActiva === 'crear-clase') {
     <div class="space-y-6">
       <!-- Banner de Detección de Conflicto -->
-      @if (conflictoDetectado) {
-        <div class="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 shadow-sm flex items-start gap-3 animate-pulse">
+      @if (conflictoDocente) {
+        <div class="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 shadow-sm flex items-start gap-3">
           <div class="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shrink-0 text-base font-bold">
             <i class="fa-solid fa-triangle-exclamation"></i>
           </div>
           <div>
             <h4 class="text-sm font-bold text-rose-950">
-              ⚠️ CONFLICTO DE HORARIO DETECTADO CON LOS ALUMNOS
+              ⚠️ CONFLICTO DE HORARIO DEL DOCENTE
             </h4>
             <p class="text-xs mt-1 text-rose-800">
-              Los estudiantes de esta cátedra ya están ocupados los <strong>{{ conflictoDetectado.dia }}s de {{ conflictoDetectado.horaInicio }} a {{ conflictoDetectado.horaFin }}</strong> en la materia <strong>'{{ conflictoDetectado.materiaOcupada }}'</strong> ({{ conflictoDetectado.tipo }}).
+              Ya tienes <strong>{{ conflictoDocente.nombreMateria }}</strong> programada el
+              <strong>{{ conflictoDocente.fecha }}</strong> de
+              <strong>{{ conflictoDocente.horaInicio }} a {{ conflictoDocente.horaFin }}</strong>.
             </p>
             <p class="text-[11px] font-semibold text-rose-700 mt-1">
-              Recomendación: Cambia el día o la hora para evitar cruces en el horario de los alumnos.
+              Debes seleccionar otra fecha u horario antes de crear la sesión.
             </p>
           </div>
         </div>
-      } @else {
+      } @else if (conflictoDetectado) {
+        <div class="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 shadow-sm flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 shrink-0 text-base font-bold">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-amber-950">
+              ⚠️ CONFLICTO DE HORARIO DETECTADO CON LOS ALUMNOS
+            </h4>
+            <p class="text-xs mt-1 text-amber-800">
+              Los estudiantes de esta cátedra ya están ocupados los <strong>{{ conflictoDetectado.dia }}s de {{ conflictoDetectado.horaInicio }} a {{ conflictoDetectado.horaFin }}</strong> en la materia <strong>'{{ conflictoDetectado.materiaOcupada }}'</strong> ({{ conflictoDetectado.tipo }}).
+            </p>
+            <p class="text-[11px] font-semibold text-amber-700 mt-1">
+              Recomendación: cambia el día o la hora para evitar cruces en el horario de los alumnos.
+            </p>
+          </div>
+        </div>
+      } @else if (nuevaClase.fecha && cargandoConflictosDocente) {
+        <div class="p-3.5 rounded-2xl bg-sky-50 border border-sky-200 text-sky-900 flex items-center gap-3 text-xs shadow-sm">
+          <i class="fa-solid fa-spinner animate-spin text-sky-600 text-base"></i>
+          <div>
+            <span class="font-bold">Verificando horario:</span>
+            <span class="text-sky-800"> consultando las demás sesiones del docente.</span>
+          </div>
+        </div>
+      } @else if (nuevaClase.fecha) {
         <div class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-3 text-xs shadow-sm">
           <i class="fa-solid fa-circle-check text-emerald-600 text-base"></i>
           <div>
-            <span class="font-bold">Horario Verificado:</span>
-            <span class="text-emerald-800"> Ningún alumno de este grupo presenta cruces de horario en la franja seleccionada.</span>
+            <span class="font-bold">Horario verificado:</span>
+            <span class="text-emerald-800"> no se detectan cruces del docente ni de los alumnos en la franja seleccionada.</span>
+          </div>
+        </div>
+      } @else {
+        <div class="p-3.5 rounded-2xl bg-sky-50 border border-sky-200 text-sky-900 flex items-center gap-3 text-xs shadow-sm">
+          <i class="fa-solid fa-circle-info text-sky-600 text-base"></i>
+          <div>
+            <span class="font-bold">Selecciona una fecha:</span>
+            <span class="text-sky-800"> el sistema verificará automáticamente los cruces de horario.</span>
           </div>
         </div>
       }
@@ -1010,23 +1045,25 @@
             <label class="block text-xs font-semibold text-slate-700 mb-1">Fecha de la sesión</label>
             <input type="date"
                    [(ngModel)]="nuevaClase.fecha"
-                   (ngModelChange)="revisarConflictoHorario()"
+                   (ngModelChange)="alCambiarFechaSesion($event)"
                    name="fecha"
                    required
                    class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none bg-white" />
           </div>
 
-          <!-- Días de la semana -->
+          <!-- Día calculado a partir de la fecha -->
           <div class="col-span-1 md:col-span-2">
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Días de la semana</label>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">
+              Día de la semana
+              <span class="font-normal text-slate-400">(se calcula automáticamente con la fecha)</span>
+            </label>
             <div class="flex flex-wrap gap-2">
               @for (dia of ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']; track dia) {
-                <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors"
-                       [ngClass]="nuevaClase.diasSeleccionados.includes(dia) ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600'">
+                <label class="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs cursor-default transition-colors"
+                       [ngClass]="nuevaClase.diasSeleccionados.includes(dia) ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-400'">
                   <input type="checkbox"
-                         [value]="dia"
-                         (change)="toggleDia($event)"
                          [checked]="nuevaClase.diasSeleccionados.includes(dia)"
+                         disabled
                          class="accent-indigo-600" />
                   <span>{{ dia }}</span>
                 </label>
@@ -1112,10 +1149,24 @@
           <!-- Botón Guardar -->
           <div class="col-span-1 md:col-span-2 flex justify-end mt-2">
             <button type="submit"
-                    [class]="conflictoDetectado ? 'bg-amber-600 hover:bg-amber-700' : 'bg-indigo-600 hover:bg-indigo-700'"
-                    class="py-2.5 px-6 text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center gap-2">
-              <i class="fa-solid" [ngClass]="conflictoDetectado ? 'fa-triangle-exclamation' : 'fa-calendar-check'"></i>
-              {{ conflictoDetectado ? 'Programar con Advertencia' : 'Confirmar y Crear Clase' }}
+                    [disabled]="!!conflictoDocente || isLoading || cargandoConflictosDocente"
+                    [ngClass]="{
+                      'bg-rose-400 cursor-not-allowed opacity-70': !!conflictoDocente,
+                      'bg-amber-600 hover:bg-amber-700': !conflictoDocente && !!conflictoDetectado,
+                      'bg-indigo-600 hover:bg-indigo-700': !conflictoDocente && !conflictoDetectado
+                    }"
+                    class="py-2.5 px-6 text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center gap-2 disabled:cursor-not-allowed">
+              <span>
+                {{ cargandoConflictosDocente
+                ? 'Verificando horario...'
+                : isLoading
+                  ? 'Guardando...'
+                  : conflictoDocente
+                    ? 'Horario no disponible'
+                    : conflictoDetectado
+                      ? 'Programar con advertencia'
+                      : 'Confirmar y Crear Clase' }}
+              </span>
             </button>
           </div>
         </form>
@@ -1207,19 +1258,43 @@
       @if (subTabRecursos === 'recursos') {
         <div class="space-y-6">
           <div class="glass-card rounded-2xl p-6 border border-slate-200 bg-white shadow-sm">
-            <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-              <i class="fa-solid fa-cloud-arrow-up text-indigo-600"></i> Publicar Recurso Pedagógico
-            </h3>
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4">
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <i class="fa-solid text-indigo-600"
+                     [ngClass]="recursoEditandoId ? 'fa-pen-to-square' : 'fa-cloud-arrow-up'"></i>
+                  {{ recursoEditandoId ? 'Editar Recurso Pedagógico' : 'Publicar Recurso Pedagógico' }}
+                </h3>
+                <p class="text-xs text-slate-500 mt-1">
+                  {{ recursoEditandoId
+                  ? 'Modifica el recurso seleccionado. Los cambios se guardarán en el backend.'
+                  : 'Publica material asociado a la materia seleccionada.' }}
+                </p>
+              </div>
+
+              @if (recursoEditandoId) {
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold">
+                  <i class="fa-solid fa-pen"></i>
+                  Editando recurso #{{ recursoEditandoId }}
+                </span>
+              }
+            </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div class="md:col-span-2">
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Título del Recurso</label>
-                <input type="text" [(ngModel)]="nuevoRecurso.titulo" placeholder="Ej: Guía Práctica de Derivadas Vectoriales" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none" />
+                <input
+                  type="text"
+                  [(ngModel)]="nuevoRecurso.titulo"
+                  placeholder="Ej: Guía Práctica de Derivadas Vectoriales"
+                  class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
               </div>
 
               <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Tipo de Recurso</label>
-                <select [(ngModel)]="nuevoRecurso.tipo" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none bg-white">
+                <select
+                  [(ngModel)]="nuevoRecurso.tipo"
+                  class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400">
                   <option value="PDF">Documento PDF</option>
                   <option value="Video">Video Explicativo</option>
                   <option value="Simulador">Simulador Interactivo</option>
@@ -1228,51 +1303,112 @@
               </div>
 
               <div class="md:col-span-2">
-                <label class="block text-xs font-semibold text-slate-700 mb-1">URL o Enlace del Archivo (Opcional si sube archivo)</label>
-                <input type="url" [(ngModel)]="nuevoRecurso.url" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none" />
+                <label class="block text-xs font-semibold text-slate-700 mb-1">URL o Enlace del Archivo</label>
+                <input
+                  type="url"
+                  [(ngModel)]="nuevoRecurso.url"
+                  placeholder="https://..."
+                  class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
               </div>
 
               <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Tema del Sílabo</label>
-                <input type="text" [(ngModel)]="nuevoRecurso.temaNombre" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none" />
+                <input
+                  type="text"
+                  [(ngModel)]="nuevoRecurso.temaNombre"
+                  class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
+              </div>
+
+              <div class="md:col-span-3">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Descripción</label>
+                <textarea
+                  [(ngModel)]="nuevoRecurso.descripcion"
+                  rows="3"
+                  placeholder="Describe brevemente el contenido o propósito del recurso..."
+                  class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"></textarea>
               </div>
 
               <!-- Carga de Archivo Adjunto (Docente/Ayudante) -->
               <div class="md:col-span-3">
-                <label class="block text-xs font-semibold text-slate-700 mb-1">Subir Archivo / Guía de Cátedra (PDF, DOCX, ZIP, Imagen)</label>
-                <div class="flex items-center gap-3">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">
+                  {{ recursoEditandoId ? 'Reemplazar Archivo Adjunto (opcional)' : 'Subir Archivo / Guía de Cátedra (PDF, DOCX, ZIP, Imagen)' }}
+                </label>
+                <div class="flex flex-wrap items-center gap-3">
                   <label class="cursor-pointer px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-2 transition-colors">
                     <i class="fa-solid fa-cloud-arrow-up text-indigo-600"></i>
                     <span>{{ archivoRecurso ? 'Cambiar archivo' : 'Examinar archivo...' }}</span>
-                    <input type="file" (change)="onArchivoRecursoChange($event)" class="hidden" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.png,.jpg,.jpeg" />
+                    <input
+                      type="file"
+                      (change)="onArchivoRecursoChange($event)"
+                      class="hidden"
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.png,.jpg,.jpeg" />
                   </label>
+
                   @if (archivoRecurso) {
                     <div class="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-800 px-3 py-1.5 rounded-lg text-xs">
                       <i class="fa-solid fa-paperclip"></i>
-                      <span class="font-medium max-w-xs truncate">{{ archivoRecurso.nombre }} ({{ archivoRecurso.tamanoKb }} KB)</span>
-                      <button (click)="quitarArchivoRecurso()" class="text-rose-500 hover:text-rose-700 ml-1" title="Quitar archivo">
+                      <span class="font-medium max-w-xs truncate">
+                        {{ archivoRecurso.nombre }} ({{ archivoRecurso.tamanoKb }} KB)
+                      </span>
+                      <button
+                        type="button"
+                        (click)="quitarArchivoRecurso()"
+                        class="text-rose-500 hover:text-rose-700 ml-1"
+                        title="Quitar archivo">
                         <i class="fa-solid fa-xmark"></i>
                       </button>
                     </div>
+                  } @else if (recursoEditandoId) {
+                    <span class="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+                      <i class="fa-solid fa-circle-info text-indigo-500 mr-1"></i>
+                      Si no seleccionas otro archivo, se conservará el adjunto actual.
+                    </span>
                   }
                 </div>
               </div>
 
               <div class="md:col-span-3">
                 <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input type="checkbox" [(ngModel)]="nuevoRecurso.esEsencial" class="accent-indigo-600" />
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="nuevoRecurso.esEsencial"
+                    class="accent-indigo-600" />
                   <span>Marcar como Recurso Esencial (Obligatorio para la materia)</span>
                 </label>
 
-                <!-- Links adicionales -->
-                <div class="mt-2">
-                  <label class="block text-xs font-semibold text-slate-700 mb-1">Enlaces relacionados (uno por línea o separados por comas)</label>
-                  <textarea [(ngModel)]="nuevoRecurso.linksString" rows="2" placeholder="https://youtu.be/..., https://ejemplo.edu/recurso" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs"></textarea>
+                <div class="mt-3">
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">
+                    Enlaces relacionados (uno por línea o separados por comas)
+                  </label>
+                  <textarea
+                    [(ngModel)]="nuevoRecurso.linksString"
+                    rows="3"
+                    placeholder="https://youtu.be/...&#10;https://ejemplo.edu/recurso"
+                    class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"></textarea>
                 </div>
 
-                <div class="flex items-center justify-end gap-2 mt-3">
-                  <button (click)="crearRecursoPedagogico()" class="py-2 px-5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center gap-2">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> Publicar Recurso
+                <div class="flex flex-wrap items-center justify-end gap-2 mt-4">
+                  @if (recursoEditandoId) {
+                    <button
+                      type="button"
+                      (click)="cancelarEdicionRecurso()"
+                      [disabled]="isLoading"
+                      class="py-2 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold rounded-xl transition-colors disabled:opacity-50">
+                      <i class="fa-solid fa-xmark mr-1"></i>
+                      Cancelar edición
+                    </button>
+                  }
+
+                  <button
+                    type="button"
+                    (click)="crearRecursoPedagogico()"
+                    [disabled]="isLoading"
+                    class="py-2 px-5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center gap-2">
+                    <i class="fa-solid"
+                       [ngClass]="isLoading ? 'fa-spinner fa-spin' : (recursoEditandoId ? 'fa-floppy-disk' : 'fa-cloud-arrow-up')"></i>
+                    {{ isLoading
+                    ? 'Guardando...'
+                    : (recursoEditandoId ? 'Guardar Cambios' : 'Publicar Recurso') }}
                   </button>
                 </div>
               </div>
@@ -1282,42 +1418,103 @@
           <!-- Listado de Recursos -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             @for (rec of recursosMateria; track rec.id) {
-              <div class="p-4 rounded-xl border border-slate-200 bg-white shadow-sm flex items-start justify-between gap-3">
-                <div class="flex items-start gap-3">
-                  <div class="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
-                       [ngClass]="rec.tipo === 'PDF' ? 'bg-rose-50 text-rose-600' : rec.tipo === 'Video' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'">
-                    <i class="fa-solid" [ngClass]="rec.tipo === 'PDF' ? 'fa-file-pdf' : rec.tipo === 'Video' ? 'fa-play' : 'fa-flask'"></i>
+              <div
+                class="p-4 rounded-xl border bg-white shadow-sm flex items-start justify-between gap-3 transition-all"
+                [ngClass]="recursoEditandoId === rec.id ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200'">
+                <div class="flex items-start gap-3 min-w-0">
+                  <div
+                    class="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
+                    [ngClass]="rec.tipo === 'PDF' ? 'bg-rose-50 text-rose-600' : rec.tipo === 'Video' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'">
+                    <i
+                      class="fa-solid"
+                      [ngClass]="rec.tipo === 'PDF' ? 'fa-file-pdf' : rec.tipo === 'Video' ? 'fa-play' : 'fa-flask'"></i>
                   </div>
-                  <div>
+
+                  <div class="min-w-0">
                     <div class="flex items-center gap-1.5 flex-wrap">
                       <h4 class="text-xs font-bold text-slate-900">{{ rec.titulo }}</h4>
+
                       @if (rec.esEsencial) {
                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
                           Esencial
                         </span>
                       }
+
                       @if (rec.nombreArchivo) {
                         <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
-                          <i class="fa-solid fa-paperclip"></i> Adjunto
+                          <i class="fa-solid fa-paperclip"></i>
+                          Adjunto
                         </span>
                       }
                     </div>
-                    <p class="text-[11px] text-slate-500 mt-0.5">{{ rec.descripcion || rec.temaNombre }}</p>
 
-                    <div class="flex items-center gap-3 mt-2">
-                      <a [href]="rec.url" target="_blank" class="text-[11px] text-indigo-600 hover:underline font-medium inline-flex items-center gap-1">
-                        Abrir enlace <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
-                      </a>
-                      <button (click)="descargarRecursoDocumento(rec)" class="text-[11px] text-emerald-700 hover:text-emerald-800 font-bold inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded">
-                        <i class="fa-solid fa-download text-[9px]"></i> Descargar archivo
+                    <p class="text-[11px] text-slate-500 mt-0.5">
+                      {{ rec.descripcion || rec.temaNombre || 'Sin descripción.' }}
+                    </p>
+
+                    @if (rec.links && rec.links.length > 0) {
+                      <div class="mt-2 space-y-1">
+                        @for (link of rec.links; track link) {
+                          <a
+                            [href]="link"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="block text-[10px] text-blue-600 hover:underline truncate max-w-sm">
+                            <i class="fa-solid fa-link mr-1"></i>{{ link }}
+                          </a>
+                        }
+                      </div>
+                    }
+
+                    <div class="flex flex-wrap items-center gap-2 mt-3">
+                      @if (rec.url) {
+                        <a
+                          [href]="rec.url"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-[11px] text-indigo-600 hover:underline font-medium inline-flex items-center gap-1">
+                          Abrir enlace
+                          <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                        </a>
+                      }
+
+                      <button
+                        type="button"
+                        (click)="descargarRecursoDocumento(rec)"
+                        class="text-[11px] text-emerald-700 hover:text-emerald-800 font-bold inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg">
+                        <i class="fa-solid fa-download text-[9px]"></i>
+                        Descargar
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <button (click)="eliminarRecurso(rec.id)" class="text-slate-400 hover:text-rose-600 p-1" title="Eliminar recurso">
-                  <i class="fa-solid fa-trash-can text-xs"></i>
-                </button>
+                <div class="flex flex-col items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    (click)="iniciarEdicionRecurso(rec)"
+                    class="w-8 h-8 rounded-lg text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-colors"
+                    title="Editar recurso">
+                    <i class="fa-solid fa-pen-to-square text-xs"></i>
+                  </button>
+
+                  <button
+                    type="button"
+                    (click)="toggleRecursoEsencial(rec.id)"
+                    class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                    [ngClass]="rec.esEsencial ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'"
+                    [title]="rec.esEsencial ? 'Quitar como esencial' : 'Marcar como esencial'">
+                    <i class="fa-solid fa-star text-xs"></i>
+                  </button>
+
+                  <button
+                    type="button"
+                    (click)="eliminarRecurso(rec.id)"
+                    class="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors"
+                    title="Eliminar recurso">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
               </div>
             } @empty {
               <div class="col-span-full py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-xs text-slate-500">
@@ -1337,20 +1534,33 @@
             <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
               <div>
                 <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <i class="fa-solid fa-list-check text-indigo-600"></i>
-                  Crear Actividad o Taller
+                  <i class="fa-solid text-indigo-600"
+                     [ngClass]="actividadEditandoId ? 'fa-pen-to-square' : 'fa-list-check'"></i>
+                  {{ actividadEditandoId ? 'Editar Actividad o Taller' : 'Crear Actividad o Taller' }}
                 </h3>
                 <p class="text-xs text-slate-500 mt-1">
-                  La actividad quedará asociada a la materia seleccionada y disponible para sus estudiantes.
+                  {{ actividadEditandoId
+                  ? 'Modifica la actividad seleccionada. Los cambios se guardarán en el backend.'
+                  : 'La actividad quedará asociada a la materia seleccionada y disponible para sus estudiantes.' }}
                 </p>
               </div>
-              <button
-                type="button"
-                (click)="actualizarRecursosYActividades()"
-                class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-2">
-                <i class="fa-solid fa-rotate"></i>
-                Actualizar
-              </button>
+
+              <div class="flex items-center gap-2">
+                @if (actividadEditandoId) {
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold">
+                    <i class="fa-solid fa-pen"></i>
+                    Editando #{{ actividadEditandoId }}
+                  </span>
+                }
+
+                <button
+                  type="button"
+                  (click)="actualizarRecursosYActividades()"
+                  class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-2">
+                  <i class="fa-solid fa-rotate"></i>
+                  Actualizar
+                </button>
+              </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1384,7 +1594,20 @@
                   class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
               </div>
 
-              <div class="md:col-span-2">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Ponderación</label>
+                <div class="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    [(ngModel)]="nuevaActividad.ponderacion"
+                    class="w-full px-3 py-2 pr-8 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
+                  <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
+                </div>
+              </div>
+
+              <div class="md:col-span-3">
                 <label class="block text-xs font-semibold text-slate-700 mb-1">Descripción / instrucciones</label>
                 <textarea
                   [(ngModel)]="nuevaActividad.descripcion"
@@ -1393,14 +1616,28 @@
                   class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"></textarea>
               </div>
 
-              <div class="md:col-span-3 flex items-center justify-end">
+              <div class="md:col-span-3 flex flex-wrap items-center justify-end gap-2">
+                @if (actividadEditandoId) {
+                  <button
+                    type="button"
+                    (click)="cancelarEdicionActividad()"
+                    [disabled]="isLoading"
+                    class="py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold rounded-xl transition-colors disabled:opacity-50">
+                    <i class="fa-solid fa-xmark mr-1"></i>
+                    Cancelar edición
+                  </button>
+                }
+
                 <button
                   type="button"
                   (click)="crearActividadPedagogica()"
                   [disabled]="isLoading"
                   class="py-2.5 px-5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center gap-2">
-                  <i class="fa-solid fa-plus"></i>
-                  {{ isLoading ? 'Guardando...' : 'Publicar Actividad' }}
+                  <i class="fa-solid"
+                     [ngClass]="isLoading ? 'fa-spinner fa-spin' : (actividadEditandoId ? 'fa-floppy-disk' : 'fa-plus')"></i>
+                  {{ isLoading
+                  ? 'Guardando...'
+                  : (actividadEditandoId ? 'Guardar Cambios' : 'Publicar Actividad') }}
                 </button>
               </div>
             </div>
@@ -1410,7 +1647,9 @@
             <div class="flex items-center justify-between gap-3 mb-4">
               <div>
                 <h3 class="text-sm font-bold text-slate-900">Actividades publicadas</h3>
-                <p class="text-xs text-slate-500 mt-1">Información cargada desde el backend para la materia seleccionada.</p>
+                <p class="text-xs text-slate-500 mt-1">
+                  Información cargada desde el backend para la materia seleccionada.
+                </p>
               </div>
               <span class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
                 {{ actividadesMateria.length }} actividad(es)
@@ -1419,7 +1658,9 @@
 
             <div class="space-y-3">
               @for (act of actividadesMateria; track act.id) {
-                <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-colors">
+                <div
+                  class="p-4 rounded-xl border bg-slate-50/60 hover:bg-white transition-colors"
+                  [ngClass]="actividadEditandoId === act.id ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-200'">
                   <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                     <div class="flex items-start gap-3 min-w-0">
                       <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0">
@@ -1446,15 +1687,31 @@
                             <i class="fa-regular fa-calendar text-indigo-500"></i>
                             Fecha límite: {{ act.fechaEntrega | date:'dd/MM/yyyy HH:mm' }}
                           </span>
+
                           <span class="inline-flex items-center gap-1.5">
                             <i class="fa-solid fa-book text-indigo-500"></i>
                             {{ materiaSeleccionada?.nombre || 'Materia' }}
                           </span>
+
+                          @if (act.ponderacion !== undefined && act.ponderacion !== null) {
+                            <span class="inline-flex items-center gap-1.5">
+                              <i class="fa-solid fa-percent text-indigo-500"></i>
+                              {{ act.ponderacion }}%
+                            </span>
+                          }
                         </div>
                       </div>
                     </div>
 
                     <div class="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        (click)="iniciarEdicionActividad(act)"
+                        class="px-3 py-2 text-[11px] font-bold rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 transition-colors inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                        Editar
+                      </button>
+
                       <button
                         type="button"
                         (click)="descargarActividadDocumento(act)"
