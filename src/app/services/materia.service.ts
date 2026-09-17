@@ -62,6 +62,10 @@ export interface MateriaDto {
   ayudantes?: string[];
   estudiantes?: EstudianteMateria[];
   actividades?: any[];
+  cupos?: number;
+  cuposDisponibles?: number;
+  postulantesPendientes?: number;
+  estudiantesPostulando?: number;
 }
 
 export interface CreateMateriaDto {
@@ -143,13 +147,80 @@ export class MateriaService {
   }
 
   private mapToMateriaDto(item: any, idx: number = 0): MateriaDto {
-    const rawDocente =
-      typeof item.docente === 'object' && item.docente
-        ? `${item.docente.nombre || ''} ${item.docente.apellido || ''}`.trim() ||
-          item.docente.nombreCompleto ||
-          item.docente.username
-        : String(item.docenteNombre || item.docente || item.profesor || 'Docente Titular');
+    if (!item) {
+      return {
+        id: idx + 101,
+        nombre: `Asignatura ${idx + 1}`,
+        codigo: `MAT-${101 + idx}`,
+        docente: 'Por asignar',
+        creditos: 4,
+        semana: 1,
+        totalSemanas: 16,
+        semestre: '2026-2',
+        grupo: 'Grupo A',
+        ayudantes: [],
+        estudiantes: [],
+      };
+    }
 
+    let docenteStr = '';
+    if (item.catedra?.docente) {
+      if (typeof item.catedra.docente === 'object') {
+        const nom = item.catedra.docente.nombres || item.catedra.docente.nombre || '';
+        const ape = item.catedra.docente.apellidos || item.catedra.docente.apellido || '';
+        docenteStr =
+          `${nom} ${ape}`.trim() ||
+          item.catedra.docente.nombreCompleto ||
+          item.catedra.docente.username ||
+          '';
+      } else if (typeof item.catedra.docente === 'string') {
+        docenteStr = item.catedra.docente;
+      }
+    }
+    if (!docenteStr && item.docente) {
+      if (typeof item.docente === 'object') {
+        const nom = item.docente.nombres || item.docente.nombre || '';
+        const ape = item.docente.apellidos || item.docente.apellido || '';
+        docenteStr =
+          `${nom} ${ape}`.trim() || item.docente.nombreCompleto || item.docente.username || '';
+      } else if (typeof item.docente === 'string') {
+        docenteStr = item.docente;
+      }
+    }
+    if (!docenteStr && item.docenteResponsable) {
+      if (typeof item.docenteResponsable === 'object') {
+        const nom = item.docenteResponsable.nombres || item.docenteResponsable.nombre || '';
+        const ape = item.docenteResponsable.apellidos || item.docenteResponsable.apellido || '';
+        docenteStr =
+          `${nom} ${ape}`.trim() ||
+          item.docenteResponsable.nombreCompleto ||
+          item.docenteResponsable.username ||
+          '';
+      } else if (typeof item.docenteResponsable === 'string') {
+        docenteStr = item.docenteResponsable;
+      }
+    }
+    if (!docenteStr && item.docente && typeof item.docente === 'object') {
+      const p = item.docente.persona;
+      if (p) {
+        const nom = p.nombres || p.nombre || '';
+        const ape = p.apellidos || p.apellido || '';
+        docenteStr = `${nom} ${ape}`.trim();
+      }
+    }
+    if (!docenteStr) {
+      docenteStr =
+        item.docenteTitular ||
+        item.nombreDocente ||
+        item.docenteNombre ||
+        item.catedra?.docenteTitular ||
+        item.catedra?.docenteNombre ||
+        item.profesorResponsable ||
+        item.profesorNombre ||
+        item.profesor ||
+        '';
+    }
+    const rawDocente = docenteStr ? String(docenteStr).trim() : 'Por asignar';
     const docId = Number(
       item.docenteResponsableId ||
         item.docenteId ||
@@ -171,13 +242,8 @@ export class MateriaService {
     }
 
     const mappedClases = rawClases.map((c: any, cIdx: number) => {
-      if (typeof c === 'string') {
-        return {
-          id: cIdx + 1,
-          nombre: c,
-        };
-      }
-
+      if (!c) return { id: cIdx + 1, nombre: `Paralelo ${cIdx + 1}` };
+      if (typeof c === 'string') return { id: cIdx + 1, nombre: c };
       return {
         id: Number(c.id || c.claseId || cIdx + 1),
         nombre: String(c.nombre || c.nombreClase || c.paralelo || `Paralelo ${cIdx + 1}`),
@@ -297,11 +363,9 @@ export class MateriaService {
     return this.http.get<any>(`${this.apiUrl}/Materia`).pipe(
       map((res) => {
         const raw = Array.isArray(res) ? res : res?.$values || res?.data || [];
-
-        const mapped: MateriaDto[] = raw.map((item: any, idx: number) =>
-          this.mapToMateriaDto(item, idx),
-        );
-
+        const mapped: MateriaDto[] = raw
+          .filter(Boolean)
+          .map((item: any, idx: number) => this.mapToMateriaDto(item, idx));
         this.materiasSubject.next(mapped);
 
         return mapped;
@@ -357,6 +421,18 @@ export class MateriaService {
     return this.eliminarMateria(id);
   }
 
+  getDocenteDeMateria(materiaIdOrCatedraId: number | string): string {
+    const list = this.materiasSubject.value;
+    const m = list.find(
+      (item) =>
+        Number(item.id) === Number(materiaIdOrCatedraId) ||
+        Number(item.catedraId) === Number(materiaIdOrCatedraId) ||
+        (typeof materiaIdOrCatedraId === 'string' &&
+          item.nombre.toLowerCase().trim() === materiaIdOrCatedraId.toLowerCase().trim()),
+    );
+    return m ? m.docenteNombre || m.docente || '' : '';
+  }
+
   getMateriasSnapshot(): MateriaDto[] {
     return this.materiasSubject.value;
   }
@@ -380,6 +456,7 @@ export class MateriaService {
   }
 
   syncMaterias(nuevas: MateriaDto[]): void {
+    if (!Array.isArray(nuevas)) return;
     const current = this.materiasSubject.value;
 
     const mapById = new Map<number, MateriaDto>();
@@ -544,12 +621,8 @@ export class MateriaService {
     const key = `${this.STORAGE_TEMAS}_${materiaId}`;
 
     const actuales = this.getTemasByMateria(materiaId);
-
-    const titulo = nombreTema.trim();
-
-    if (!titulo) {
-      return actuales;
-    }
+    const titulo = (nombreTema || '').trim();
+    if (!titulo) return actuales;
 
     const payload = {
       titulo,
@@ -863,16 +936,14 @@ export class MateriaService {
       materiaId: Number(materiaId),
 
       fecha: new Date().toISOString().split('T')[0],
-
-      tema: tema.trim(),
-
+      tema: (tema || '').trim(),
       asistentes: listaEstudiantes.map((e) => ({
         id: e.id,
 
         nombre: e.nombre,
-
-        email: e.correo || `${e.nombre.toLowerCase().replace(/\s+/g, '.')}@uni.edu`,
-
+        email:
+          e.correo ||
+          `${e.nombre ? e.nombre.toLowerCase().replace(/\s+/g, '.') : 'estudiante'}@uni.edu`,
         presente: false,
       })),
     };
@@ -938,6 +1009,8 @@ export class MateriaService {
       | number
     )[],
   ): Observable<any> {
+    if (!Array.isArray(estudiantes)) return of({ success: false });
+
     const materias = this.materiasSubject.value.map((m) => {
       if (Number(m.id) === Number(materiaId)) {
         const actualList = m.estudiantes || [];
@@ -1006,6 +1079,7 @@ export class MateriaService {
   }
 
   agregarEstudianteDirecto(materiaId: number, estudiante: Partial<EstudianteMateria>): void {
+    if (!estudiante) return;
     const materias = this.materiasSubject.value.map((m) => {
       if (Number(m.id) === Number(materiaId)) {
         const list = m.estudiantes || [];
@@ -1056,6 +1130,7 @@ export class MateriaService {
   }
 
   actualizarEstudianteEnMateria(materiaId: number, estudianteActualizado: EstudianteMateria): void {
+    if (!estudianteActualizado) return;
     const materias = this.materiasSubject.value.map((m) => {
       if (Number(m.id) === Number(materiaId)) {
         const list = (m.estudiantes || []).map((e) =>

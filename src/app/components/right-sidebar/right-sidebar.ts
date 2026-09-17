@@ -48,110 +48,121 @@ export class RightSidebarComponent implements OnInit {
   notificacionSeleccionada: NotificacionItem | null = null;
 
   constructor(
-    private router: Router,
     private estudianteService: EstudianteService,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
-    this.cargarCacheNotificaciones();
-    this.aplicarEstadoLeidas();
-    this.cargarActualizacionesCronograma();
-  }
-
-  get pendientesCount(): number {
-    return this.notificaciones.filter((n) => !n.leida).length;
+    this.cargarNotificaciones();
   }
 
   get notificacionesFiltradas(): NotificacionItem[] {
-    return this.filtro === 'pendientes'
-      ? this.notificaciones.filter((n) => !n.leida)
-      : this.notificaciones;
-  }
-
-  private get usuarioCacheId(): string {
-    if (typeof window === 'undefined') {
-      return 'anon';
+    if (this.filtro === 'pendientes') {
+      return this.notificaciones.filter((item) => !item.leida);
     }
-
-    return (
-      localStorage.getItem('userId') ||
-      localStorage.getItem('estudianteId') ||
-      localStorage.getItem('username') ||
-      'anon'
-    );
+    return this.notificaciones;
   }
 
-  private get cacheNotificacionesKey(): string {
-    return `sigac_notificaciones_cronograma_${this.usuarioCacheId}`;
+  get contadorPendientes(): number {
+    return this.notificaciones.filter((item) => !item.leida).length;
   }
 
-  private get leidasKey(): string {
-    return `notificaciones_estudiante_leidas_${this.usuarioCacheId}`;
+  get pendientesCount(): number {
+    return this.contadorPendientes;
   }
 
-  private cargarCacheNotificaciones(): void {
-    if (typeof window === 'undefined') {
+  get hayAvisos(): boolean {
+    return this.notificaciones.length > 0;
+  }
+
+  cambiarFiltro(nuevoFiltro: 'todas' | 'pendientes'): void {
+    this.filtro = nuevoFiltro;
+  }
+
+  marcarTodoLeido(): void {
+    this.notificaciones = this.notificaciones.map((item) => ({
+      ...item,
+      leida: true,
+    }));
+    this.guardarLeidasEnStorage();
+  }
+
+  marcarTodasComoLeidas(): void {
+    this.marcarTodoLeido();
+  }
+
+  abrirDetalle(item: NotificacionItem): void {
+    this.notificacionSeleccionada = item;
+    this.modalAbierto = true;
+
+    if (!item.leida) {
+      item.leida = true;
+      this.guardarLeidasEnStorage();
+    }
+  }
+
+  abrirNotificacion(item: NotificacionItem): void {
+    this.abrirDetalle(item);
+  }
+
+  toggleLeida(event: Event, item: NotificacionItem): void {
+    event.stopPropagation();
+    item.leida = !item.leida;
+    this.guardarLeidasEnStorage();
+  }
+
+  cerrarModal(): void {
+    this.modalAbierto = false;
+    this.notificacionSeleccionada = null;
+  }
+
+  irAMateria(item: NotificacionItem | null): void {
+    if (!item) {
       return;
     }
 
-    try {
-      const guardadas = localStorage.getItem(this.cacheNotificacionesKey);
-      if (!guardadas) {
-        return;
-      }
+    const targetId = item.materiaId || item.catedraId;
+    this.cerrarModal();
 
-      const cache = JSON.parse(guardadas);
-      if (Array.isArray(cache)) {
-        this.notificaciones = cache;
-      }
-    } catch {
-      this.notificaciones = [];
-    }
-  }
-
-  private guardarCacheNotificaciones(): void {
-    if (typeof window === 'undefined') {
+    if (targetId) {
+      this.router.navigate(['/estudiante/materia', targetId], {
+        queryParams: { tab: 'cronograma' },
+      });
       return;
     }
 
-    try {
-      localStorage.setItem(this.cacheNotificacionesKey, JSON.stringify(this.notificaciones));
-    } catch {
-      // El cache es solo una mejora de velocidad.
-    }
+    this.router.navigate(['/estudiante/materias']);
   }
 
-  private cargarActualizacionesCronograma(): void {
+  recargarNotificaciones(): void {
+    this.cargarNotificaciones();
+  }
+
+  private cargarNotificaciones(): void {
+    this.cargandoNotificaciones = true;
     this.errorNotificaciones = '';
-
-    // Si ya existe cache real, se muestra inmediatamente mientras se sincroniza.
-    this.cargandoNotificaciones = this.notificaciones.length === 0;
 
     this.estudianteService
       .getActualizacionesCronograma()
       .pipe(
-        timeout(8000),
+        timeout(7000),
         finalize(() => {
           this.cargandoNotificaciones = false;
-        }),
+        })
       )
       .subscribe({
         next: (actualizaciones) => {
-          const cambios = Array.isArray(actualizaciones) ? actualizaciones : [];
-
-          this.notificaciones = cambios.map((cambio) =>
-            this.crearAvisoCronograma(cambio as ActualizacionCronogramaConMateria),
+          const raw = Array.isArray(actualizaciones) ? actualizaciones : [];
+          this.notificaciones = raw.map((item) =>
+            this.crearAvisoCronograma(item as ActualizacionCronogramaConMateria)
           );
-
           this.aplicarEstadoLeidas();
-          this.guardarCacheNotificaciones();
         },
         error: (err) => {
-          // Si ya hay cache real, no vaciamos la interfaz ni mostramos un error molesto.
-          if (this.notificaciones.length > 0) {
-            return;
-          }
-
+          console.warn(
+            'Error o tiempo de espera agotado al cargar notificaciones del cronograma:',
+            err
+          );
           this.notificaciones = [];
           this.errorNotificaciones =
             err?.error?.message || 'No se pudieron cargar las notificaciones del cronograma.';
@@ -175,18 +186,18 @@ export class RightSidebarComponent implements OnInit {
       tipo: 'cronograma',
       titulo: 'Cronograma actualizado',
       descripcion:
-        `${cambio.actividad} fue reprogramada del ` + `${fechaAnterior} al ${fechaNueva}.`,
+        `${cambio.actividad || 'La actividad'} fue reprogramada del ` + `${fechaAnterior} al ${fechaNueva}.`,
       fecha: this.formatearFechaAviso(cambio.fechaNotificacion),
       materiaId,
       materiaNombre,
       leida: false,
       actualizacionCronogramaId: Number(cambio.id),
       catedraId: Number(cambio.catedraId),
-      actividad: cambio.actividad,
-      fechaAnterior: cambio.fechaAnterior,
-      fechaNueva: cambio.fechaNueva,
+      actividad: cambio.actividad || '',
+      fechaAnterior: cambio.fechaAnterior || '',
+      fechaNueva: cambio.fechaNueva || '',
       observacion,
-      fechaNotificacion: cambio.fechaNotificacion,
+      fechaNotificacion: cambio.fechaNotificacion || '',
     };
   }
 
@@ -201,100 +212,66 @@ export class RightSidebarComponent implements OnInit {
         return;
       }
 
-      const idsLeidas: number[] = JSON.parse(guardadas);
-
-      this.notificaciones = this.notificaciones.map((n) => ({
-        ...n,
-        leida: idsLeidas.includes(n.id),
+      const idsLeidos = new Set<number>(JSON.parse(guardadas));
+      this.notificaciones = this.notificaciones.map((item) => ({
+        ...item,
+        leida: item.leida || idsLeidos.has(item.id),
       }));
     } catch {
-      // No afecta las notificaciones reales.
+      // Ignorar errores al parsear el localStorage
     }
   }
 
-  private guardarEstadoLeidas(): void {
+  private guardarLeidasEnStorage(): void {
     if (typeof window === 'undefined') {
       return;
     }
 
     try {
-      const idsLeidas = this.notificaciones.filter((n) => n.leida).map((n) => n.id);
+      const idsLeidos = this.notificaciones
+        .filter((item) => item.leida)
+        .map((item) => item.id);
 
-      localStorage.setItem(this.leidasKey, JSON.stringify(idsLeidas));
-
-      this.guardarCacheNotificaciones();
+      localStorage.setItem(this.leidasKey, JSON.stringify(idsLeidos));
     } catch {
-      // No afecta la información de la BD.
+      // Ignorar errores de escritura en storage
     }
   }
 
-  abrirNotificacion(noti: NotificacionItem): void {
-    noti.leida = true;
-    this.guardarEstadoLeidas();
+  private get leidasKey(): string {
+    return 'sigac_notificaciones_cronograma_leidas';
+  }
 
-    if (noti.materiaId > 0) {
-      this.router.navigate(['/estudiante/materia', noti.materiaId], {
-        queryParams: {
-          actualizacionCronograma: noti.actualizacionCronogramaId,
-        },
-      });
-      return;
+  private formatearSoloFecha(fechaStr?: string | null): string {
+    if (!fechaStr) {
+      return 'Fecha no definida';
     }
 
-    this.notificacionSeleccionada = noti;
-    this.modalAbierto = true;
-  }
-
-  cerrarModal(): void {
-    this.modalAbierto = false;
-    this.notificacionSeleccionada = null;
-  }
-
-  toggleLeida(event: MouseEvent, noti: NotificacionItem): void {
-    event.stopPropagation();
-    noti.leida = !noti.leida;
-    this.guardarEstadoLeidas();
-  }
-
-  marcarTodasComoLeidas(): void {
-    this.notificaciones.forEach((n) => (n.leida = true));
-    this.guardarEstadoLeidas();
-  }
-
-  recargarNotificaciones(): void {
-    this.cargarActualizacionesCronograma();
-  }
-
-  private formatearSoloFecha(fecha?: string | null): string {
-    if (!fecha) {
-      return 'Sin fecha';
+    const fecha = new Date(fechaStr);
+    if (isNaN(fecha.getTime())) {
+      return fechaStr;
     }
 
-    const valor = new Date(fecha);
-    if (Number.isNaN(valor.getTime())) {
-      return fecha;
-    }
-
-    return valor.toLocaleDateString('es-EC', {
+    return fecha.toLocaleDateString('es-ES', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
     });
   }
 
-  private formatearFechaAviso(fecha?: string | null): string {
-    if (!fecha) {
-      return 'Actualización reciente';
+  private formatearFechaAviso(fechaStr?: string | null): string {
+    if (!fechaStr) {
+      return 'Reciente';
     }
 
-    const valor = new Date(fecha);
-    if (Number.isNaN(valor.getTime())) {
-      return fecha;
+    const fecha = new Date(fechaStr);
+    if (isNaN(fecha.getTime())) {
+      return fechaStr;
     }
 
-    return valor.toLocaleString('es-EC', {
+    return fecha.toLocaleDateString('es-ES', {
       day: '2-digit',
-      month: '2-digit',
+      month: 'short',
       hour: '2-digit',
       minute: '2-digit',
     });

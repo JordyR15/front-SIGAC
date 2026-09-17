@@ -41,7 +41,7 @@ export class LayoutComponent implements OnInit {
   probandoConexion: boolean = false;
 
   ngOnInit() {
-    this.rol = localStorage.getItem('rol') || 'Estudiante';
+    this.rol = this.authService.getRole() || this.authService.currentUser?.rol || this.authService.currentUser?.role || localStorage.getItem('rol') || 'Estudiante';
     this.actualizarEstadoAyudante();
     this.actualizarBackend();
 
@@ -89,11 +89,13 @@ export class LayoutComponent implements OnInit {
     }
     return name.substring(0, 2).toUpperCase() || 'US';
   }
+
   abrirCentroNotificaciones(): void {
     if (this.esRolIgual(this.rol, 'Docente')) {
       this.router.navigate(['/docente/gestion-estudiantes']);
     }
   }
+
   actualizarBackend() {
     const base = getApiBase();
     this.backendActual = isModoAutonomo() ? '' : base || '';
@@ -101,7 +103,7 @@ export class LayoutComponent implements OnInit {
   }
 
   mostrarSeccion(seccion: string): boolean {
-    const rolActual = this.normalizeRol(this.rol || localStorage.getItem('rol') || 'Estudiante');
+    const rolActual = this.normalizeRol(this.rol || this.authService.getRole() || 'Estudiante');
     const sec = this.normalizeRol(seccion);
 
     if (sec === 'jurado' || sec === 'tribunal') {
@@ -136,37 +138,6 @@ export class LayoutComponent implements OnInit {
     return this.authService.getRoles();
   }
 
-  cambiarRol(nuevoRol: string) {
-    this.rol = nuevoRol;
-    localStorage.setItem('rol', nuevoRol);
-    this.actualizarEstadoAyudante();
-
-    // Redirección inmediata según el rol seleccionado para cambiar la vista
-    switch (nuevoRol) {
-      case 'Estudiante':
-        this.router.navigate(['/estudiante/materias']);
-        break;
-      case 'Ayudante':
-        this.router.navigate(['/ayudante/materias']);
-        break;
-      case 'Docente':
-        this.router.navigate(['/docente/gestion-clases']);
-        break;
-      case 'Coordinador':
-        this.router.navigate(['/coordinador/validacion']);
-        break;
-      case 'Jurado':
-        this.router.navigate(['/jurado/evaluacion']);
-        break;
-      case 'Administrador':
-        this.router.navigate(['/admin/docentes']);
-        break;
-      default:
-        this.router.navigate(['/dashboard']);
-        break;
-    }
-  }
-
   actualizarEstadoAyudante() {
     this.esAyudante =
       this.isAyudante ||
@@ -195,48 +166,32 @@ export class LayoutComponent implements OnInit {
       this.activarModoAutonomo();
       return;
     }
-    setApiBase(url.trim());
-    this.actualizarBackend();
-    this.mensajeBackend = `✓ URL de backend guardada: ${url}`;
-    this.esExitoBackend = true;
-    setTimeout(() => {
-      window.location.reload();
-    }, 600);
-  }
-
-  probarConexionBackend() {
-    const url = (this.inputBackendUrl || '').trim();
-    if (!url) {
-      this.mensajeBackend = 'Ingresa una URL válida para verificar.';
-      this.esExitoBackend = false;
-      return;
-    }
-
     this.probandoConexion = true;
-    this.mensajeBackend = 'Verificando comunicación con el backend...';
+    this.mensajeBackend = 'Probando conexión con el backend...';
     this.esExitoBackend = null;
 
-    const testUrl = `${url.replace(/\/+$/, '')}/api/Login/login`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-
-    fetch(testUrl, { method: 'GET', signal: controller.signal, mode: 'cors' })
+    fetch(`${url.replace(/\/$/, '')}/api/Materias`, { method: 'GET' })
       .then((res) => {
-        clearTimeout(timer);
         this.probandoConexion = false;
-        if (res.status >= 200 && res.status < 500) {
+        if (res.ok || res.status === 401 || res.status === 403) {
+          setApiBase(url.replace(/\/$/, ''));
+          this.actualizarBackend();
           this.esExitoBackend = true;
-          this.mensajeBackend = `✓ Backend detectado y respondiendo en ${url}`;
+          this.mensajeBackend = '✓ ¡Conexión exitosa! URL del backend guardada.';
+          setTimeout(() => {
+            this.mostrarModalBackend = false;
+            window.location.reload();
+          }, 800);
         } else {
           this.esExitoBackend = false;
-          this.mensajeBackend = `⚠ Backend respondió con código HTTP ${res.status}.`;
+          this.mensajeBackend = `El servidor respondió con código ${res.status}. Verifique la URL.`;
         }
       })
-      .catch(() => {
-        clearTimeout(timer);
+      .catch((err) => {
         this.probandoConexion = false;
         this.esExitoBackend = false;
-        this.mensajeBackend = `❌ ERR_CONNECTION_REFUSED en ${url}. Tu backend no está ejecutándose en ese puerto. Inicia Visual Studio (F5) o activa Modo Autónomo.`;
+        this.mensajeBackend =
+          'No se pudo conectar con el servidor. ¿Está el backend encendido?';
       });
   }
 }

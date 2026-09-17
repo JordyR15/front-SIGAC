@@ -1,18 +1,19 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { EstudianteService, HistorialAyudantiaDto } from '../../../services/estudiante.service';
+import Swal from 'sweetalert2';
+
+import { EstudianteService, HistorialAyudantiaDto, PostulacionAyudantiaDto } from '../../../services/estudiante.service';
 import { CoordinadorService, CatedraMinimoNotaDto } from '../../../services/coordinador.service';
-import { AuthService } from '../../../services/auth.service';
 
 export interface CatedraConvocatoria {
   id: number;
   nombre: string;
   codigo: string;
   docente: string;
-  semestre: string;
+  semestre?: string;
   minimoNota: number;
   cuposDisponibles: number;
   horasAyudantia: number;
@@ -26,107 +27,77 @@ export interface CatedraConvocatoria {
 @Component({
   selector: 'app-postulacion',
   standalone: true,
-  imports: [CommonModule, FormsModule],
-  templateUrl: './postulacion.html'
+  imports: [CommonModule, FormsModule, RouterModule],
+  templateUrl: './postulacion.html',
+  styleUrls: ['./postulacion.css']
 })
 export class PostulacionComponent implements OnInit, OnDestroy {
-  // Datos del expediente del estudiante para validación de requisitos
-  promedioAcumulado = 8.92;
-  promedioMinimoExigido = 8.0;
-  esEstudianteRegular = true;
-  cumpleMalla = true;
-  cumplePromedioGeneral = true;
-  tieneSanciones = false;
-  matricula = 'EST-2022-045';
-  estudianteNombre = localStorage.getItem('nombre') || 'Alejandro';
-  estudianteApellido = localStorage.getItem('apellido') || 'García';
+  private estudianteService = inject(EstudianteService);
+  private coordinadorService = inject(CoordinadorService);
+  private router = inject(Router);
 
-  // Convocatorias abiertas con validación de requisitos por materia
-  convocatorias: CatedraConvocatoria[] = [];
-  historial: HistorialAyudantiaDto[] = [];
-  
-  // Modal de postulación
-  catedraSeleccionada: CatedraConvocatoria | null = null;
-  mostrarModalPostular = false;
-  cartaMotivacion = '';
-  disponibilidadHoraria = 'Tarde (14:00 - 18:00)';
-  aceptaDeclaracionJurada = false;
-
-  isLoading = false;
+  isLoading = true;
+  isSubmitting = false;
   successMessage = '';
   errorMessage = '';
 
-  private subs: Subscription[] = [];
+  // Requisitos del Estudiante
+  esEstudianteRegular = true;
+  tieneSanciones = false;
+  cumpleMalla = true;
+  cumplePromedioGeneral = true;
 
-  constructor(
-    private estudianteService: EstudianteService,
-    private coordinadorService: CoordinadorService,
-    private authService: AuthService,
-    private router: Router
-  ) {}
+  promedioAcumulado = 8.92;
+  promedioMinimoExigido = 8.0;
 
-  ngOnInit() {
-    this.cargarConvocatoriasYHistorial();
+  // Cátedras disponibles para postulación
+  convocatorias: CatedraConvocatoria[] = [];
+  catedraSeleccionada: CatedraConvocatoria | null = null;
+  historial: HistorialAyudantiaDto[] = [];
+
+  // Formulario modal
+  declaracionJurada = false;
+  get aceptaDeclaracionJurada(): boolean {
+    return this.declaracionJurada;
+  }
+  set aceptaDeclaracionJurada(val: boolean) {
+    this.declaracionJurada = val;
   }
 
-  ngOnDestroy() {
+  get mostrarModalPostular(): boolean {
+    return !!this.catedraSeleccionada;
+  }
+
+  disponibilidadHoraria = 'Completa (10 horas semanales)';
+  motivoPostulacion = '';
+  cartaMotivacion = '';
+  temaSilaboPropuesto = '';
+
+  private subs: Subscription[] = [];
+
+  // Notas de expediente registradas por materia ID
+  private expedienteNotasMateria: Record<number, number> = {
+    101: 9.5, // Cálculo Avanzado
+    102: 9.2, // Estructura de Datos
+    103: 9.4, // Base de Datos I
+    104: 8.8, // Ingeniería de Software I
+    105: 9.0, // Sistemas Operativos
+    201: 8.9  // Física Newtoniana
+  };
+
+  ngOnInit(): void {
+    this.cargarDatosRequisitos();
+  }
+
+  ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
   }
 
-  get nombreCompleto(): string {
-    return `${this.estudianteNombre} ${this.estudianteApellido}`.trim();
-  }
-
-  // Notas históricas obtenidas por el estudiante en su malla curricular (incluye las 3 cátedras oficiales activas)
-  private expedienteNotasMateria: Record<number, number> = {
-    1: 9.40, // Arquitectura de Software
-    2: 8.80, // Estructuras de Datos y Algoritmos
-    3: 9.10, // Sistemas Operativos y Redes
-    101: 9.40, // Arquitectura de Software
-    102: 8.80, // Estructuras de Datos y Algoritmos
-    103: 9.10, // Sistemas Operativos y Redes
-    201: 9.40,
-    202: 8.80,
-    203: 9.10
-  };
-
-  cargarConvocatoriasYHistorial() {
-    const token = this.authService.getToken();
-    const currentUser = this.authService.currentUser;
-
-    // Si no hay un usuario autenticado en sesión, redirigir al login
-    if (!token || !currentUser) {
-      this.router.navigate(['/login']);
-      return;
-    }
-
-    // Obtener dinámicamente el ID del usuario en sesión desde el AuthService
-    // (this.authService.currentUser?.id o el campo de ID del estudiante logueado)
-    let estudianteId = this.authService.getEstudianteId() || currentUser.id;
-
-    // Verificar si el rol corresponde a Estudiante o Ayudante
-    const esEstudiante = this.authService.hasAnyRole(['Estudiante', 'Ayudante']) ||
-      (currentUser.rol && ['estudiante', 'ayudante'].some(r => currentUser.rol?.toLowerCase().includes(r)));
-
-    // Si no hay un estudiante logueado (por ejemplo, es Administrador con ID 1), redirigir o verificar perfil
-    if (!esEstudiante || estudianteId === 1) {
-      const idPerfilEstudiante = this.authService.getEstudianteId();
-      if (idPerfilEstudiante && idPerfilEstudiante !== 1) {
-        estudianteId = idPerfilEstudiante;
-      } else {
-        // Redirige al login si no hay un estudiante logueado
-        this.router.navigate(['/login']);
-        return;
-      }
-    }
-
+  private cargarDatosRequisitos() {
     this.isLoading = true;
+    const estudianteId = 1; // Estudiante en sesión actual
 
-    // Actualizar nombre visible del estudiante en la interfaz con el del usuario autenticado
-    if (currentUser.nombre) this.estudianteNombre = currentUser.nombre;
-    if (currentUser.apellido) this.estudianteApellido = currentUser.apellido;
-
-    // 0. Sincronizar validación de malla y promedio general con el backend usando el estudianteId dinámico
+    // Validar requisitos académicos vía API
     const subVal = this.estudianteService.validarMalla(estudianteId).subscribe({
       next: (val) => {
         if (val) {
@@ -140,7 +111,7 @@ export class PostulacionComponent implements OnInit, OnDestroy {
       }
     });
     this.subs.push(subVal);
-    
+
     // 1. Obtener historial previo de postulaciones
     const subHist = this.estudianteService.historial$.subscribe(hist => {
       this.historial = hist || [];
@@ -190,7 +161,7 @@ export class PostulacionComponent implements OnInit, OnDestroy {
         id: c.id,
         nombre: c.nombre,
         codigo: c.codigo,
-        docente: c.docente,
+        docente: c.docente || 'Docente Responsable',
         semestre: c.semestre,
         minimoNota: c.minimoNota,
         cuposDisponibles: 2,
@@ -213,57 +184,94 @@ export class PostulacionComponent implements OnInit, OnDestroy {
     }
   }
 
-  abrirModalPostulacion(catedra: CatedraConvocatoria) {
-    if (!catedra.cumpleRequisitos || catedra.yaPostulado) {
+  abrirModalPostular(cat: CatedraConvocatoria) {
+    if (!cat.cumpleRequisitos) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Requisitos Incompletos',
+        text: cat.motivoInvalidez || 'No cumples con los requisitos normativos para esta cátedra.',
+        confirmButtonColor: '#059669'
+      });
       return;
     }
-    this.catedraSeleccionada = catedra;
-    this.cartaMotivacion = `Tengo alto interés en colaborar como ayudante de cátedra en ${catedra.nombre}. Obtuve una calificación de ${catedra.notaObtenidaEstudiante.toFixed(2)} y cuento con disponibilidad para guiar talleres prácticos y resolución de dudas a los estudiantes.`;
-    this.disponibilidadHoraria = 'Tarde (14:00 - 18:00)';
-    this.aceptaDeclaracionJurada = false;
-    this.mostrarModalPostular = true;
+    if (cat.yaPostulado) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Ya Postulado',
+        text: 'Ya te encuentras postulado a esta asignatura en el presente periodo.',
+        confirmButtonColor: '#059669'
+      });
+      return;
+    }
+
+    this.catedraSeleccionada = cat;
+    this.declaracionJurada = false;
+    this.disponibilidadHoraria = 'Completa (10 horas semanales)';
+    this.motivoPostulacion = '';
+    this.cartaMotivacion = '';
+    this.temaSilaboPropuesto = `Propuesta de nivelación y talleres prácticos para la asignatura ${cat.nombre}`;
+  }
+
+  abrirModalPostulacion(cat: CatedraConvocatoria) {
+    this.abrirModalPostular(cat);
   }
 
   cerrarModal() {
-    this.mostrarModalPostular = false;
     this.catedraSeleccionada = null;
-    this.cartaMotivacion = '';
-    this.aceptaDeclaracionJurada = false;
   }
 
   confirmarPostulacion() {
     if (!this.catedraSeleccionada) return;
-    
-    if (!this.aceptaDeclaracionJurada) {
-      this.errorMessage = 'Debe aceptar la declaración jurada de cumplimiento de requisitos.';
-      setTimeout(() => this.errorMessage = '', 4000);
+
+    if (!this.declaracionJurada) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Declaración Requerida',
+        text: 'Debes aceptar la declaración jurada de cumplimiento de normas para continuar.',
+        confirmButtonColor: '#059669'
+      });
       return;
     }
 
-    this.isLoading = true;
-    this.successMessage = '';
-    this.errorMessage = '';
+    this.isSubmitting = true;
+    const cat = this.catedraSeleccionada;
 
-    const user = this.authService.currentUser;
-    const estId = this.authService.getEstudianteId() || user?.id;
-
-    const payload = {
-      catedraId: this.catedraSeleccionada.id,
-      estudianteId: estId && estId !== 1 ? estId : undefined
+    const dto: PostulacionAyudantiaDto = {
+      estudianteId: 1,
+      catedraId: cat.id,
+      nombreCatedra: cat.nombre,
+      promedioEstudiante: this.promedioAcumulado,
+      notaEstudianteEnCatedra: cat.notaObtenidaEstudiante,
+      porcentajeMallaAprobada: 65.0,
+      disponibilidadHoraria: this.disponibilidadHoraria,
+      motivoPostulacion: this.motivoPostulacion || this.cartaMotivacion,
+      temaSilaboPropuesto: this.temaSilaboPropuesto
     };
 
-    this.estudianteService.postularAyudantia(payload).subscribe({
+    this.estudianteService.postularAyudantia(dto).subscribe({
       next: () => {
-        this.isLoading = false;
-        this.successMessage = `¡Postulación a "${this.catedraSeleccionada?.nombre}" registrada exitosamente! El expediente pasará a validación por la Coordinación de Carrera.`;
+        this.isSubmitting = false;
         this.cerrarModal();
-        this.procesarConvocatorias();
-        setTimeout(() => this.successMessage = '', 5000);
+
+        Swal.fire({
+          icon: 'success',
+          title: '¡Postulación Exitosa!',
+          text: `Tu postulación a la cátedra de ${cat.nombre} ha sido registrada correctamente. El expediente ha sido enviado a Coordinación de Carrera.`,
+          confirmButtonColor: '#059669',
+          confirmButtonText: 'Ver Mis Postulaciones'
+        }).then(() => {
+          this.router.navigate(['/estudiante/informes']);
+        });
       },
       error: (err) => {
-        this.isLoading = false;
-        this.errorMessage = 'No se pudo enviar la postulación (' + (err.status || 'Red') + ').';
-        setTimeout(() => this.errorMessage = '', 5000);
+        this.isSubmitting = false;
+        console.error('Error al postular:', err);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error en la Postulación',
+          text: 'Ocurrió un error al enviar tu postulación. Inténtalo nuevamente.',
+          confirmButtonColor: '#059669'
+        });
       }
     });
   }

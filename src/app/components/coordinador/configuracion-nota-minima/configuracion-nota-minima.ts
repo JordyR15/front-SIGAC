@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import Swal from 'sweetalert2';
 import { CoordinadorService, CatedraMinimoNotaDto } from '../../../services/coordinador.service';
 
 @Component({
@@ -34,7 +35,6 @@ export class ConfiguracionNotaMinimaComponent implements OnInit {
       minimoNota: [8.0, [Validators.required, Validators.min(1.0), Validators.max(10.0)]]
     });
 
-    // Sincronizar selección de cátedra para precargar su nota mínima actual
     this.configForm.get('catedraId')?.valueChanges.subscribe(id => {
       const cat = this.catedras.find(c => c.id === Number(id));
       if (cat) {
@@ -75,10 +75,6 @@ export class ConfiguracionNotaMinimaComponent implements OnInit {
     this.configForm.get('minimoNota')?.setValue(nueva);
   }
 
-  /**
-   * PUT /api/coordinador/catedras/{id}/minimo-nota
-   * Guarda el nuevo umbral mínimo de nota de aprobación para la cátedra seleccionada
-   */
   guardarConfiguracion(): void {
     if (this.configForm.invalid) {
       this.configForm.markAllAsTouched();
@@ -95,20 +91,33 @@ export class ConfiguracionNotaMinimaComponent implements OnInit {
     this.mensajeError = '';
 
     this.coordinadorService.actualizarMinimoNota(catIdNum, notaNum).subscribe({
-      next: (resp) => {
+      next: (resp: any) => {
         this.isSubmitting = false;
-        this.mensajeExito = resp.mensaje || `Nota mínima actualizada a ${notaNum.toFixed(1)} / 10.0 exitosamente.`;
+        const msg = resp?.mensaje || `Nota mínima actualizada a ${notaNum.toFixed(1)} / 10.0 exitosamente.`;
+        this.mensajeExito = msg;
 
-        // Actualizar la lista local reflejando el cambio inmediato en la UI
         const item = this.catedras.find(c => c.id === catIdNum);
         if (item) {
           item.minimoNota = notaNum;
           this.catedraSeleccionada = item;
         }
+
+        Swal.fire({
+          icon: 'success',
+          title: '¡Configuración Guardada!',
+          text: msg,
+          confirmButtonColor: '#059669',
+          confirmButtonText: 'Aceptar'
+        });
       },
-      error: (err) => {
+      error: () => {
         this.isSubmitting = false;
         this.mensajeError = 'Ocurrió un error al actualizar la nota mínima en el servidor backend.';
+        Swal.fire({
+          icon: 'error',
+          title: 'Error de Servidor',
+          text: 'No se pudo guardar la configuración de nota mínima.'
+        });
       }
     });
   }
