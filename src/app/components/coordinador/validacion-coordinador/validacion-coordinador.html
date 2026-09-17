@@ -1,373 +1,246 @@
-<div class="space-y-6 max-w-7xl mx-auto">
+<div class="space-y-6 max-w-7xl mx-auto pb-12">
   <!-- ENCABEZADO -->
   <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
     <div>
-      <div class="flex items-center gap-2 text-xs font-semibold text-accent uppercase tracking-wider mb-1">
-        <i class="fa-solid fa-graduation-cap"></i> Módulo de Coordinación Académica
+      <div class="flex items-center gap-2 text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-1">
+        <i class="fa-solid fa-gavel"></i> Panel de Evaluadores y Tribunal Docente
       </div>
-      <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Validación de Postulaciones y Tribunal Evaluador</h1>
+      <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Validación y Calificación de Ayudantías</h1>
       <p class="text-sm text-slate-500 mt-1">
-        Verificación estricta de requisitos normativos (50% de malla, promedios de carrera y curso, acuerdo docente) y convocatoria del jurado examinador.
+        Gestión de defensas pedagógicas convocadas, evaluación por rúbrica institucional y asentamiento de notas del tribunal.
       </p>
     </div>
 
-    <!-- Acceso rápido a parametrización de nota mínima -->
-    <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200" [formGroup]="minimoNotaForm">
-      <div class="text-right">
-        <span class="text-xs font-semibold text-slate-700 block">Nota Mínima Tribunal</span>
-        <span class="text-[11px] text-slate-400">PUT /api/coordinador/catedras/{{ minimoNotaForm.get('catedraId')?.value }}/minimo-nota</span>
-      </div>
-      <input
-        type="number"
-        step="0.1"
-        min="7"
-        max="10"
-        formControlName="minimoNota"
-        class="w-16 px-2 py-1 bg-white border border-slate-300 rounded-lg text-sm font-bold text-center text-slate-800"
-      />
-      <button
-        type="button"
-        (click)="guardarMinimoNota()"
-        class="px-3 py-1.5 bg-accent hover:bg-accent-dim text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
-      >
-        Guardar
-      </button>
+    <button (click)="cargarPresentaciones()"
+            class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-colors inline-flex items-center gap-2 self-start md:self-auto cursor-pointer">
+      <i class="fa-solid fa-arrows-rotate text-slate-500" [class.fa-spin]="isLoading"></i>
+      <span>Actualizar Reuniones</span>
+    </button>
+  </div>
+
+  <!-- FILTROS Y BÚSQUEDA -->
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+    <div class="relative w-full sm:w-96">
+      <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+      <input type="text" [(ngModel)]="busqueda" placeholder="Buscar por estudiante, cátedra o tema..."
+             class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-600 shadow-sm" />
+    </div>
+
+    <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+      <span class="text-xs text-slate-500 font-medium">Estado:</span>
+      <select [(ngModel)]="filtroEstado"
+              class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:border-emerald-600 shadow-sm">
+        <option value="todos">Todos los estados</option>
+        <option value="Convocada">Convocada</option>
+        <option value="Evaluada">Evaluada</option>
+      </select>
     </div>
   </div>
 
-  <!-- ALERTA DE MENSAJES -->
-  <div *ngIf="mensajeExito" class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-emerald-800 text-sm animate-fadeIn">
-    <i class="fa-solid fa-circle-check text-emerald-600 text-lg shrink-0"></i>
-    <span>{{ mensajeExito }}</span>
-  </div>
-
-  <div *ngIf="mensajeError" class="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-3 text-rose-800 text-sm animate-fadeIn">
-    <i class="fa-solid fa-circle-exclamation text-rose-600 text-lg shrink-0"></i>
-    <span>{{ mensajeError }}</span>
-  </div>
-
-  <!-- CONTENIDO EN DOS COLUMNAS -->
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-    <!-- COLUMNA IZQUIERDA: LISTA DE POSTULANTES (4 cols) -->
-    <div class="lg:col-span-4 space-y-3">
-      <div class="flex items-center justify-between px-1">
-        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Postulantes a Cátedra ({{ postulantes.length }})</h2>
-        <span class="text-xs text-slate-400">Ciclo 2026-2</span>
-      </div>
-
-      <div class="space-y-3">
-        <div
-          *ngFor="let p of postulantes"
-          (click)="seleccionarPostulante(p)"
-          [class.ring-2]="postulanteSeleccionado?.ayudantiaId === p.ayudantiaId"
-          [class.ring-accent]="postulanteSeleccionado?.ayudantiaId === p.ayudantiaId"
-          class="bg-white p-4 rounded-xl border border-slate-200 hover:border-slate-300 shadow-sm cursor-pointer transition-all relative overflow-hidden"
-        >
-          <!-- Indicador de estado lateral -->
-          <div
-            class="absolute top-0 left-0 bottom-0 w-1.5"
-            [class.bg-emerald-500]="p.cumpleTodosRequisitos && p.estado === 'Tribunal Asignado'"
-            [class.bg-amber-500]="p.cumpleTodosRequisitos && p.estado === 'Pendiente Revisión'"
-            [class.bg-rose-500]="!p.cumpleTodosRequisitos"
-          ></div>
-
-          <div class="pl-2">
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <h3 class="text-sm font-bold text-slate-900 leading-snug">{{ p.nombres }} {{ p.apellidos }}</h3>
-                <p class="text-xs text-slate-500">{{ p.carrera }} · CI: {{ p.cedula }}</p>
-              </div>
-              <span
-                class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0"
-                [class.bg-emerald-100]="p.estado === 'Tribunal Asignado'"
-                [class.text-emerald-800]="p.estado === 'Tribunal Asignado'"
-                [class.bg-amber-100]="p.estado === 'Pendiente Revisión' && p.cumpleTodosRequisitos"
-                [class.text-amber-800]="p.estado === 'Pendiente Revisión' && p.cumpleTodosRequisitos"
-                [class.bg-rose-100]="!p.cumpleTodosRequisitos"
-                [class.text-rose-800]="!p.cumpleTodosRequisitos"
-              >
-                {{ p.estado }}
-              </span>
-            </div>
-
-            <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-              <span class="font-medium truncate max-w-[170px]"><i class="fa-solid fa-book text-slate-400 mr-1"></i> {{ p.catedraNombre }}</span>
-              <span
-                class="font-bold inline-flex items-center gap-1"
-                [class.text-emerald-600]="p.cumpleTodosRequisitos"
-                [class.text-rose-600]="!p.cumpleTodosRequisitos"
-              >
-                <i [class]="p.cumpleTodosRequisitos ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
-                {{ p.cumpleTodosRequisitos ? 'Apto' : 'No Apto' }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- NOTA DE INTEGRACIÓN SISTEMA ACADÉMICO -->
-      <div class="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-900 space-y-1.5">
-        <div class="font-bold flex items-center gap-1.5 text-blue-800">
-          <i class="fa-solid fa-circle-info"></i> Validación de Malla & Promedios:
-        </div>
-        <p class="text-blue-800/80 leading-relaxed">
-          Los datos del expediente académico (créditos aprobados, GPA acumulado y nota del curso) son contrastados automáticamente con la base institucional de registro curricular.
-        </p>
-      </div>
-    </div>
-
-    <!-- COLUMNA DERECHA: EXPEDIENTE Y ASIGNACIÓN DE TRIBUNAL (8 cols) -->
-    <div class="lg:col-span-8 space-y-6" *ngIf="postulanteSeleccionado as p">
-
-      <!-- TARJETA 1: VALIDACIÓN DE REQUISITOS DEL CANDIDATO -->
-      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
+  <!-- LISTADO DE REUNIONES DE TRIBUNAL CONVOCADAS -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <div *ngFor="let pres of presentacionesFiltradas"
+         class="bg-white border border-slate-200 hover:border-emerald-600/50 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4">
+      <div>
+        <div class="flex items-start justify-between gap-3">
           <div>
-            <span class="text-xs font-semibold text-slate-400 uppercase">Expediente de Postulación #AYUD-{{ p.ayudantiaId }}</span>
-            <h2 class="text-xl font-bold text-slate-900">{{ p.nombres }} {{ p.apellidos }}</h2>
-            <p class="text-xs text-slate-500 mt-0.5">Postulante a: <strong class="text-slate-800">{{ p.catedraNombre }}</strong> (Docente: {{ p.docenteTitularNombre }})</p>
-          </div>
-          <div class="text-right">
-            <span
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider"
-              [class.bg-emerald-100]="p.cumpleTodosRequisitos"
-              [class.text-emerald-800]="p.cumpleTodosRequisitos"
-              [class.bg-rose-100]="!p.cumpleTodosRequisitos"
-              [class.text-rose-800]="!p.cumpleTodosRequisitos"
-            >
-              <i [class]="p.cumpleTodosRequisitos ? 'fa-solid fa-shield-check' : 'fa-solid fa-triangle-exclamation'"></i>
-              {{ p.cumpleTodosRequisitos ? 'Habilitado para Tribunal' : 'Requisitos Incompletos' }}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-600 mb-1.5">
+              <i class="fa-solid fa-calendar-day text-emerald-600"></i> {{ pres.fecha }}
             </span>
+            <h3 class="text-base font-bold text-slate-900 leading-snug">{{ pres.estudianteNombre }}</h3>
+            <p class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+              <i class="fa-solid fa-book-open text-emerald-600"></i>
+              <span class="font-semibold text-slate-700">{{ pres.catedraNombre }}</span>
+            </p>
           </div>
+
+          <!-- Badge de Estado (Convocada o Evaluada) -->
+          <span [ngClass]="{
+                  'bg-amber-50 text-amber-700 border-amber-200': pres.estado === 'Convocada' || pres.estado === 'Pendiente',
+                  'bg-emerald-50 text-emerald-700 border-emerald-200': pres.estado === 'Evaluada' || pres.estado === 'Aprobada'
+                }"
+                class="px-3 py-1 rounded-full text-xs font-bold border shrink-0 inline-flex items-center gap-1">
+            <i class="fa-solid" [ngClass]="pres.estado === 'Evaluada' ? 'fa-circle-check' : 'fa-clock'"></i>
+            {{ pres.estado }}
+          </span>
         </div>
 
-        <!-- CUADRO DE REQUISITOS NORMATIVOS (4 Puntos Clave) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Tema del Sílabo -->
+        <div class="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+          <span class="font-semibold text-slate-700 block mb-1 text-[11px] uppercase tracking-wider">Tema de Sustentación:</span>
+          <p class="text-slate-800 font-medium">{{ pres.temaSilabo }}</p>
+        </div>
 
-          <!-- Requisito 1: Acuerdo del Docente Titular -->
-          <div class="p-4 rounded-xl border" [class.bg-emerald-50/50]="p.acuerdoDocenteAprobado" [class.border-emerald-200]="p.acuerdoDocenteAprobado" [class.bg-rose-50/50]="!p.acuerdoDocenteAprobado" [class.border-rose-200]="!p.acuerdoDocenteAprobado">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <i class="fa-solid fa-chalkboard-user text-slate-600"></i> 1. Acuerdo del Docente
-              </span>
-              <span class="text-xs font-bold" [class.text-emerald-700]="p.acuerdoDocenteAprobado" [class.text-rose-700]="!p.acuerdoDocenteAprobado">
-                {{ p.acuerdoDocenteAprobado ? 'APROBADO' : 'PENDIENTE' }}
-              </span>
-            </div>
-            <p class="text-xs text-slate-600 mt-1">
-              {{ p.docenteObservaciones || 'El docente titular debe aprobar formalmente que el postulante imparta clases.' }}
-            </p>
+        <!-- Fecha, hora y lugar/enlace -->
+        <div class="mt-3 space-y-2 text-xs text-slate-600">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-location-dot text-slate-400 w-4"></i>
+            <span class="font-medium text-slate-700"><strong>Lugar/Enlace:</strong> {{ pres.lugarOEnlace }}</span>
           </div>
-
-          <!-- Requisito 2: 50% de la Malla Aprobada -->
-          <div class="p-4 rounded-xl border" [class.bg-emerald-50/50]="p.porcentajeMallaAprobada >= 50" [class.border-emerald-200]="p.porcentajeMallaAprobada >= 50" [class.bg-rose-50/50]="p.porcentajeMallaAprobada < 50" [class.border-rose-200]="p.porcentajeMallaAprobada < 50">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <i class="fa-solid fa-diagram-project text-slate-600"></i> 2. Malla Aprobada (Mín. 50%)
-              </span>
-              <span class="text-xs font-bold" [class.text-emerald-700]="p.porcentajeMallaAprobada >= 50" [class.text-rose-700]="p.porcentajeMallaAprobada < 50">
-                {{ p.porcentajeMallaAprobada }}%
-              </span>
-            </div>
-            <div class="w-full bg-slate-200 rounded-full h-2 mt-2">
-              <div
-                class="h-2 rounded-full transition-all"
-                [class.bg-emerald-500]="p.porcentajeMallaAprobada >= 50"
-                [class.bg-rose-500]="p.porcentajeMallaAprobada < 50"
-                [style.width.%]="p.porcentajeMallaAprobada"
-              ></div>
-            </div>
-            <p class="text-[11px] text-slate-500 mt-1.5">
-              {{ p.creditosAprobados }} de {{ p.creditosTotales }} créditos concluidos satisfactoriamente.
-            </p>
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-users text-slate-400 w-4"></i>
+            <span><strong>Tribunal:</strong> {{ pres.profesoresAsignados.join(', ') || 'Docentes Designados' }}</span>
           </div>
-
-          <!-- Requisito 3: Promedio Estudiante vs Promedio General Carrera -->
-          <div class="p-4 rounded-xl border" [class.bg-emerald-50/50]="p.promedioEstudiante > p.promedioGeneralCarrera" [class.border-emerald-200]="p.promedioEstudiante > p.promedioGeneralCarrera" [class.bg-rose-50/50]="p.promedioEstudiante <= p.promedioGeneralCarrera" [class.border-rose-200]="p.promedioEstudiante <= p.promedioGeneralCarrera">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <i class="fa-solid fa-chart-line text-slate-600"></i> 3. Promedio vs. Carrera
-              </span>
-              <span class="text-xs font-bold" [class.text-emerald-700]="p.promedioEstudiante > p.promedioGeneralCarrera" [class.text-rose-700]="p.promedioEstudiante <= p.promedioGeneralCarrera">
-                {{ p.promedioEstudiante }} vs {{ p.promedioGeneralCarrera }}
-              </span>
-            </div>
-            <p class="text-xs text-slate-600 mt-1">
-              Estudiante: <strong class="text-slate-900">{{ p.promedioEstudiante }}/10</strong> · Promedio General Carrera: <strong class="text-slate-700">{{ p.promedioGeneralCarrera }}/10</strong>.
-            </p>
-            <p class="text-[11px] text-slate-500 mt-1">
-              {{ p.promedioEstudiante > p.promedioGeneralCarrera ? 'Supera el promedio general de la carrera.' : 'No supera el promedio general requerido.' }}
-            </p>
-          </div>
-
-          <!-- Requisito 4: Promedio en Cátedra vs Promedio Histórico del Curso -->
-          <div class="p-4 rounded-xl border" [class.bg-emerald-50/50]="p.notaEstudianteEnCatedra > p.promedioHistoricoCurso" [class.border-emerald-200]="p.notaEstudianteEnCatedra > p.promedioHistoricoCurso" [class.bg-rose-50/50]="p.notaEstudianteEnCatedra <= p.promedioHistoricoCurso" [class.border-rose-200]="p.notaEstudianteEnCatedra <= p.promedioHistoricoCurso">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <i class="fa-solid fa-award text-slate-600"></i> 4. Nota en Materia vs. Curso
-              </span>
-              <span class="text-xs font-bold" [class.text-emerald-700]="p.notaEstudianteEnCatedra > p.promedioHistoricoCurso" [class.text-rose-700]="p.notaEstudianteEnCatedra <= p.promedioHistoricoCurso">
-                {{ p.notaEstudianteEnCatedra }} vs {{ p.promedioHistoricoCurso }}
-              </span>
-            </div>
-            <p class="text-xs text-slate-600 mt-1">
-              Nota obtenida: <strong class="text-slate-900">{{ p.notaEstudianteEnCatedra }}/10</strong> · Promedio Curso: <strong class="text-slate-700">{{ p.promedioHistoricoCurso }}/10</strong>.
-            </p>
-            <p class="text-[11px] text-slate-500 mt-1">
-              {{ p.notaEstudianteEnCatedra > p.promedioHistoricoCurso ? 'Supera el promedio del curso en esta cátedra.' : 'Calificación inferior al promedio del curso.' }}
-            </p>
-          </div>
-
         </div>
       </div>
 
-      <!-- TARJETA 2: FORMULARIO PARA CONFORMAR EL TRIBUNAL EVALUADOR -->
-      <!-- Regla: Compuesto por Decano, Coordinador y 2 Docentes expertos -->
-      <!-- Endpoint: POST /api/jurado/presentaciones -->
-      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <div class="flex items-center justify-between pb-4 mb-5 border-b border-slate-200">
-          <div>
-            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <i class="fa-solid fa-users-viewfinder text-accent"></i> Convocatoria del Tribunal Evaluador (Jurado)
-            </h2>
-            <p class="text-xs text-slate-500 mt-0.5">
-              El estudiante sustentará el tema del sílabo ante el tribunal conformado por Decano, Coordinador y 2 Docentes expertos.
-            </p>
-          </div>
-          <span class="text-[11px] font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">POST /api/jurado/presentaciones</span>
+      <!-- BOTÓN CALIFICAR SUSTENTACIÓN -->
+      <div class="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+        <div class="text-xs text-slate-500">
+          <span *ngIf="pres.promedioNota" class="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+            Promedio: {{ pres.promedioNota.toFixed(1) }} / 10
+          </span>
         </div>
 
-        <form [formGroup]="tribunalForm" (ngSubmit)="asignarTribunal()" class="space-y-4">
+        <div class="flex items-center gap-2">
+          <button type="button" (click)="rechazarDefensa(pres)"
+                  class="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold rounded-xl text-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-circle-xmark text-rose-600"></i>
+            <span>No Aprobar</span>
+          </button>
+          <button (click)="abrirModalCalificar(pres)"
+                  class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-700/20 transition-all inline-flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>{{ pres.estado === 'Evaluada' ? 'Modificar Calificación' : 'Calificar Sustentación' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
 
-          <!-- TEMA DEL SÍLABO Y FECHA DE SUSTENTACIÓN -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Tema del Sílabo a Sustentar *
-              </label>
-              <textarea
-                rows="2"
-                formControlName="temaSilabo"
-                placeholder="Ejemplo: Unidad 3: Aplicación del Teorema de Stokes en problemas de flujo magnético"
-                class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
-              ></textarea>
-              <p class="text-[11px] text-slate-400 mt-0.5">Tema oficial extraído del sílabo de {{ p.catedraNombre }}.</p>
-            </div>
+    <!-- SIN RESULTADOS -->
+    <div *ngIf="presentacionesFiltradas.length === 0" class="col-span-2 py-16 bg-white border border-slate-200 rounded-2xl text-center text-slate-400 text-xs">
+      <i class="fa-solid fa-inbox text-4xl text-slate-300 block mb-3"></i>
+      <p class="font-semibold text-slate-600 text-sm">No se encontraron defensas ni reuniones convocadas</p>
+      <p class="text-slate-400 mt-1">Verifique la conexión con el servidor o ajuste los filtros de búsqueda.</p>
+    </div>
+  </div>
 
-            <div class="space-y-3">
+  <!-- MODAL: RÚBRICA OFICIAL DE EVALUACIÓN DEL TRIBUNAL -->
+  <div *ngIf="mostrarModalCalificar && presentacionSeleccionada"
+       class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-100 overflow-hidden my-8">
+      <!-- Encabezado Modal -->
+      <div class="bg-slate-900 text-white p-6 flex items-center justify-between">
+        <div>
+          <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider block mb-1">Rúbrica Oficial de Evaluación</span>
+          <h2 class="text-xl font-bold">{{ presentacionSeleccionada.estudianteNombre }}</h2>
+          <p class="text-xs text-slate-300 mt-0.5">Cátedra: <strong>{{ presentacionSeleccionada.catedraNombre }}</strong></p>
+        </div>
+        <button (click)="cerrarModalCalificar()" class="text-slate-400 hover:text-white text-xl transition-colors cursor-pointer">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Formulario de Evaluación -->
+      <form [formGroup]="evaluacionForm" (ngSubmit)="guardarCalificacion()" class="p-6 space-y-6">
+
+        <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+          <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 text-sm shrink-0"></i>
+          <div>
+            <strong>Instrucciones para el Jurado:</strong> Ingrese una calificación cuantitativa de 0 a 10 para cada criterio pedagógico. Las notas ponderadas asentarán la validez del acta oficial.
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <!-- Criterio 1: Dominio Científico -->
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div class="flex items-center justify-between">
               <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Fecha y Hora de la Sustentación *
+                <label class="text-xs font-bold text-slate-900 uppercase tracking-wider block">
+                  1. Dominio Científico / Técnico
                 </label>
-                <input
-                  type="datetime-local"
-                  formControlName="fecha"
-                  class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium"
-                />
+                <span class="text-[11px] text-slate-500">Conocimiento profundo del sílabo, teoría y aplicabilidad práctica (40%).</span>
               </div>
-
-              <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Lugar o Enlace Virtual *
-                </label>
-                <input
-                  type="text"
-                  formControlName="lugarOEnlace"
-                  placeholder="Aula Magna / Meet: meet.google.com/..."
-                  class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
-                />
+              <div class="flex items-center gap-2">
+                <input type="number" min="0" max="10" step="0.1" formControlName="dominioCientifico"
+                       class="w-20 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-center text-slate-900 focus:outline-none focus:border-emerald-600" />
+                <span class="text-xs font-bold text-slate-400">/ 10</span>
               </div>
             </div>
           </div>
 
-          <!-- INTEGRANTES DEL TRIBUNAL (Decano, Coordinador, 2 Docentes Expertos) -->
-          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-            <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-              <i class="fa-solid fa-gavel text-accent"></i> Miembros Oficiales del Tribunal (4 Evaluadores)
-            </h3>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <!-- 1. Decano -->
+          <!-- Criterio 2: Destreza Pedagógica -->
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div class="flex items-center justify-between">
               <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">
-                  1. Decano / Subdecano de Facultad *
+                <label class="text-xs font-bold text-slate-900 uppercase tracking-wider block">
+                  2. Destreza Pedagógica
                 </label>
-                <select
-                  formControlName="decanoId"
-                  class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
-                >
-                  <option *ngFor="let dec of decanosDisponibles" [value]="dec.id">{{ dec.nombre }}</option>
-                </select>
+                <span class="text-[11px] text-slate-500">Metodología de enseñanza, uso de recursos didácticos y estructura de la clase (30%).</span>
               </div>
-
-              <!-- 2. Coordinador -->
-              <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">
-                  2. Coordinador de Carrera *
-                </label>
-                <select
-                  formControlName="coordinadorCarreraId"
-                  class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
-                >
-                  <option *ngFor="let coord of coordinadoresDisponibles" [value]="coord.id">{{ coord.nombre }}</option>
-                </select>
-              </div>
-
-              <!-- 3. Docente Experto 1 -->
-              <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">
-                  3. Primer Docente Experto en el Área *
-                </label>
-                <select
-                  formControlName="docenteExperto1"
-                  class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
-                >
-                  <option *ngFor="let doc of docentesExpertosDisponibles" [value]="doc">{{ doc }}</option>
-                </select>
-              </div>
-
-              <!-- 4. Docente Experto 2 -->
-              <div>
-                <label class="block text-xs font-semibold text-slate-700 mb-1">
-                  4. Segundo Docente Experto en el Área *
-                </label>
-                <select
-                  formControlName="docenteExperto2"
-                  class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none"
-                >
-                  <option *ngFor="let doc of docentesExpertosDisponibles" [value]="doc">{{ doc }}</option>
-                </select>
+              <div class="flex items-center gap-2">
+                <input type="number" min="0" max="10" step="0.1" formControlName="destrezaPedagogica"
+                       class="w-20 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-center text-slate-900 focus:outline-none focus:border-emerald-600" />
+                <span class="text-xs font-bold text-slate-400">/ 10</span>
               </div>
             </div>
           </div>
 
-          <!-- BOTÓN DE ENVÍO -->
-          <div class="pt-2 flex items-center justify-between">
-            <div class="text-xs text-slate-500">
-              <span *ngIf="p.cumpleTodosRequisitos" class="text-emerald-600 font-semibold flex items-center gap-1">
-                <i class="fa-solid fa-circle-check"></i> El estudiante cumple todos los requisitos normativos.
-              </span>
-              <span *ngIf="!p.cumpleTodosRequisitos" class="text-rose-600 font-semibold flex items-center gap-1">
-                <i class="fa-solid fa-circle-xmark"></i> El estudiante no cumple con los requisitos mínimos para sustentar.
-              </span>
+          <!-- Criterio 3: Desenvolvimiento y Claridad -->
+          <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-xs font-bold text-slate-900 uppercase tracking-wider block">
+                  3. Desenvolvimiento y Claridad
+                </label>
+                <span class="text-[11px] text-slate-500">Fluidez verbal, manejo del tiempo y respuesta solvente a preguntas del tribunal (30%).</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <input type="number" min="0" max="10" step="0.1" formControlName="desenvolvimientoClaridad"
+                       class="w-20 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-center text-slate-900 focus:outline-none focus:border-emerald-600" />
+                <span class="text-xs font-bold text-slate-400">/ 10</span>
+              </div>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              [disabled]="!p.cumpleTodosRequisitos || isSubmitting"
-              class="px-6 py-3 bg-accent hover:bg-accent-dim disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs shadow-md shadow-accent/20 transition-all flex items-center gap-2"
-            >
-              <i class="fa-solid fa-paper-plane" *ngIf="!isSubmitting"></i>
+          <!-- Comentarios y Observaciones del Docente -->
+          <div>
+            <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+              Comentarios y Observaciones del Docente *
+            </label>
+            <textarea formControlName="observaciones" rows="3"
+                      placeholder="Ingrese los comentarios cualitativos, observaciones pedagógicas o recomendaciones para el postulante..."
+                      class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20"></textarea>
+            <p *ngIf="evaluacionForm.get('observaciones')?.touched && evaluacionForm.get('observaciones')?.invalid"
+               class="text-[11px] text-rose-600 mt-1 font-semibold">
+              Por favor ingrese las observaciones del docente (mínimo 5 caracteres).
+            </p>
+          </div>
+        </div>
+
+        <!-- Previsualización Promedio Ponderado -->
+        <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+          <div>
+            <span class="text-xs font-bold text-emerald-900 uppercase block">Promedio Ponderado Estimado</span>
+            <span class="text-[11px] text-emerald-700">Calculado en base a los 3 criterios normativos</span>
+          </div>
+          <div class="text-2xl font-extrabold text-emerald-800">
+            {{ getPromedioPonderado().toFixed(2) }} <span class="text-xs text-emerald-600">/ 10</span>
+          </div>
+        </div>
+
+        <!-- Acciones Modal -->
+        <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-3">
+          <button type="button" (click)="rechazarDefensa()" [disabled]="isSubmitting"
+                  class="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-xl text-xs transition-colors inline-flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-ban"></i>
+            <span>No Aprobar / Rechazar</span>
+          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" (click)="cerrarModalCalificar()"
+                    class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-colors cursor-pointer">
+              Cancelar
+            </button>
+            <button type="submit" [disabled]="isSubmitting || evaluacionForm.invalid"
+                    class="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-700/20 transition-all inline-flex items-center gap-2 cursor-pointer">
               <i class="fa-solid fa-spinner fa-spin" *ngIf="isSubmitting"></i>
-              <span>{{ isSubmitting ? 'Convocando Tribunal...' : 'Convocar y Notificar Tribunal' }}</span>
+              <i class="fa-solid fa-floppy-disk" *ngIf="!isSubmitting"></i>
+              <span>{{ isSubmitting ? 'Guardando Calificación...' : 'Guardar Calificación' }}</span>
             </button>
           </div>
+        </div>
 
-        </form>
-      </div>
-
+      </form>
     </div>
-
   </div>
 </div>

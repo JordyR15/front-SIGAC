@@ -37,7 +37,7 @@
       </div>
       <div>
         <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Postulantes</p>
-        <p class="text-2xl font-bold text-slate-900 mt-0.5">{{ solicitudes.length }}</p>
+        <p class="text-2xl font-bold text-slate-900 mt-0.5">{{ totalPostulantesActivos }}</p>
         <p class="text-[11px] text-amber-600 font-medium">Por convocar tribunal</p>
       </div>
     </div>
@@ -91,7 +91,7 @@
         <span>1. Postulantes Pendientes</span>
         <span class="px-2 py-0.5 rounded-full text-xs font-bold"
               [ngClass]="tabActiva === 'solicitudes' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'">
-          {{ solicitudes.length }}
+          {{ totalPostulantesActivos }}
         </span>
       </button>
 
@@ -233,17 +233,25 @@
                 </div>
               </td>
               <td class="py-3.5 px-4 text-right">
-                <button (click)="abrirModalConvocarTribunal(s)"
-                        [class.bg-emerald-700]="!s.tieneTribunal"
-                        [class.hover:bg-emerald-800]="!s.tieneTribunal"
-                        [class.bg-amber-600]="s.tieneTribunal && !s.reunionPlanificada"
-                        [class.hover:bg-amber-700]="s.tieneTribunal && !s.reunionPlanificada"
-                        [class.bg-indigo-600]="s.tieneTribunal && s.reunionPlanificada"
-                        [class.hover:bg-indigo-700]="s.tieneTribunal && s.reunionPlanificada"
-                        class="px-3.5 py-1.5 text-white font-semibold rounded-lg text-xs transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
-                  <i class="fa-solid fa-gavel text-[11px]"></i>
-                  <span>{{ s.tieneTribunal ? (s.reunionPlanificada ? 'Replanificar Reunión' : 'Planificar Reunión') : 'Convocar Tribunal' }}</span>
-                </button>
+                <div class="flex items-center justify-end gap-2">
+                  <button type="button" (click)="rechazarSolicitudPostulante(s)"
+                          class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold rounded-lg text-xs transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          title="No Aprobar / Rechazar Postulación">
+                    <i class="fa-solid fa-circle-xmark text-rose-600"></i>
+                    <span>Rechazar</span>
+                  </button>
+                  <button (click)="abrirModalConvocarTribunal(s)"
+                          [class.bg-emerald-700]="!s.tieneTribunal"
+                          [class.hover:bg-emerald-800]="!s.tieneTribunal"
+                          [class.bg-amber-600]="s.tieneTribunal && !s.reunionPlanificada"
+                          [class.hover:bg-amber-700]="s.tieneTribunal && !s.reunionPlanificada"
+                          [class.bg-indigo-600]="s.tieneTribunal && s.reunionPlanificada"
+                          [class.hover:bg-indigo-700]="s.tieneTribunal && s.reunionPlanificada"
+                          class="px-3.5 py-1.5 text-white font-semibold rounded-lg text-xs transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-gavel text-[11px]"></i>
+                    <span>{{ s.tieneTribunal ? (s.reunionPlanificada ? 'Replanificar Reunión' : 'Planificar Reunión') : 'Convocar Tribunal' }}</span>
+                  </button>
+                </div>
               </td>
             </tr>
 
@@ -343,12 +351,18 @@
               <span>Ver Desglose de Notas</span>
             </button>
 
-            <!-- Botón Aprobar y Posesionar si nota >= 7.0 o evaluada -->
-            <button (click)="aprobarYPosesionarAyudante(pres)"
-                    class="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg text-xs transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
-              <i class="fa-solid fa-signature"></i>
-              <span>Aprobar y Posesionar Ayudante</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <button type="button" (click)="rechazarPresentacionAdmin(pres)"
+                      class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold rounded-lg text-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-circle-xmark text-rose-600"></i>
+                <span>No Aprobar</span>
+              </button>
+              <button (click)="aprobarYPosesionarAyudante(pres)"
+                      class="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg text-xs transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-signature"></i>
+                <span>Aprobar y Posesionar Ayudante</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -409,8 +423,8 @@
               <td class="py-3.5 px-4">
                 <span class="font-medium text-slate-800">{{ a.nombreCatedra }}</span>
               </td>
-              <td class="py-3.5 px-4 text-slate-600">
-                {{ a.nombreDocente }}
+              <td class="py-3.5 px-4 text-slate-600 font-medium">
+                {{ resolverDocenteTitular(a) }}
               </td>
               <td class="py-3.5 px-4 text-center">
                 <span class="inline-flex items-center gap-1 font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
@@ -521,7 +535,7 @@
                   class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-600 bg-white">
             <option value="0" disabled selected>-- Selecciona una Materia / Cátedra --</option>
             <option *ngFor="let m of materiasDisponibles" [value]="m.id">
-              {{ m.nombre }} ({{ m.codigo }}) - {{ m.docente || 'Docente Titular' }}
+              {{ m.nombre }} ({{ m.codigo }}) - {{ m.docente || 'Docente Titular' }} &bull; [{{ getCuposDisponiblesCatedra(m.id, m.cupos || 2) }} cupos libres | {{ getPostulantesPorCatedra(m.id) }} postulando]
             </option>
           </select>
         </div>
@@ -722,17 +736,24 @@
         </div>
       </div>
 
-      <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-        <button (click)="cerrarModalRubrica()"
-                class="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-semibold cursor-pointer">
-          Cerrar
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+        <button type="button" (click)="rechazarPresentacionAdmin()"
+                class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold cursor-pointer flex items-center gap-1.5">
+          <i class="fa-solid fa-ban text-rose-600"></i>
+          <span>No Aprobar / Rechazar Postulante</span>
         </button>
-        <button *ngIf="resultadoSeleccionado && resultadoSeleccionado.promedioFinal >= 7.0"
-                (click)="aprobarYPosesionarAyudante(resultadoSeleccionado)"
-                class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-sm cursor-pointer flex items-center gap-1.5">
-          <i class="fa-solid fa-signature"></i>
-          <span>Posesionar Ayudante Oficial</span>
-        </button>
+        <div class="flex items-center gap-2">
+          <button (click)="cerrarModalRubrica()"
+                  class="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-semibold cursor-pointer">
+            Cerrar
+          </button>
+          <button *ngIf="resultadoSeleccionado && resultadoSeleccionado.promedioFinal >= 7.0"
+                  (click)="aprobarYPosesionarAyudante(resultadoSeleccionado)"
+                  class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-sm cursor-pointer flex items-center gap-1.5">
+            <i class="fa-solid fa-signature"></i>
+            <span>Posesionar Ayudante Oficial</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

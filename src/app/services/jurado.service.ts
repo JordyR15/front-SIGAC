@@ -31,6 +31,9 @@ export interface EvaluacionJuradoDto {
     claridadPedagogica?: number;
     recursosDidacticos?: number;
     manejoPreguntas?: number;
+    dominioCientifico?: number;
+    destrezaPedagogica?: number;
+    desenvolvimientoClaridad?: number;
   };
 }
 
@@ -51,10 +54,17 @@ export interface ResultadoPresentacionDto {
   fechaSustentacion: string;
   promedioFinal: number;
   notaMinimaAprobatoria: number;
-  estadoFinal: 'Aprobado' | 'Reprobado' | 'En Evaluación';
+  estadoFinal: 'Aprobado' | 'Reprobado' | 'En Evaluación' | 'Rechazado' | 'No Aprobado';
   totalEvaluadores: number;
   evaluacionesCompletadas: number;
   evaluaciones: EvaluacionIndividualDto[];
+  notaDocente?: number;
+  observacionDocente?: string;
+  fechaCalificacionDocente?: string;
+  notaAdmin?: number;
+  observacionAdmin?: string;
+  fechaCalificacionAdmin?: string;
+  notaFinal?: number;
 }
 
 export interface PresentacionDetalleDto {
@@ -71,9 +81,18 @@ export interface PresentacionDetalleDto {
   decanoNombre?: string;
   coordinadorNombre?: string;
   profesoresAsignados: string[];
-  estado: 'Pendiente' | 'Evaluada' | 'En Progreso' | 'Aprobada' | 'Convocada';
+  estado: 'Pendiente' | 'Evaluada' | 'En Progreso' | 'Aprobada' | 'Convocada' | 'Rechazada' | 'No Aprobado' | 'No Aprobada';
   yaEvaluadoPorMi?: boolean;
   promedioNota?: number;
+  docenteId?: number;
+  docentesIds?: number[];
+  notaDocente?: number;
+  observacionDocente?: string;
+  fechaCalificacionDocente?: string;
+  notaAdmin?: number;
+  observacionAdmin?: string;
+  fechaCalificacionAdmin?: string;
+  notaFinal?: number;
 }
 
 @Injectable({
@@ -124,6 +143,10 @@ export class JuradoService {
    * POST /api/Jurado/presentaciones o /api/Coordinador/ayudantias/convocar-tribunal
    * Registra una sustentación de tema de sílabo ante el tribunal
    */
+  
+  convocarPresentacion(dto: CrearPresentacionDto): Observable<any> {
+    return this.crearPresentacion(dto);
+  }
   crearPresentacion(dto: CrearPresentacionDto): Observable<any> {
     const payload = {
       ayudantiaId: Number(dto.ayudantiaId || dto.postulanteId || dto.estudianteId || 0),
@@ -309,6 +332,23 @@ export class JuradoService {
       }),
       map(() => this.presentacionesSubject.value),
       catchError(() => of([...this.presentacionesSubject.value]))
+    );
+  }
+
+    rechazarPresentacion(presentacionId: number, observaciones: string): Observable<any> {
+    const list = this.presentacionesSubject.value.map(p => {
+      if (p.id === presentacionId) {
+        return { ...p, estado: 'Rechazada' as const, observacionDocente: observaciones };
+      }
+      return p;
+    });
+    this.presentacionesSubject.next(list);
+    this.saveStorage(this.STORAGE_PRESENTACIONES, list);
+
+    const payload = { estado: 'Rechazada', observaciones: observaciones, observacion: observaciones };
+    return this.http.put(this.apiUrl + '/presentaciones/' + presentacionId + '/estado', payload).pipe(
+      catchError(() => this.http.post(this.apiUrl + '/presentaciones/' + presentacionId + '/rechazar', payload)),
+      catchError(() => of({ success: true, message: 'Presentación rechazada exitosamente' }))
     );
   }
 

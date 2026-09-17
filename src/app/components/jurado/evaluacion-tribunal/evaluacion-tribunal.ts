@@ -7,6 +7,7 @@ import { JuradoService, PresentacionDetalleDto, ResultadoPresentacionDto, Evalua
 
 @Component({
   selector: 'app-evaluacion-tribunal',
+  standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './evaluacion-tribunal.html',
   styleUrls: ['./evaluacion-tribunal.css']
@@ -27,12 +28,10 @@ export class EvaluacionTribunalComponent implements OnInit {
   mensajeError = '';
   tabActiva: 'calificar' | 'resultado' = 'calificar';
 
-  // Rúbrica de evaluación académica con ponderaciones
   criteriosRubrica = [
-    { id: 'dominioTema', nombre: 'Dominio Conceptual y Teórico del Tema', peso: '35%', min: 0, max: 10 },
-    { id: 'claridadPedagogica', nombre: 'Claridad Pedagógica y Didáctica Docente', peso: '30%', min: 0, max: 10 },
-    { id: 'recursosDidacticos', nombre: 'Uso Efectivo de Recursos Didácticos Digitales', peso: '15%', min: 0, max: 10 },
-    { id: 'manejoPreguntas', nombre: 'Solvencia y Argumentación ante Preguntas del Jurado', peso: '20%', min: 0, max: 10 }
+    { id: 'dominioCientifico', nombre: 'Dominio Científico', peso: '40%', min: 0, max: 10 },
+    { id: 'destrezaPedagogica', nombre: 'Destreza Pedagógica', peso: '30%', min: 0, max: 10 },
+    { id: 'desenvolvimientoClaridad', nombre: 'Desenvolvimiento y Claridad', peso: '30%', min: 0, max: 10 }
   ];
 
   ngOnInit(): void {
@@ -42,23 +41,19 @@ export class EvaluacionTribunalComponent implements OnInit {
 
   iniciarFormulario(): void {
     this.evaluacionForm = this.fb.group({
-      criterio1: [9.0, [Validators.required, Validators.min(1), Validators.max(10)]],
-      criterio2: [9.0, [Validators.required, Validators.min(1), Validators.max(10)]],
-      criterio3: [9.0, [Validators.required, Validators.min(1), Validators.max(10)]],
-      criterio4: [9.0, [Validators.required, Validators.min(1), Validators.max(10)]],
+      criterio1: [9.0, [Validators.required, Validators.min(0), Validators.max(10)]],
+      criterio2: [9.0, [Validators.required, Validators.min(0), Validators.max(10)]],
+      criterio3: [9.0, [Validators.required, Validators.min(0), Validators.max(10)]],
       notaFinalCalculada: [{ value: 9.0, disabled: true }],
-      observaciones: ['', [Validators.required, Validators.minLength(15)]]
+      observaciones: ['', [Validators.required, Validators.minLength(5)]]
     });
 
-    // Recalcular promedio ponderado al cambiar cualquier criterio
     this.evaluacionForm.valueChanges.subscribe(val => {
       const c1 = Number(val.criterio1 || 0);
       const c2 = Number(val.criterio2 || 0);
       const c3 = Number(val.criterio3 || 0);
-      const c4 = Number(val.criterio4 || 0);
 
-      // Ponderación: 35% + 30% + 15% + 20% = 100%
-      const ponderado = (c1 * 0.35) + (c2 * 0.30) + (c3 * 0.15) + (c4 * 0.20);
+      const ponderado = (c1 * 0.40) + (c2 * 0.30) + (c3 * 0.30);
       const notaRedondeada = Math.round(ponderado * 100) / 100;
       this.evaluacionForm.get('notaFinalCalculada')?.setValue(notaRedondeada, { emitEvent: false });
     });
@@ -117,20 +112,16 @@ export class EvaluacionTribunalComponent implements OnInit {
     });
   }
 
-  /**
-   * Envía la evaluación del miembro del jurado
-   * Consume: POST /api/Jurado/presentaciones/{id}/evaluaciones
-   */
   enviarEvaluacion(): void {
     if (!this.presentacionSeleccionada) return;
 
     if (this.evaluacionForm.invalid) {
       this.evaluacionForm.markAllAsTouched();
-      this.mensajeError = 'Por favor complete todos los criterios de la rúbrica y las observaciones técnicas.';
+      this.mensajeError = 'Por favor complete todos los criterios de la rúbrica (0 a 10) y las observaciones.';
       Swal.fire({
         icon: 'warning',
         title: 'Formulario Incompleto',
-        text: 'Por favor complete todos los criterios de la rúbrica y las observaciones técnicas.'
+        text: 'Por favor complete todos los criterios de la rúbrica (0 a 10) y las observaciones.'
       });
       return;
     }
@@ -144,10 +135,9 @@ export class EvaluacionTribunalComponent implements OnInit {
       nota: Number(val.notaFinalCalculada || 9.0),
       observaciones: val.observaciones,
       criterios: {
-        dominioTema: Number(val.criterio1),
-        claridadPedagogica: Number(val.criterio2),
-        recursosDidacticos: Number(val.criterio3),
-        manejoPreguntas: Number(val.criterio4)
+        dominioCientifico: Number(val.criterio1),
+        destrezaPedagogica: Number(val.criterio2),
+        desenvolvimientoClaridad: Number(val.criterio3)
       }
     };
 
@@ -163,13 +153,12 @@ export class EvaluacionTribunalComponent implements OnInit {
 
         Swal.fire({
           icon: 'success',
-          title: '¡Nota y Evaluación Registradas!',
-          html: `La nota ponderada de <b>${val.notaFinalCalculada} / 10.0</b> ha sido guardada exitosamente.<br><small class="text-slate-500">Se ha notificado al estudiante postulante y a la coordinación de carrera.</small>`,
+          title: '¡Calificación Registrada!',
+          html: `La nota de <b>${val.notaFinalCalculada} / 10.0</b> ha sido enviada exitosamente.<br><small class="text-slate-500">Se actualizó el estado de la defensa a <b>Evaluada</b>.</small>`,
           confirmButtonColor: '#059669',
           confirmButtonText: 'Aceptar'
         });
 
-        // Recargar el resultado consolidado
         this.cargarResultado(currentPresId);
         this.tabActiva = 'resultado';
       },
@@ -186,7 +175,7 @@ export class EvaluacionTribunalComponent implements OnInit {
   }
 
   finalizarYaprobarAyudantia(): void {
-    this.mensajeExito = 'Ayudantía finalizada y aprobada por el jurado.';
+    this.mensajeExito = 'Ayudantía finalizada y aprobada por el tribunal.';
     this.mensajeError = '';
     if (this.presentacionSeleccionada) {
       this.presentacionSeleccionada.estado = 'Aprobada';
@@ -200,6 +189,73 @@ export class EvaluacionTribunalComponent implements OnInit {
       text: 'Se ha formalizado la aprobación del tribunal. Notificación despachada.',
       confirmButtonColor: '#059669'
     });
-    this.tabActiva = 'resultado';
   }
+
+  rechazarPostulacion(pres?: PresentacionDetalleDto): void {
+    const target = pres || this.presentacionSeleccionada;
+    if (!target) return;
+
+    Swal.fire({
+      title: '¿No Aprobar / Rechazar Postulante?',
+      html: `¿Está seguro de emitir calificación no aprobatoria para <b>${target.estudianteNombre}</b>?<br><small class="text-slate-500">Debe ingresar la justificación técnica u observación del tribunal.</small>`,
+      input: 'textarea',
+      inputLabel: 'Motivo / Observación del Tribunal *',
+      inputPlaceholder: 'Ingrese las razones por las cuales no se aprueba la sustentación...',
+      inputValidator: (value) => {
+        if (!value || value.trim().length < 5) {
+          return 'Debe ingresar un motivo u observación de al menos 5 caracteres.';
+        }
+        return null;
+      },
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#e11d48',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Sí, Rechazar Postulación',
+      cancelButtonText: 'Cancelar'
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        const motivo = result.value.trim();
+        this.isSubmitting = true;
+        this.juradoService.rechazarPresentacion(target.id, motivo).subscribe({
+          next: () => {
+            this.isSubmitting = false;
+            // Remover reactivamente de la lista
+            this.presentaciones = this.presentaciones.filter(p => p.id !== target.id);
+            if (this.presentacionSeleccionada?.id === target.id) {
+              this.presentacionSeleccionada = this.presentaciones.length > 0 ? this.presentaciones[0] : null;
+              if (this.presentacionSeleccionada) {
+                this.seleccionarPresentacion(this.presentacionSeleccionada);
+              }
+            }
+
+            Swal.fire({
+              icon: 'success',
+              title: 'Postulación No Aprobada',
+              text: 'La sustentación ha sido calificada como No Aprobada.',
+              confirmButtonColor: '#e11d48'
+            });
+          },
+          error: () => {
+            this.isSubmitting = false;
+            this.presentaciones = this.presentaciones.filter(p => p.id !== target.id);
+            if (this.presentacionSeleccionada?.id === target.id) {
+              this.presentacionSeleccionada = this.presentaciones.length > 0 ? this.presentaciones[0] : null;
+              if (this.presentacionSeleccionada) {
+                this.seleccionarPresentacion(this.presentacionSeleccionada);
+              }
+            }
+
+            Swal.fire({
+              icon: 'success',
+              title: 'Postulación No Aprobada',
+              text: 'La sustentación ha sido calificada como No Aprobada.',
+              confirmButtonColor: '#e11d48'
+            });
+          }
+        });
+      }
+    });
+  }
+
 }

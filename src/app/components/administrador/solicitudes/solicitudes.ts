@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CoordinadorService, SolicitudAyudantiaDto } from '../../../services/coordinador.service';
 
@@ -6,17 +6,18 @@ import { CoordinadorService, SolicitudAyudantiaDto } from '../../../services/coo
   selector: 'app-solicitudes',
   standalone: true,
   imports: [CommonModule],
-  templateUrl: './solicitudes.html'
+  templateUrl: './solicitudes.html',
+  styleUrls: ['./solicitudes.css']
 })
 export class SolicitudesComponent implements OnInit {
+  private coordinadorService = inject(CoordinadorService);
+
   solicitudes: SolicitudAyudantiaDto[] = [];
   isLoading = false;
   successMessage = '';
   errorMessage = '';
 
-  constructor(private coordinadorService: CoordinadorService) {}
-
-  ngOnInit() {
+  ngOnInit(): void {
     this.cargarSolicitudes();
   }
 
@@ -36,8 +37,8 @@ export class SolicitudesComponent implements OnInit {
         console.warn('Usando datos de respaldo para solicitudes:', err);
         // Default preview data if not populated yet
         this.solicitudes = [
-          { ayudantiaId: 1, estudianteId: 1, nombreEstudiante: 'María González', catedraId: 1, nombreCatedra: 'Cálculo Avanzado', estado: 'Pendiente' },
-          { ayudantiaId: 2, estudianteId: 2, nombreEstudiante: 'Carlos Pérez', catedraId: 2, nombreCatedra: 'Mecánica Cuántica', estado: 'Pendiente' }
+          { ayudantiaId: 1, estudianteId: 1, nombreEstudiante: 'María González', catedraId: 1, nombreCatedra: 'Cálculo Avanzado', estado: 'Pendiente', promedio: 8.8, porcentajeMalla: 65, notaCatedra: 9.0, fecha: '2026-08-20' },
+          { ayudantiaId: 2, estudianteId: 2, nombreEstudiante: 'Carlos Pérez', catedraId: 2, nombreCatedra: 'Mecánica Cuántica', estado: 'Pendiente', promedio: 8.5, porcentajeMalla: 60, notaCatedra: 8.8, fecha: '2026-08-20' }
         ];
       }
     });
@@ -64,7 +65,7 @@ export class SolicitudesComponent implements OnInit {
 
   rechazar(id: number) {
     this.isLoading = true;
-    this.coordinadorService.gestionarEstadoAyudantia(id, { nuevoEstado: 'Rechazada' }).subscribe({
+    this.coordinadorService.actualizarEstadoSolicitud(id, 'Rechazada').subscribe({
       next: () => {
         this.isLoading = false;
         this.successMessage = `Solicitud #${id} rechazada.`;

@@ -64,25 +64,29 @@
       <!-- SECCIÓN: DOCENTE -->
       <ng-container *ngIf="mostrarSeccion('Docente')">
         <p class="px-3 pb-2 pt-4 text-[10px] font-semibold tracking-widest text-indigo-400 uppercase">Docente</p>
-        <a routerLink="/docente/gestion-clases" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+        <a routerLink="/docente/gestion-clases" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
           <i class="fa-solid fa-chalkboard-user text-sm w-5 text-center text-indigo-600"></i>
-          <span class="text-sm font-medium">Mis Cátedras</span>
+          <span class="text-sm font-medium">Gestión de Clases</span>
+        </a>
+        <a routerLink="/docente/asistencia" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+          <i class="fa-solid fa-clipboard-user text-sm w-5 text-center text-indigo-600"></i>
+          <span class="text-sm font-medium">Control Asistencia</span>
         </a>
         <a routerLink="/docente/gestion-estudiantes" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-          <i class="fa-solid fa-user-plus text-sm w-5 text-center"></i>
-          <span class="text-sm font-medium">Gestionar Estudiantes</span>
+          <i class="fa-solid fa-user-check text-sm w-5 text-center text-indigo-600"></i>
+          <span class="text-sm font-medium">Validación Ayudantías</span>
         </a>
       </ng-container>
 
-      <!-- SECCIÓN: COORDINADOR -->
+      <!-- SECCIÓN: COORDINADOR DE CARRERA -->
       <ng-container *ngIf="mostrarSeccion('Coordinador')">
-        <p class="px-3 pb-2 pt-4 text-[10px] font-semibold tracking-widest text-amber-500 uppercase">Coordinación</p>
+        <p class="px-3 pb-2 pt-4 text-[10px] font-semibold tracking-widest text-indigo-400 uppercase">Coordinación de Carrera</p>
         <a routerLink="/coordinador/validacion" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
-          <i class="fa-solid fa-clipboard-check text-sm w-5 text-center text-amber-600"></i>
+          <i class="fa-solid fa-clipboard-check text-sm w-5 text-center text-indigo-600"></i>
           <span class="text-sm font-medium">Validación de Ayudantías</span>
         </a>
-        <a routerLink="/coordinador/nota-minima" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
-          <i class="fa-solid fa-sliders text-sm w-5 text-center text-amber-600"></i>
+        <a routerLink="/coordinador/nota-minima" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+          <i class="fa-solid fa-sliders text-sm w-5 text-center text-indigo-600"></i>
           <span class="text-sm font-medium">Configuración Cátedras</span>
         </a>
       </ng-container>
@@ -110,6 +114,10 @@
         <a routerLink="/admin/ayudantias" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
           <i class="fa-solid fa-graduation-cap text-sm w-5 text-center text-rose-600"></i>
           <span class="text-sm font-medium">Ayudantías e Informes</span>
+        </a>
+        <a routerLink="/coordinador/validacion" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
+          <i class="fa-solid fa-gavel text-sm w-5 text-center text-indigo-600"></i>
+          <span class="text-sm font-medium">Validación & Calificación</span>
         </a>
         <a routerLink="/admin/materias" routerLinkActive="bg-accent/5 text-accent" class="flex items-center gap-3 px-3 py-2.5 rounded-lg relative group transition-colors cursor-pointer">
           <i class="fa-solid fa-list text-sm w-5 text-center text-slate-500"></i>
@@ -182,6 +190,17 @@
       </div>
 
       <div class="flex items-center gap-3">
+        <!-- Perfil y rol de sesión actual en el Header -->
+        <div class="hidden sm:flex items-center gap-2.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl">
+          <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold">
+            {{ userInitials }}
+          </div>
+          <div class="flex flex-col text-left">
+            <span class="text-xs font-bold text-slate-900 leading-tight">{{ userDisplayName }}</span>
+            <span class="text-[10px] font-semibold text-emerald-600 uppercase leading-none">{{ rol }}</span>
+          </div>
+        </div>
+
         <button
           type="button"
           (click)="abrirCentroNotificaciones()"
@@ -190,9 +209,9 @@
           <i class="fa-regular fa-bell"></i>
           <span class="absolute top-3 right-3 w-2 h-2 rounded-full bg-amber-500 border-2 border-white"></span>
         </button>
-        <button type="button" (click)="authService.logout(); router.navigate(['/login'])" class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm transition-colors">
+        <button type="button" (click)="authService.logout(); router.navigate(['/login'])" class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm transition-colors cursor-pointer">
           <i class="fa-solid fa-right-from-bracket"></i>
-          <span>Cerrar Sesión</span>
+          <span class="hidden md:inline">Cerrar Sesión</span>
         </button>
       </div>
     </header>
@@ -215,7 +234,7 @@
   </app-right-sidebar-ayudante>
 
   <app-right-sidebar-docente
-    *ngIf="esRolIgual(rol, 'Docente')"
+    *ngIf="mostrarSeccion('Docente') && !esEstudianteNormal && !esAyudante"
     class="hidden xl:flex w-full xl:w-[340px] border-l border-slate-200">
   </app-right-sidebar-docente>
 </div>

@@ -5,6 +5,10 @@ export interface MateriaDto {
   descripcion: string;
   codigo: string;
   docenteResponsableId: number;
+  cupos?: number;
+  cuposDisponibles?: number;
+  postulantesPendientes?: number;
+  estudiantesPostulando?: number;
 }
 
 export interface RecursoDto {
