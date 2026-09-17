@@ -37,7 +37,6 @@ const PROXY_CONFIG = {
   '/api': {
     target: 'http://127.0.0.1:5001',
     secure: false,
-    changeOrigin: true,
     bypass: async (req, res) => {
       const isUp = await checkBackend('127.0.0.1', 5001);
       if (!isUp) {

@@ -298,9 +298,17 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
 
     return base.filter(s => {
       const st = (s.estado || '').toLowerCase().trim();
-      const matchEstado =
-        this.filtroSolicitudesEstado === 'todas' ||
-        st === this.filtroSolicitudesEstado.toLowerCase();
+      let matchEstado = this.filtroSolicitudesEstado === 'todas';
+      if (!matchEstado) {
+        const f = this.filtroSolicitudesEstado.toLowerCase();
+        if (f === 'convocada' || f === 'tribunal convocado') {
+          matchEstado = st === 'convocada' || s.tieneTribunal === true;
+        } else if (f === 'pendiente') {
+          matchEstado = (st === 'pendiente' || !st) && !s.tieneTribunal;
+        } else {
+          matchEstado = st.includes(f);
+        }
+      }
 
       const matchTexto =
         !this.busquedaSolicitud.trim() ||
@@ -369,71 +377,157 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
 
   crearPostulanteManual(): void {
     const p = this.nuevoPostulante;
-    const nombresFull = `${p.nombres || p.nombre || ''} ${p.apellidos || p.apellido || ''}`.trim();
+    const nombre = (p.nombre || p.nombres || '').trim();
+    const apellido = (p.apellido || p.apellidos || '').trim();
+    const nombresFull = `${nombre} ${apellido}`.trim();
+    const cedula = (p.cedula || '').trim();
+    const correo = (p.correo || '').trim();
 
-    if (!nombresFull || !p.materiaId) {
+    if (!nombre || !apellido || !p.materiaId) {
       Swal.fire({
         icon: 'warning',
         title: 'Campos Incompletos',
-        text: 'Por favor complete el nombre y seleccione una cátedra para la postulación.'
+        text: 'Por favor complete nombres, apellidos y seleccione la cátedra a postular.'
+      });
+      return;
+    }
+
+    if (!cedula || cedula.length < 10) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Cédula Inválida',
+        text: 'Por favor ingrese una cédula válida de 10 dígitos.'
+      });
+      return;
+    }
+
+    if (!correo || !correo.includes('@')) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Correo Inválido',
+        text: 'Por favor ingrese un correo institucional válido.'
       });
       return;
     }
 
     Swal.fire({
-      title: 'Registrando Postulación...',
-      text: 'Creando estudiante y registrando postulación oficial...',
+      title: 'Registrando en Base de Datos...',
+      text: 'Creando estudiante y registrando postulación oficial en la BD/Supabase...',
       allowOutsideClick: false,
       didOpen: () => Swal.showLoading()
     });
 
+    const username = correo.split('@')[0] || `est_${cedula}`;
     const payloadEstudiante = {
-      cedula: p.cedula || '1201234567',
-      nombres: p.nombres || p.nombre || 'Estudiante',
-      apellidos: p.apellidos || p.apellido || 'Postulante',
-      correo: p.correo || `estudiante${Date.now()}@uteq.edu.ec`,
+      cedula: cedula,
+      nombres: nombre,
+      nombre: nombre,
+      apellidos: apellido,
+      apellido: apellido,
+      nombreCompleto: nombresFull,
+      correo: correo,
+      email: correo,
+      username: username,
+      password: cedula,
       carrera: 'Ingeniería en Software',
       facultad: 'Facultad de Ciencias de la Ingeniería',
-      promedioEstudiante: p.promedioGeneral,
+      promedioEstudiante: Number(p.promedioGeneral || 8.5),
+      promedioGeneral: Number(p.promedioGeneral || 8.5),
+      porcentajeMalla: Number(p.porcentajeMalla || 60),
       creditosAprobados: 120,
-      creditosTotales: 180
+      creditosTotales: 180,
+      rol: 'Estudiante',
+      roles: ['Estudiante']
     };
 
     const apiBase = getApiBase();
-    this.http.post<any>(`${apiBase}/api/Estudiantes`, payloadEstudiante).pipe(
-      catchError(() => of({ id: Math.floor(Math.random() * 1000) + 1 }))
-    ).subscribe({
-      next: (estRes) => {
-        const estudianteId = estRes.id || Math.floor(Math.random() * 1000) + 1;
 
-        const payloadAyudantia = {
-          estudianteId: estudianteId,
+    // Registrar el usuario en la BD de Supabase a través de Login/register o Usuarios
+    const registrarEstudiante$ = this.http.post<any>(`${apiBase}/api/Login/register`, payloadEstudiante).pipe(
+      catchError(() => this.http.post<any>(`${apiBase}/api/Usuarios`, payloadEstudiante)),
+      catchError((err) => {
+        console.warn('Aviso de registro de estudiante (continuando con postulación directa):', err);
+        return of(null);
+      })
+    );
+
+    registrarEstudiante$.subscribe({
+      next: (estRes) => {
+        const estudianteId = Number(estRes?.id || estRes?.estudianteId || estRes?.Id || estRes?.data?.id || 0);
+
+        const payloadAyudantia: any = {
+          // Identificadores
+          estudianteId: estudianteId || 0,
+          EstudianteId: estudianteId || 0,
           catedraId: Number(p.materiaId),
-          promedioEstudiante: p.promedioGeneral,
-          notaEstudianteEnCatedra: p.notaCatedra,
-          porcentajeMallaAprobada: p.porcentajeMalla
+          CatedraId: Number(p.materiaId),
+          materiaId: Number(p.materiaId),
+          MateriaId: Number(p.materiaId),
+
+          // Datos personales del estudiante / postulante
+          cedula: cedula,
+          cedulaEstudiante: cedula,
+          Cedula: cedula,
+          nombres: nombre,
+          nombre: nombre,
+          apellidos: apellido,
+          apellido: apellido,
+          nombreEstudiante: nombresFull,
+          NombreEstudiante: nombresFull,
+          correo: correo,
+          email: correo,
+          correoEstudiante: correo,
+          CorreoEstudiante: correo,
+          carrera: 'Ingeniería en Software',
+
+          // Calificaciones y méritos
+          promedio: Number(p.promedioGeneral),
+          promedioEstudiante: Number(p.promedioGeneral),
+          promedioGeneral: Number(p.promedioGeneral),
+          PromedioEstudiante: Number(p.promedioGeneral),
+          notaCatedra: Number(p.notaCatedra),
+          notaEstudianteEnCatedra: Number(p.notaCatedra),
+          NotaEstudianteEnCatedra: Number(p.notaCatedra),
+          porcentajeMalla: Number(p.porcentajeMalla),
+          porcentajeMallaAprobada: Number(p.porcentajeMalla),
+          PorcentajeMallaAprobada: Number(p.porcentajeMalla),
+
+          // Datos institucionales
+          disponibilidadHoraria: 'Completa',
+          DisponibilidadHoraria: 'Completa',
+          motivoPostulacion: 'Postulación y Registro de Ayudante de Cátedra',
+          MotivoPostulacion: 'Postulación y Registro de Ayudante de Cátedra',
+          temaSilaboPropuesto: 'Sustentación y Apoyo a la Cátedra',
+          TemaSilaboPropuesto: 'Sustentación y Apoyo a la Cátedra',
+          estado: 'Pendiente',
+          estadoAyudantia: 'Pendiente',
+          Estado: 'Pendiente',
+          fecha: new Date().toISOString()
         };
 
         this.coordinadorService.crearSolicitudAyudantia(payloadAyudantia).subscribe({
-          next: () => {
+          next: (res) => {
+            console.log('Postulación creada con éxito en la BD:', res);
             Swal.fire({
               icon: 'success',
               title: '¡Postulación Registrada!',
-              text: `El postulante ${nombresFull} ha sido registrado exitosamente.`,
+              text: `El postulante ${nombresFull} ha sido registrado y guardado exitosamente en la base de datos.`,
               confirmButtonColor: '#059669'
             });
             this.cerrarModalNuevoPostulante();
             this.cargarSolicitudes();
+            this.cargarPresentaciones();
+            this.cargarAyudantesActivos();
           },
-          error: () => {
+          error: (err) => {
+            console.error('Error al registrar postulante en el backend/BD:', err);
+            const errDetalle = err?.error?.message || err?.error?.title || (typeof err?.error === 'string' ? err.error : null) || (err?.error?.errors ? JSON.stringify(err.error.errors) : null) || err?.statusText || 'Error de comunicación con el backend/Supabase';
             Swal.fire({
-              icon: 'success',
-              title: '¡Postulación Registrada!',
-              text: `El postulante ${nombresFull} ha sido agregado a la lista de espera de ayudantías.`,
-              confirmButtonColor: '#059669'
+              icon: 'error',
+              title: 'Error al Registrar en la BD',
+              text: `No se pudo registrar en la base de datos: ${errDetalle}`,
+              confirmButtonColor: '#dc2626'
             });
-            this.cerrarModalNuevoPostulante();
-            this.cargarSolicitudes();
           }
         });
       }
@@ -507,10 +601,10 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
   }
 
   guardarConvocatoriaTribunal(): void {
-    const sel = this.solicitudSeleccionada as any;
-    const ayudantiaId = Number(sel?.ayudantiaId || this.solicitudSeleccionadaParaTribunal?.ayudantiaId || 0);
-    const postulanteId = Number(sel?.estudianteId || sel?.postulanteId || sel?.id || this.solicitudSeleccionadaParaTribunal?.estudianteId || 0);
-    const catedraId = Number(sel?.catedraId || sel?.materiaId || this.solicitudSeleccionadaParaTribunal?.catedraId || 1);
+    const sol = this.solicitudSeleccionadaParaTribunal || (this.solicitudSeleccionada as any);
+    const ayudantiaId = Number(sol?.ayudantiaId || sol?.id || 0);
+    const postulanteId = Number(sol?.estudianteId || sol?.postulanteId || sol?.id || 0);
+    const catedraId = Number(sol?.catedraId || sol?.materiaId || 1);
 
     let juradoId = Number(this.convocatoria?.juradoId || this.formTribunal?.docenteTribunalId);
     if (!juradoId || juradoId <= 0) {
@@ -532,26 +626,32 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
     }
 
     const docenteItem = this.docentesDisponibles.find(d => Number(d.id) === juradoId);
-    const juradoNombre = docenteItem?.nombre ? `${docenteItem.nombre} ${docenteItem.apellido || ''}`.trim() : (this.formTribunal.juradoNombre || 'Docente Evaluador Titular');
+    const juradoNombre = docenteItem?.nombre ? `${docenteItem.nombre} ${docenteItem.apellido || ''}`.trim() : (this.formTribunal?.juradoNombre || 'Docente Evaluador Titular');
+    const temaFinal = this.convocatoria?.tema?.trim() || this.formTribunal?.tema?.trim() || `Evaluación de Destrezas Pedagógicas y Conocimientos: ${sol?.nombreCatedra || 'Cátedra UTEQ'}`;
+    const lugarFinal = this.convocatoria?.lugar?.trim() || this.formTribunal?.lugar?.trim() || 'Aula Asignada / Enlace Virtual Teams UTEQ';
 
     const payload = {
       ayudantiaId: ayudantiaId || postulanteId,
       AyudantiaId: ayudantiaId || postulanteId,
       postulanteId: postulanteId,
       estudianteId: postulanteId,
-      estudianteNombre: this.solicitudSeleccionadaParaTribunal?.nombreEstudiante || 'Estudiante Postulante',
-      catedraNombre: this.solicitudSeleccionadaParaTribunal?.nombreCatedra || 'Cátedra UTEQ',
+      estudianteNombre: sol?.nombreEstudiante || 'Estudiante Postulante',
+      estudianteCorreo: sol?.correoEstudiante || 'postulante@uteq.edu.ec',
+      catedraNombre: sol?.nombreCatedra || 'Cátedra UTEQ',
       catedraId: catedraId,
       materiaId: catedraId,
       juradoId: juradoId,
       docentesIds: [juradoId],
+      juradoIds: [juradoId],
+      juradoNombre: juradoNombre,
       profesoresAsignados: [juradoNombre],
       fechaPresentacion: fechaIso,
       fecha: fechaIso,
-      tema: this.convocatoria?.tema?.trim() || this.formTribunal?.tema?.trim() || 'Evaluación de Destrezas Pedagógicas y Conocimientos en la Cátedra',
-      temaSilabo: this.convocatoria?.tema?.trim() || this.formTribunal?.tema?.trim() || 'Evaluación de Destrezas Pedagógicas y Conocimientos en la Cátedra',
-      lugar: this.convocatoria?.lugar?.trim() || this.formTribunal?.lugar?.trim() || 'Aula Asignada / Enlace Virtual Teams UTEQ',
-      lugarOEnlace: this.convocatoria?.lugar?.trim() || this.formTribunal?.lugar?.trim() || 'Aula Asignada / Enlace Virtual Teams UTEQ'
+      tema: temaFinal,
+      temaSilabo: temaFinal,
+      lugar: lugarFinal,
+      lugarOEnlace: lugarFinal,
+      estado: 'Convocada'
     };
 
     Swal.fire({
@@ -562,34 +662,94 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
     });
 
     this.juradoService.convocarPresentacion(payload).subscribe({
-      next: () => {
-        if (this.solicitudSeleccionadaParaTribunal) {
-          this.solicitudSeleccionadaParaTribunal.tieneTribunal = true;
-          this.solicitudSeleccionadaParaTribunal.reunionPlanificada = true;
-          this.solicitudSeleccionadaParaTribunal.estado = 'Convocada';
-          this.solicitudSeleccionadaParaTribunal.estadoTribunal = 'Tribunal Convocado - Reunión Planificada';
-          this.solicitudSeleccionadaParaTribunal.fechaPresentacion = fechaIso;
-          this.solicitudSeleccionadaParaTribunal.jurados = [juradoNombre];
-          this.solicitudSeleccionadaParaTribunal.mensajeTribunal = `Tribunal convocado y reunión planificada para el ${new Date(fechaIso).toLocaleString()}`;
+      next: (res) => {
+        const presId = Number(res?.id ?? res?.Id ?? res?.presentacionId ?? res?.PresentacionId ?? (ayudantiaId > 0 ? ayudantiaId : Math.floor(Math.random() * 900000) + 1000));
+        const convData = {
+          tieneTribunal: true,
+          reunionPlanificada: true,
+          estado: 'Convocada',
+          estadoTribunal: 'Tribunal Convocado - Reunión Planificada',
+          fechaPresentacion: fechaIso,
+          jurados: [juradoNombre],
+          mensajeTribunal: `Tribunal convocado y reunión planificada para el ${new Date(fechaIso).toLocaleString()}`,
+          temaSilabo: temaFinal,
+          lugarOEnlace: lugarFinal,
+          presentacionId: presId
+        };
 
-          if (this.solicitudSeleccionadaParaTribunal.ayudantiaId) {
-            this.coordinadorService.actualizarEstadoAyudantia(this.solicitudSeleccionadaParaTribunal.ayudantiaId, 'Convocada').subscribe();
-          }
+        // Guardar persistente en el servicio coordinador
+        if (ayudantiaId) {
+          this.coordinadorService.guardarConvocatoriaLocal(ayudantiaId, convData);
+          this.coordinadorService.actualizarEstadoAyudantia(ayudantiaId, 'Convocada').subscribe();
         }
+
+        // Actualizar en memoria en this.solicitudes
+        const idx = this.solicitudes.findIndex(s => s.ayudantiaId === ayudantiaId || (postulanteId > 0 && s.estudianteId === postulanteId && s.catedraId === catedraId));
+        if (idx !== -1) {
+          this.solicitudes[idx] = {
+            ...this.solicitudes[idx],
+            ...convData
+          };
+        } else if (sol) {
+          this.solicitudes.unshift({
+            ...sol,
+            ...convData
+          });
+        }
+
+        // Crear y añadir inmediatamente la presentación en memoria
+        const nuevaPres: PresentacionDetalleDto = {
+          id: presId,
+          ayudantiaId: ayudantiaId,
+          estudianteId: postulanteId,
+          estudianteNombre: sol?.nombreEstudiante || 'Estudiante Postulante',
+          estudianteCorreo: sol?.correoEstudiante || 'postulante@uteq.edu.ec',
+          catedraId: catedraId,
+          catedraNombre: sol?.nombreCatedra || 'Cátedra UTEQ',
+          fecha: fechaIso,
+          temaSilabo: temaFinal,
+          lugarOEnlace: lugarFinal,
+          profesoresAsignados: [juradoNombre],
+          estado: 'Convocada',
+          yaEvaluadoPorMi: false,
+          promedioNota: 0
+        };
+
+        this.presentaciones = [
+          nuevaPres,
+          ...this.presentaciones.filter(p => p.id !== nuevaPres.id && (ayudantiaId ? p.ayudantiaId !== ayudantiaId : true))
+        ];
+
+        this.actualizarMetricas();
+        this.cerrarModalTribunal();
 
         Swal.fire({
           icon: 'success',
           title: '¡Tribunal Convocado y Reunión Planificada!',
-          html: `La presentación para <b>${this.solicitudSeleccionadaParaTribunal?.nombreEstudiante || 'el postulante'}</b> fue planificada exitosamente.<br><small class="text-slate-500">Docente Jurado: ${juradoNombre}</small>`,
+          html: `La presentación para <b>${sol?.nombreEstudiante || 'el postulante'}</b> fue planificada exitosamente.<br><small class="text-slate-500">Docente Jurado: ${juradoNombre}</small>`,
           timer: 3000,
           showConfirmButton: true
         });
 
-        this.cerrarModalTribunal();
-        this.cargarSolicitudes();
-        this.cargarPresentaciones();
+        // Cambiar directamente a la pestaña de tribunales / convocadas para que aparezca de inmediato
         this.cambiarTab('tribunales');
-        this.cdr.detectChanges();
+
+        // Recargar para sincronizar con backend sin perder los datos
+        this.coordinadorService.getSolicitudesAyudantia().subscribe({
+          next: (sols) => {
+            if (Array.isArray(sols) && sols.length > 0) {
+              this.solicitudes = sols;
+            }
+            this.cargarPresentaciones();
+            this.cdr.markForCheck();
+            this.cdr.detectChanges();
+          },
+          error: () => {
+            this.cargarPresentaciones();
+            this.cdr.markForCheck();
+            this.cdr.detectChanges();
+          }
+        });
       },
       error: (err) => {
         console.error('Error al convocar tribunal:', err);
@@ -609,7 +769,35 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
     this.juradoService.getPresentaciones().subscribe({
       next: (data) => {
         this.isLoadingTribunales = false;
-        this.presentaciones = Array.isArray(data) ? [...data] : [];
+        const apiPresentaciones = Array.isArray(data) ? [...data] : [];
+
+        // Asegurar que todas las solicitudes con tribunal convocado en la BD se incluyan en la pestaña de Convocadas
+        const ayudantiaIdsEnPresentaciones = new Set(apiPresentaciones.map(p => p.ayudantiaId).filter(id => id && id > 0));
+        
+        const convocadasDesdeSolicitudes: PresentacionDetalleDto[] = (this.solicitudes || [])
+          .filter(s => (s.tieneTribunal || (s.estado || '').toLowerCase() === 'convocada' || s.reunionPlanificada || (s.presentacionId && s.presentacionId > 0)) && !ayudantiaIdsEnPresentaciones.has(s.ayudantiaId))
+          .map(s => ({
+            id: s.presentacionId || s.ayudantiaId || Math.floor(Math.random() * 1000) + 10,
+            ayudantiaId: s.ayudantiaId,
+            estudianteId: s.estudianteId,
+            estudianteNombre: s.nombreEstudiante,
+            estudianteCorreo: s.correoEstudiante || 'postulante@uteq.edu.ec',
+            catedraId: s.catedraId,
+            catedraNombre: s.nombreCatedra,
+            fecha: s.fechaPresentacion || new Date(Date.now() + 86400000 * 3).toISOString(),
+            temaSilabo: s.temaSilabo || 'Evaluación de Destrezas Pedagógicas y Conocimientos en la Cátedra',
+            lugarOEnlace: 'Aula Asignada / Enlace Virtual Teams UTEQ',
+            profesoresAsignados: s.jurados && s.jurados.length > 0 ? s.jurados : ['Docente Jurado Asignado'],
+            estado: 'Convocada' as const,
+            yaEvaluadoPorMi: false
+          }));
+
+        // Preservar en memoria cualquier presentación reciente que no esté en las anteriores
+        const idsExistentes = new Set([...apiPresentaciones, ...convocadasDesdeSolicitudes].map(p => p.id));
+        const aIdsExistentes = new Set([...apiPresentaciones, ...convocadasDesdeSolicitudes].map(p => p.ayudantiaId).filter(id => id && id > 0));
+        const enMemoria = (this.presentaciones || []).filter(p => !idsExistentes.has(p.id) && (!p.ayudantiaId || !aIdsExistentes.has(p.ayudantiaId)));
+
+        this.presentaciones = [...apiPresentaciones, ...convocadasDesdeSolicitudes, ...enMemoria];
         this.actualizarMetricas();
         this.cdr.markForCheck();
         this.cdr.detectChanges();
@@ -617,7 +805,25 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.isLoadingTribunales = false;
         console.warn('Error al cargar presentaciones:', err);
-        this.presentaciones = [];
+        const convocadasDesdeSolicitudes: PresentacionDetalleDto[] = (this.solicitudes || [])
+          .filter(s => s.tieneTribunal || (s.estado || '').toLowerCase() === 'convocada' || s.reunionPlanificada)
+          .map(s => ({
+            id: s.presentacionId || s.ayudantiaId || 1,
+            ayudantiaId: s.ayudantiaId,
+            estudianteId: s.estudianteId,
+            estudianteNombre: s.nombreEstudiante,
+            estudianteCorreo: s.correoEstudiante || 'postulante@uteq.edu.ec',
+            catedraId: s.catedraId,
+            catedraNombre: s.nombreCatedra,
+            fecha: s.fechaPresentacion || new Date().toISOString(),
+            temaSilabo: 'Evaluación de Destrezas Pedagógicas y Conocimientos en la Cátedra',
+            lugarOEnlace: 'Aula Asignada / Enlace Virtual Teams UTEQ',
+            profesoresAsignados: s.jurados && s.jurados.length > 0 ? s.jurados : ['Docente Jurado Asignado'],
+            estado: 'Convocada' as const,
+            yaEvaluadoPorMi: false
+          }));
+        this.presentaciones = convocadasDesdeSolicitudes;
+        this.actualizarMetricas();
         this.cdr.markForCheck();
       }
     });
@@ -625,8 +831,12 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
 
   // Pestaña 2: Mostrar todas las defensas convocadas de la BD que aún NO están aprobadas
   get defensasPendientes(): PresentacionDetalleDto[] {
-    const base = (this.presentaciones || []).filter(p => {
+    const list = this.presentaciones || [];
+    const base = list.filter(p => {
       const est = (p.estado || '').toLowerCase().trim();
+      if (this.filtroTribunalEstado === 'aprobada') {
+        return est === 'aprobada' || est === 'aprobado' || est === 'posesionado';
+      }
       return est !== 'aprobada' && est !== 'aprobado' && est !== 'posesionado';
     });
 
@@ -638,13 +848,14 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
       const st = (p.estado || '').toLowerCase().trim();
       const matchEstado =
         this.filtroTribunalEstado === 'todas' ||
-        st.includes(this.filtroTribunalEstado.toLowerCase());
+        st.includes(this.filtroTribunalEstado.toLowerCase()) ||
+        (this.filtroTribunalEstado === 'convocada' && (st === 'convocada' || !st));
 
       const matchTexto =
         !this.busquedaTribunal.trim() ||
-        p.estudianteNombre.toLowerCase().includes(this.busquedaTribunal.toLowerCase()) ||
-        p.catedraNombre.toLowerCase().includes(this.busquedaTribunal.toLowerCase()) ||
-        p.temaSilabo.toLowerCase().includes(this.busquedaTribunal.toLowerCase());
+        (p.estudianteNombre || '').toLowerCase().includes(this.busquedaTribunal.toLowerCase()) ||
+        (p.catedraNombre || '').toLowerCase().includes(this.busquedaTribunal.toLowerCase()) ||
+        (p.temaSilabo || '').toLowerCase().includes(this.busquedaTribunal.toLowerCase());
 
       return matchEstado && matchTexto;
     });
@@ -764,23 +975,15 @@ export class AyudantiasDashboardComponent implements OnInit, OnDestroy {
             this.cargarAyudantesActivos();
             this.cambiarTab('reportes');
           },
-          error: () => {
+          error: (err) => {
+            console.error('Error al aprobar ayudantía en el backend/BD:', err);
+            const errDetalle = err?.error?.message || err?.error?.title || (typeof err?.error === 'string' ? err.error : null) || err?.statusText || 'Error de comunicación con el backend/Supabase';
             Swal.fire({
-              icon: 'success',
-              title: '¡Ayudantía Aprobada!',
-              text: 'El estudiante ha sido posesionado como Ayudante de Cátedra oficial.',
-              confirmButtonColor: '#059669'
+              icon: 'error',
+              title: 'Error al Posesionar Ayudante',
+              text: `No se pudo aprobar la ayudantía en la base de datos: ${errDetalle}`,
+              confirmButtonColor: '#dc2626'
             });
-
-            this.cerrarModalRubrica();
-            const pFound = this.presentaciones.find(p => p.id === ayudantiaId || p.ayudantiaId === ayudantiaId);
-            if (pFound) {
-              pFound.estado = 'Aprobada';
-            }
-            this.cargarSolicitudes();
-            this.cargarPresentaciones();
-            this.cargarAyudantesActivos();
-            this.cambiarTab('reportes');
           }
         });
       }
