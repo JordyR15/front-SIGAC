@@ -24,6 +24,8 @@ import {
   PreguntaCuestionarioDto,
   RegistrarResultadosDiagnosticosDto,
   ResumenEvaluacionDiagnosticaDto,
+  CronogramaActividadDto,
+  HistorialCronogramaDto,
 } from '../../../services/docente.service';
 
 export interface ClaseCreada {
@@ -87,7 +89,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   private STORAGE_DOCENTE_CLASES = 'sigac_docente_clases_v2';
 
   // Control de pestañas
-  tabActiva: 'catedras' | 'horarios' | 'silabo' | 'crear-clase' | 'recursos' = 'catedras';
+  tabActiva: 'catedras' | 'cronograma' | 'horarios' | 'silabo' | 'crear-clase' | 'recursos' = 'catedras';
 
   // Datos principales
   docenteIdLogueado: number = 1;
@@ -187,6 +189,33 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   mostrarModalRevisionDiagnostica = false;
   cargandoResultadosDiagnosticos = false;
   guardandoResultadosDiagnosticos = false;
+
+  // Cronograma de Cátedra - RF-005
+  cronogramaCatedra: CronogramaActividadDto[] = [];
+  cargandoCronograma = false;
+  guardandoCronograma = false;
+
+  // Reprogramación en ventana emergente
+  mostrarModalReprogramacionCronograma = false;
+  actividadCronogramaEditando: CronogramaActividadDto | null = null;
+
+  // Historial por actividad en ventana emergente
+  mostrarModalHistorialCronograma = false;
+  actividadHistorialCronograma: CronogramaActividadDto | null = null;
+  historialActividadCronograma: HistorialCronogramaDto[] = [];
+  cargandoHistorialCronograma = false;
+
+  nuevaActividadCronograma = {
+    descripcion: '',
+    fechaPrevista: '',
+  };
+
+  reprogramacionCronograma = {
+    descripcion: '',
+    fechaPrevista: '',
+    observacionCambio: '',
+  };
+
   // Archivos adjuntos seleccionados
   archivoRecurso: { nombre: string; tamanoKb: number; dataUrl: string } | null = null;
   archivoActividad: { nombre: string; tamanoKb: number; dataUrl: string } | null = null;
@@ -301,8 +330,12 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     this.subs.forEach((s) => s.unsubscribe());
   }
 
-  setTab(tab: 'catedras' | 'horarios' | 'silabo' | 'crear-clase' | 'recursos') {
+  setTab(tab: 'catedras' | 'cronograma' | 'horarios' | 'silabo' | 'crear-clase' | 'recursos') {
     this.tabActiva = tab;
+
+    if (tab === 'cronograma') {
+      this.cargarCronogramaCatedra();
+    }
 
     if (tab === 'horarios' || tab === 'crear-clase') {
       this.revisarConflictoHorario();
@@ -343,6 +376,17 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     this.resultadosDiagnosticosFormulario = [];
     this.resultadoDiagnosticoSeleccionado = null;
     this.resumenEvaluacionDiagnostica = null;
+
+    this.cronogramaCatedra = [];
+    this.actividadCronogramaEditando = null;
+    this.actividadHistorialCronograma = null;
+    this.historialActividadCronograma = [];
+    this.mostrarModalReprogramacionCronograma = false;
+    this.mostrarModalHistorialCronograma = false;
+
+    if (this.tabActiva === 'cronograma') {
+      this.cargarCronogramaCatedra();
+    }
 
     // Si el usuario está mirando Diagnóstica, recién aquí consultamos
     // usando la materia que acaba de seleccionar.
@@ -386,6 +430,287 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
   get ayudantesDeMateriaActual(): AyudanteCatedraInfo[] {
     return this.ayudantesCatedra.filter((a) => a.catedraId === Number(this.materiaSeleccionadaId));
+  }
+
+  // ==========================================
+  // CRONOGRAMA DE CÁTEDRA - RF-005
+  // ==========================================
+
+  get fechaMinimaCronograma(): string {
+    const ahora = new Date();
+    const local = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  }
+
+  cargarCronogramaCatedra(): void {
+    const catedraId = this.catedraSeleccionadaId;
+
+    if (!catedraId) {
+      this.cronogramaCatedra = [];
+      this.actividadCronogramaEditando = null;
+      this.actividadHistorialCronograma = null;
+      this.historialActividadCronograma = [];
+      this.mostrarModalReprogramacionCronograma = false;
+      this.mostrarModalHistorialCronograma = false;
+      this.cargandoCronograma = false;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.cargandoCronograma = true;
+    this.errorMessage = '';
+
+    this.docenteService.getCronogramaByCatedra(catedraId).subscribe({
+      next: (cronograma) => {
+        this.cronogramaCatedra = Array.isArray(cronograma) ? cronograma : [];
+        this.cargandoCronograma = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Error cargando cronograma de cátedra:', error);
+        this.cronogramaCatedra = [];
+        this.cargandoCronograma = false;
+        this.errorMessage =
+          error?.error?.message || 'No se pudo cargar el cronograma de la cátedra.';
+        this.cdr.detectChanges();
+      },
+    });
+
+  }
+
+  crearActividadCronograma(): void {
+    const catedraId = this.catedraSeleccionadaId;
+    const descripcion = this.nuevaActividadCronograma.descripcion.trim();
+    const fechaTexto = this.nuevaActividadCronograma.fechaPrevista;
+
+    if (!catedraId) {
+      this.errorMessage =
+        'No se pudo identificar la cátedra correspondiente a la materia seleccionada.';
+      return;
+    }
+
+    if (!descripcion) {
+      this.errorMessage = 'Ingresa la actividad que deseas agregar al cronograma.';
+      return;
+    }
+
+    if (!fechaTexto) {
+      this.errorMessage = 'Selecciona la fecha prevista de la actividad.';
+      return;
+    }
+
+    const fecha = new Date(fechaTexto);
+    const inicioHoy = new Date();
+    inicioHoy.setHours(0, 0, 0, 0);
+
+    if (Number.isNaN(fecha.getTime()) || fecha < inicioHoy) {
+      this.errorMessage = 'La fecha del cronograma no puede estar en el pasado.';
+      return;
+    }
+
+    this.guardandoCronograma = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.docenteService
+      .crearCronogramaActividad({
+        catedraId,
+        descripcion,
+        fechaPrevista: fecha.toISOString(),
+        fechaReal: null,
+        observacionCambio: '',
+      })
+      .subscribe({
+        next: (actividad) => {
+          this.guardandoCronograma = false;
+          this.cronogramaCatedra = [...this.cronogramaCatedra, actividad].sort(
+            (a, b) =>
+              new Date(a.fechaPrevista).getTime() - new Date(b.fechaPrevista).getTime(),
+          );
+          this.nuevaActividadCronograma = {
+            descripcion: '',
+            fechaPrevista: '',
+          };
+          this.successMessage = 'Actividad agregada al cronograma correctamente.';
+          this.cdr.detectChanges();
+          setTimeout(() => {
+            this.successMessage = '';
+            this.cdr.detectChanges();
+          }, 4000);
+        },
+        error: (error) => {
+          this.guardandoCronograma = false;
+          console.error('Error creando actividad del cronograma:', error);
+          this.errorMessage =
+            error?.error?.message || 'No se pudo agregar la actividad al cronograma.';
+          this.cdr.detectChanges();
+        },
+      });
+  }
+
+  iniciarReprogramacionCronograma(actividad: CronogramaActividadDto): void {
+    this.actividadCronogramaEditando = actividad;
+    this.reprogramacionCronograma = {
+      descripcion: actividad.descripcion,
+      fechaPrevista: this.convertirFechaAInput(actividad.fechaPrevista),
+      observacionCambio: '',
+    };
+    this.errorMessage = '';
+    this.mostrarModalReprogramacionCronograma = true;
+  }
+
+  cancelarReprogramacionCronograma(): void {
+    this.mostrarModalReprogramacionCronograma = false;
+    this.actividadCronogramaEditando = null;
+    this.reprogramacionCronograma = {
+      descripcion: '',
+      fechaPrevista: '',
+      observacionCambio: '',
+    };
+  }
+
+  guardarReprogramacionCronograma(): void {
+    const catedraId = this.catedraSeleccionadaId;
+    const actividad = this.actividadCronogramaEditando;
+
+    if (!catedraId || !actividad) {
+      return;
+    }
+
+    const descripcion = this.reprogramacionCronograma.descripcion.trim();
+    const observacion = this.reprogramacionCronograma.observacionCambio.trim();
+    const fechaTexto = this.reprogramacionCronograma.fechaPrevista;
+
+    if (!descripcion) {
+      this.errorMessage = 'La actividad no puede quedar vacía.';
+      return;
+    }
+
+    if (!fechaTexto) {
+      this.errorMessage = 'Selecciona la nueva fecha de la actividad.';
+      return;
+    }
+
+    if (!observacion) {
+      this.errorMessage = 'Debes indicar la observación o motivo del cambio.';
+      return;
+    }
+
+    const fechaNueva = new Date(fechaTexto);
+    const inicioHoy = new Date();
+    inicioHoy.setHours(0, 0, 0, 0);
+
+    if (Number.isNaN(fechaNueva.getTime()) || fechaNueva < inicioHoy) {
+      this.errorMessage = 'No se puede reprogramar una actividad para una fecha pasada.';
+      return;
+    }
+
+    const payload: CronogramaActividadDto = {
+      id: actividad.id,
+      catedraId,
+      descripcion,
+      fechaPrevista: fechaNueva.toISOString(),
+      fechaReal: actividad.fechaReal ?? null,
+      observacionCambio: observacion,
+    };
+
+    this.guardandoCronograma = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.docenteService.reprogramarCronograma(catedraId, payload).subscribe({
+      next: (respuesta) => {
+        this.guardandoCronograma = false;
+
+        this.cronogramaCatedra = this.cronogramaCatedra
+          .map((item) =>
+            item.id === actividad.id
+              ? {
+                ...item,
+                descripcion: respuesta.actividad.descripcion,
+                fechaPrevista: respuesta.actividad.fechaPrevista,
+                fechaReal: respuesta.actividad.fechaReal,
+                observacionCambio: '',
+              }
+              : item,
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.fechaPrevista).getTime() - new Date(b.fechaPrevista).getTime(),
+          );
+
+        this.cancelarReprogramacionCronograma();
+        this.successMessage =
+          'Cronograma reprogramado correctamente. La actualización ya está disponible para los estudiantes.';
+        this.cdr.detectChanges();
+
+        setTimeout(() => {
+          this.successMessage = '';
+          this.cdr.detectChanges();
+        }, 4500);
+      },
+      error: (error) => {
+        this.guardandoCronograma = false;
+        console.error('Error reprogramando cronograma:', error);
+        this.errorMessage =
+          error?.error?.message || 'No se pudo reprogramar la actividad del cronograma.';
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  abrirHistorialActividadCronograma(actividad: CronogramaActividadDto): void {
+    const catedraId = this.catedraSeleccionadaId;
+
+    this.actividadHistorialCronograma = actividad;
+    this.historialActividadCronograma = [];
+    this.mostrarModalHistorialCronograma = true;
+    this.cargandoHistorialCronograma = true;
+
+    if (!catedraId) {
+      this.cargandoHistorialCronograma = false;
+      this.errorMessage = 'No se pudo identificar la cátedra de la actividad seleccionada.';
+      return;
+    }
+
+    this.docenteService.obtenerHistorialCronograma(catedraId).subscribe({
+      next: (historial) => {
+        const lista = Array.isArray(historial) ? historial : [];
+        this.historialActividadCronograma = lista
+          .filter((cambio) => Number(cambio.actividadId) === Number(actividad.id))
+          .sort(
+            (a, b) =>
+              new Date(b.fechaModificacion).getTime() -
+              new Date(a.fechaModificacion).getTime(),
+          );
+        this.cargandoHistorialCronograma = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Error cargando historial de la actividad:', error);
+        this.historialActividadCronograma = [];
+        this.cargandoHistorialCronograma = false;
+        this.errorMessage = 'No se pudo cargar el historial de esta actividad.';
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  cerrarHistorialActividadCronograma(): void {
+    this.mostrarModalHistorialCronograma = false;
+    this.actividadHistorialCronograma = null;
+    this.historialActividadCronograma = [];
+    this.cargandoHistorialCronograma = false;
+  }
+
+  private convertirFechaAInput(fechaIso: string): string {
+    const fecha = new Date(fechaIso);
+    if (Number.isNaN(fecha.getTime())) {
+      return '';
+    }
+
+    const local = new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
   }
 
   // ==========================================
@@ -797,6 +1122,10 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
             this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
           }
 
+          if (this.tabActiva === 'cronograma') {
+            this.cargarCronogramaCatedra();
+          }
+
           this.cdr.detectChanges();
         },
         error: () => {
@@ -805,6 +1134,10 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
           if (this.tabActiva === 'recursos' && this.subTabRecursos === 'diagnostica') {
             this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
+          }
+
+          if (this.tabActiva === 'cronograma') {
+            this.cargarCronogramaCatedra();
           }
 
           this.cdr.detectChanges();

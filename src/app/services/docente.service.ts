@@ -89,7 +89,41 @@ export interface CronogramaActividadDto {
   catedraId: number;
   descripcion: string;
   fechaPrevista: string;
-  fechaReal?: string;
+  fechaReal?: string | null;
+  observacionCambio: string;
+}
+
+export interface HistorialCronogramaDto {
+  id: number;
+  actividadId: number;
+  actividadActual: string;
+  fechaAnterior: string;
+  fechaNueva: string;
+  descripcionAnterior: string;
+  descripcionNueva: string;
+  observacionCambio: string;
+  fechaModificacion: string;
+}
+
+export interface ReprogramarCronogramaResponse {
+  message: string;
+  actividad: {
+    id: number;
+    catedraId: number;
+    descripcion: string;
+    fechaPrevista: string;
+    fechaReal: string | null;
+  };
+  cambio: {
+    id: number;
+    fechaAnterior: string;
+    fechaNueva: string;
+    descripcionAnterior: string;
+    descripcionNueva: string;
+    observacionCambio: string;
+    fechaModificacion: string;
+  };
+  notificacionEstudiantes: boolean;
 }
 
 export interface ActividadAyudantiaDto {
@@ -345,35 +379,33 @@ export class DocenteService {
   }
 
   /* =========================================================
-     CRONOGRAMA
+     CRONOGRAMA - RF-005
      ========================================================= */
 
   getCronogramaByCatedra(catedraId: number): Observable<CronogramaActividadDto[]> {
-    return this.http
-      .get<CronogramaActividadDto[]>(`${getApiBase()}/api/Cronograma/${catedraId}`)
-      .pipe(catchError(() => of([])));
+    return this.http.get<CronogramaActividadDto[]>(`${getApiBase()}/api/Cronograma/${catedraId}`);
   }
 
   crearCronogramaActividad(
     dto: Omit<CronogramaActividadDto, 'id'>,
   ): Observable<CronogramaActividadDto> {
-    return this.http.post<CronogramaActividadDto>(`${getApiBase()}/api/Cronograma`, dto).pipe(
-      catchError(() =>
-        of({
-          id: Date.now(),
-          ...dto,
-        }),
-      ),
-    );
+    return this.http.post<CronogramaActividadDto>(`${getApiBase()}/api/Cronograma`, dto);
   }
 
   reprogramarCronograma(
     catedraId: number,
     dto: CronogramaActividadDto,
-  ): Observable<CronogramaActividadDto> {
-    return this.http
-      .put<CronogramaActividadDto>(`${this.apiUrl}/catedras/${catedraId}/cronograma`, dto)
-      .pipe(catchError(() => of(dto)));
+  ): Observable<ReprogramarCronogramaResponse> {
+    return this.http.put<ReprogramarCronogramaResponse>(
+      `${getApiBase()}/api/Cronograma/${catedraId}/reprogramar`,
+      dto,
+    );
+  }
+
+  obtenerHistorialCronograma(catedraId: number): Observable<HistorialCronogramaDto[]> {
+    return this.http.get<HistorialCronogramaDto[]>(
+      `${getApiBase()}/api/Cronograma/${catedraId}/historial`,
+    );
   }
 
   /* =========================================================

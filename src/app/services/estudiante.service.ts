@@ -86,6 +86,48 @@ export interface EvaluacionDiagnosticaEstudianteDto {
   respuestasCuestionario: string | null;
 }
 
+/* =========================================================
+   RF-005 - REPROGRAMACIÓN DEL CRONOGRAMA
+   ========================================================= */
+
+export interface ActualizacionCronogramaEstudianteDto {
+  id: number;
+  cronogramaActividadId: number;
+  catedraId: number;
+  actividad: string;
+  fechaAnterior: string;
+  fechaNueva: string;
+  observacion: string;
+  fechaNotificacion: string;
+  mensaje: string;
+}
+
+/**
+ * Planificación vigente de una cátedra.
+ * Corresponde al GET /api/Cronograma/{catedraId}.
+ * RF-005 mantiene esta planificación actualizada cuando el docente reprograma.
+ */
+export interface CronogramaActividadEstudianteDto {
+  id: number;
+  catedraId: number;
+  descripcion: string;
+  fechaPrevista: string;
+  fechaReal: string | null;
+  observacionCambio?: string | null;
+}
+
+export interface MateriaInscritaEstudianteDto {
+  id: number;
+  materiaId: number;
+  catedraId: number;
+  codigo: string;
+  nombre: string;
+  descripcion?: string;
+  docente?: string;
+  nombreDocente?: string;
+  semestre?: string;
+}
+
 export interface EntregaDiagnosticaResponse {
   message: string;
   evaluacionId: number;
@@ -99,25 +141,27 @@ const HISTORIAL_DEFAULT: HistorialAyudantiaDto[] = [];
 const BITACORAS_DEFAULT: BitacoraItemDto[] = [];
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class EstudianteService {
   private STORAGE_POSTULACIONES = 'sigac_postulaciones_v2';
   private STORAGE_BITACORAS = 'sigac_bitacoras_v2';
 
   private historialSubject = new BehaviorSubject<HistorialAyudantiaDto[]>(
-    this.loadStorage(this.STORAGE_POSTULACIONES, HISTORIAL_DEFAULT)
+    this.loadStorage(this.STORAGE_POSTULACIONES, HISTORIAL_DEFAULT),
   );
+
   public historial$ = this.historialSubject.asObservable();
 
   private bitacorasSubject = new BehaviorSubject<BitacoraItemDto[]>(
-    this.loadStorage(this.STORAGE_BITACORAS, BITACORAS_DEFAULT)
+    this.loadStorage(this.STORAGE_BITACORAS, BITACORAS_DEFAULT),
   );
+
   public bitacoras$ = this.bitacorasSubject.asObservable();
 
   constructor(
     private http: HttpClient,
-    private materiaService: MateriaService
+    private materiaService: MateriaService,
   ) {}
 
   private get apiUrl() {
@@ -125,7 +169,9 @@ export class EstudianteService {
   }
 
   private loadStorage<T>(key: string, fallback: T): T {
-    if (typeof window === 'undefined') return fallback;
+    if (typeof window === 'undefined') {
+      return fallback;
+    }
 
     try {
       const stored = localStorage.getItem(key);
@@ -164,41 +210,50 @@ export class EstudianteService {
 
     const nuevaPostulacion: HistorialAyudantiaDto = {
       ayudantiaId: Math.floor((Date.now() / 1000) % 2000000000) + 1,
+
       estadoAyudantia: 'Pendiente',
+
       catedraId: Number(dto.catedraId),
+
       nombreCatedra: materia?.nombre || `Materia #${dto.catedraId}`,
+
       semestreCatedra: '2026-2',
+
       docenteCatedra: materia?.docente || 'Docente Responsable',
+
       estudianteId: 1,
-      nombreEstudiante: nombreUsuario
+
+      nombreEstudiante: nombreUsuario,
     };
 
     const current = this.historialSubject.value;
+
     const updated = [nuevaPostulacion, ...current];
 
     this.historialSubject.next(updated);
+
     this.saveStorage(this.STORAGE_POSTULACIONES, updated);
 
     const payload = {
       CatedraId: Number(dto.catedraId),
-      catedraId: Number(dto.catedraId)
+
+      catedraId: Number(dto.catedraId),
     };
 
-    return this.http
-      .post(`${this.apiUrl}/ayudantias/postulaciones`, payload)
-      .pipe(
-        catchError(() =>
-          of({
-            success: true,
-            postulacion: nuevaPostulacion
-          })
-        )
-      );
+    return this.http.post(`${this.apiUrl}/ayudantias/postulaciones`, payload).pipe(
+      catchError(() =>
+        of({
+          success: true,
+
+          postulacion: nuevaPostulacion,
+        }),
+      ),
+    );
   }
 
   registrarBitacora(dto: RegistroBitacoraDto): Observable<any> {
     const postulacion = this.historialSubject.value.find(
-      h => Number(h.ayudantiaId) === Number(dto.ayudantiaId)
+      (h) => Number(h.ayudantiaId) === Number(dto.ayudantiaId),
     );
 
     const nombreUsuario =
@@ -208,99 +263,116 @@ export class EstudianteService {
 
     const nuevaBitacora: BitacoraItemDto = {
       id: Math.floor((Date.now() / 1000) % 2000000000) + 1,
+
       ayudantiaId: Number(dto.ayudantiaId),
+
       nombreAyudante: nombreUsuario,
+
       nombreCatedra: postulacion?.nombreCatedra || 'Ayudantía General',
+
       actividadesRealizadas: dto.actividadesRealizadas,
+
       evidenciaUrl: dto.evidenciaUrl,
-      fecha: new Date().toISOString().split('T')[0]
+
+      fecha: new Date().toISOString().split('T')[0],
     };
 
     const current = this.bitacorasSubject.value;
+
     const updated = [nuevaBitacora, ...current];
 
     this.bitacorasSubject.next(updated);
+
     this.saveStorage(this.STORAGE_BITACORAS, updated);
 
     const payload = {
       AyudantiaId: Number(dto.ayudantiaId),
+
       ayudantiaId: Number(dto.ayudantiaId),
+
       ActividadesRealizadas: dto.actividadesRealizadas,
+
       actividadesRealizadas: dto.actividadesRealizadas,
+
       EvidenciaUrl: dto.evidenciaUrl || '',
-      evidenciaUrl: dto.evidenciaUrl || ''
+
+      evidenciaUrl: dto.evidenciaUrl || '',
     };
 
-    return this.http
-      .post(`${this.apiUrl}/ayudantias/bitacora`, payload)
-      .pipe(
-        catchError(() =>
-          of({
-            success: true,
-            bitacora: nuevaBitacora
-          })
-        )
-      );
+    return this.http.post(`${this.apiUrl}/ayudantias/bitacora`, payload).pipe(
+      catchError(() =>
+        of({
+          success: true,
+
+          bitacora: nuevaBitacora,
+        }),
+      ),
+    );
   }
 
   getBitacoras(): Observable<BitacoraItemDto[]> {
     return this.bitacoras$;
   }
 
-  generarInformeMensual(
-    request: InformeMensualRequestDto
-  ): Observable<any> {
+  generarInformeMensual(request: InformeMensualRequestDto): Observable<any> {
     const payload = {
       AyudantiaId: Number(request.ayudantiaId),
+
       ayudantiaId: Number(request.ayudantiaId),
 
       Mes: Number(request.mes),
+
       mes: Number(request.mes),
 
       Anio: Number(request.anio),
+
       anio: Number(request.anio),
 
       NumeroResolucion: request.numeroResolucion,
+
       numeroResolucion: request.numeroResolucion,
 
       TipoInforme: request.tipoInforme,
+
       tipoInforme: request.tipoInforme,
 
       HorasTotales: request.horasTotales,
+
       horasTotales: request.horasTotales,
 
       DiasPorSemana: request.diasPorSemana,
+
       diasPorSemana: request.diasPorSemana,
 
       Modalidad: request.modalidad,
+
       modalidad: request.modalidad,
 
       TemasImpartidos: request.temasImpartidos,
+
       temasImpartidos: request.temasImpartidos,
 
       Anexos: request.anexos,
-      anexos: request.anexos
+
+      anexos: request.anexos,
     };
 
-    return this.http
-      .post(`${this.apiUrl}/ayudantias/informe-mensual`, payload)
-      .pipe(
-        catchError(() =>
-          of({
-            success: true,
-            mensaje: 'Informe generado exitosamente.'
-          })
-        )
-      );
+    return this.http.post(`${this.apiUrl}/ayudantias/informe-mensual`, payload).pipe(
+      catchError(() =>
+        of({
+          success: true,
+
+          mensaje: 'Informe generado exitosamente.',
+        }),
+      ),
+    );
   }
 
   /**
    * GET /api/Estudiante/{id}/validacion-malla
    * Valida requisitos reglamentarios con el backend.
    */
-  validarMalla(
-    estudianteId?: number
-  ): Observable<{
+  validarMalla(estudianteId?: number): Observable<{
     cumpleMalla: boolean;
     cumplePromedioGeneral: boolean;
   }> {
@@ -308,14 +380,15 @@ export class EstudianteService {
       estudianteId ??
       (typeof window !== 'undefined'
         ? Number(localStorage.getItem('estudianteId')) ||
-        Number(localStorage.getItem('userId')) ||
-        0
+          Number(localStorage.getItem('userId')) ||
+          0
         : 0);
 
     if (!rawId || Number(rawId) === 1) {
       return of({
         cumpleMalla: true,
-        cumplePromedioGeneral: true
+
+        cumplePromedioGeneral: true,
       });
     }
 
@@ -328,37 +401,34 @@ export class EstudianteService {
         catchError(() =>
           of({
             cumpleMalla: true,
-            cumplePromedioGeneral: true
-          })
-        )
+
+            cumplePromedioGeneral: true,
+          }),
+        ),
       );
   }
 
   getHistorialAyudantias(): Observable<HistorialAyudantiaDto[]> {
-    return this.http
-      .get<HistorialAyudantiaDto[]>(
-        `${this.apiUrl}/ayudantias/historial`
-      )
-      .pipe(
-        tap(data => {
-          if (Array.isArray(data) && data.length > 0) {
-            this.historialSubject.next(data);
-            this.saveStorage(this.STORAGE_POSTULACIONES, data);
-          }
-        }),
-        catchError(() => of(this.historialSubject.value))
-      );
+    return this.http.get<HistorialAyudantiaDto[]>(`${this.apiUrl}/ayudantias/historial`).pipe(
+      tap((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          this.historialSubject.next(data);
+
+          this.saveStorage(this.STORAGE_POSTULACIONES, data);
+        }
+      }),
+
+      catchError(() => of(this.historialSubject.value)),
+    );
   }
 
-  actualizarEstadoPostulacion(
-    ayudantiaId: number,
-    nuevoEstado: string
-  ): void {
-    const list = this.historialSubject.value.map(h => {
+  actualizarEstadoPostulacion(ayudantiaId: number, nuevoEstado: string): void {
+    const list = this.historialSubject.value.map((h) => {
       if (Number(h.ayudantiaId) === Number(ayudantiaId)) {
         return {
           ...h,
-          estadoAyudantia: nuevoEstado
+
+          estadoAyudantia: nuevoEstado,
         };
       }
 
@@ -366,6 +436,7 @@ export class EstudianteService {
     });
 
     this.historialSubject.next(list);
+
     this.saveStorage(this.STORAGE_POSTULACIONES, list);
   }
 
@@ -374,63 +445,60 @@ export class EstudianteService {
   // =========================================================
 
   /**
-   * Obtiene todas las evaluaciones diagnósticas pertenecientes
-   * a las cátedras en las que está inscrito el estudiante autenticado.
+   * Obtiene todas las evaluaciones diagnósticas
+   * pertenecientes a las cátedras en las que
+   * está inscrito el estudiante autenticado.
    *
    * GET /api/Estudiante/evaluaciones-diagnosticas
    */
   getEvaluacionesDiagnosticas(): Observable<EvaluacionDiagnosticaEstudianteDto[]> {
     return this.http.get<EvaluacionDiagnosticaEstudianteDto[]>(
-      `${this.apiUrl}/evaluaciones-diagnosticas`
+      `${this.apiUrl}/evaluaciones-diagnosticas`,
     );
   }
 
   /**
-   * Entrega una evaluación diagnóstica de tipo Archivo.
-   * El backend espera multipart/form-data con el campo "archivo".
+   * Entrega una evaluación diagnóstica
+   * de tipo Archivo.
    *
-   * POST /api/Estudiante/evaluaciones-diagnosticas/{id}/entregar-archivo
+   * El backend espera multipart/form-data
+   * con el campo "archivo".
    */
   entregarEvaluacionDiagnosticaArchivo(
     evaluacionId: number,
-    archivo: File
+    archivo: File,
   ): Observable<EntregaDiagnosticaResponse> {
     const formData = new FormData();
 
-    formData.append(
-      'archivo',
-      archivo,
-      archivo.name
-    );
+    formData.append('archivo', archivo, archivo.name);
 
     return this.http.post<EntregaDiagnosticaResponse>(
       `${this.apiUrl}/evaluaciones-diagnosticas/${evaluacionId}/entregar-archivo`,
-      formData
+      formData,
     );
   }
 
   /**
-   * Entrega una evaluación diagnóstica de tipo Cuestionario.
+   * Entrega una evaluación diagnóstica
+   * de tipo Cuestionario.
    *
    * IMPORTANTE:
-   * el backend recibe directamente el arreglo JSON de respuestas,
-   * no un objeto { respuestas: [...] }.
-   *
-   * POST /api/Estudiante/evaluaciones-diagnosticas/{id}/entregar-cuestionario
+   * El backend recibe directamente
+   * el arreglo JSON de respuestas.
    */
   entregarEvaluacionDiagnosticaCuestionario(
     evaluacionId: number,
-    respuestas: RespuestaCuestionarioDiagnosticoDto[]
+    respuestas: RespuestaCuestionarioDiagnosticoDto[],
   ): Observable<EntregaDiagnosticaResponse> {
     return this.http.post<EntregaDiagnosticaResponse>(
       `${this.apiUrl}/evaluaciones-diagnosticas/${evaluacionId}/entregar-cuestionario`,
-      respuestas
+      respuestas,
     );
   }
 
   /**
-   * Convierte las rutas relativas que devuelve el backend
-   * (/uploads/...) en una URL que el navegador pueda abrir.
+   * Convierte rutas relativas del backend
+   * en URL utilizables por el navegador.
    */
   resolverUrlArchivo(url?: string | null): string {
     if (!url) {
@@ -439,11 +507,7 @@ export class EstudianteService {
 
     const valor = url.trim();
 
-    if (
-      valor.startsWith('http://') ||
-      valor.startsWith('https://') ||
-      valor.startsWith('data:')
-    ) {
+    if (valor.startsWith('http://') || valor.startsWith('https://') || valor.startsWith('data:')) {
       return valor;
     }
 
@@ -453,12 +517,10 @@ export class EstudianteService {
   }
 
   /**
-   * Convierte el JSON guardado por el backend en una lista de preguntas.
-   * Si el JSON viene vacío o inválido, devuelve [].
+   * Convierte el JSON guardado
+   * por el backend en preguntas.
    */
-  parsePreguntasCuestionario(
-    preguntasJson?: string | null
-  ): PreguntaCuestionarioDiagnosticoDto[] {
+  parsePreguntasCuestionario(preguntasJson?: string | null): PreguntaCuestionarioDiagnosticoDto[] {
     if (!preguntasJson) {
       return [];
     }
@@ -473,23 +535,16 @@ export class EstudianteService {
       return preguntas
         .map((p: any, index: number) => ({
           id: Number(p?.id ?? index + 1),
-          pregunta: String(
-            p?.pregunta ??
-            p?.texto ??
-            ''
-          ).trim(),
-          tipo: p?.tipo
-            ? String(p.tipo)
-            : 'Texto'
+
+          pregunta: String(p?.pregunta ?? p?.texto ?? '').trim(),
+
+          tipo: p?.tipo ? String(p.tipo) : 'Texto',
         }))
-        .filter(
-          (p: PreguntaCuestionarioDiagnosticoDto) =>
-            !!p.pregunta
-        );
+        .filter((p: PreguntaCuestionarioDiagnosticoDto) => !!p.pregunta);
     } catch (error) {
       console.error(
         'No se pudieron interpretar las preguntas del cuestionario diagnóstico.',
-        error
+        error,
       );
 
       return [];
@@ -497,11 +552,11 @@ export class EstudianteService {
   }
 
   /**
-   * Convierte las respuestas ya entregadas en una lista.
-   * Se usa para mostrarlas después de entregar o ser calificadas.
+   * Convierte las respuestas
+   * previamente almacenadas.
    */
   parseRespuestasCuestionario(
-    respuestasJson?: string | null
+    respuestasJson?: string | null,
   ): RespuestaCuestionarioDiagnosticoDto[] {
     if (!respuestasJson) {
       return [];
@@ -516,15 +571,58 @@ export class EstudianteService {
 
       return respuestas.map((r: any) => ({
         preguntaId: Number(r?.preguntaId ?? r?.id ?? 0),
-        respuesta: String(r?.respuesta ?? '')
+
+        respuesta: String(r?.respuesta ?? ''),
       }));
     } catch (error) {
       console.error(
         'No se pudieron interpretar las respuestas del cuestionario diagnóstico.',
-        error
+        error,
       );
 
       return [];
     }
+  }
+
+  // =========================================================
+  // RF-005 - ACTUALIZACIONES DEL CRONOGRAMA PARA EL ESTUDIANTE
+  // =========================================================
+
+  /**
+   * Obtiene las cátedras reales
+   * en las que está inscrito
+   * el estudiante autenticado.
+   *
+   * Se utiliza para resolver correctamente
+   * MateriaId -> CatedraId.
+   */
+  getMisMateriasInscritas(): Observable<MateriaInscritaEstudianteDto[]> {
+    return this.http.get<MateriaInscritaEstudianteDto[]>(`${this.apiUrl}/mis-materias`);
+  }
+
+  /**
+   * Obtiene la planificación vigente de una cátedra.
+   * El estudiante solo la consulta; la modificación corresponde al docente.
+   *
+   * GET /api/Cronograma/{catedraId}
+   */
+  getCronogramaCatedra(catedraId: number): Observable<CronogramaActividadEstudianteDto[]> {
+    return this.http.get<CronogramaActividadEstudianteDto[]>(
+      `${getApiBase()}/api/Cronograma/${catedraId}`,
+    );
+  }
+
+  /**
+   * Obtiene las reprogramaciones
+   * pertenecientes a las cátedras
+   * del estudiante autenticado.
+   *
+   * GET:
+   * /api/Cronograma/estudiante/actualizaciones
+   */
+  getActualizacionesCronograma(): Observable<ActualizacionCronogramaEstudianteDto[]> {
+    return this.http.get<ActualizacionCronogramaEstudianteDto[]>(
+      `${getApiBase()}/api/Cronograma/estudiante/actualizaciones`,
+    );
   }
 }
