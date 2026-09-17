@@ -772,9 +772,7 @@
                             Tomar Asistencia ({{ contarPresentes(claseDoc) }}/{{ contarTotal(claseDoc) }})
                           </button>
                         </div>
-                      }
-                      <!-- 2. Horario ocupado por los alumnos en otra materia -->
-                      @else if (getOcupacionEnCelda(dia, bloque.inicio); as ocupado) {
+                      } @else if (getOcupacionEnCelda(dia, bloque.inicio); as ocupado) {
                         <div class="h-full p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 shadow-sm flex flex-col justify-between">
                           <div>
                             <div class="flex items-center gap-1 text-[10px] font-bold text-rose-600 uppercase tracking-tight">
@@ -786,9 +784,7 @@
                             {{ ocupado.tipo }}
                           </span>
                         </div>
-                      }
-                      <!-- 3. Franja libre disponible -->
-                      @else {
+                      } @else {
                         <div (click)="seleccionarSlotHorario(dia, bloque.inicio, bloque.fin)"
                              class="h-full p-2 rounded-xl bg-emerald-50/40 border border-dashed border-emerald-200 hover:bg-emerald-100/60 hover:border-emerald-400 cursor-pointer text-emerald-800 flex flex-col items-center justify-center text-center transition-all group">
                           <i class="fa-solid fa-circle-plus text-emerald-500 text-sm group-hover:scale-110 transition-transform mb-1"></i>
@@ -1009,6 +1005,17 @@
             </select>
           </div>
 
+          <!-- Fecha de la sesión -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Fecha de la sesión</label>
+            <input type="date"
+                   [(ngModel)]="nuevaClase.fecha"
+                   (ngModelChange)="revisarConflictoHorario()"
+                   name="fecha"
+                   required
+                   class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none bg-white" />
+          </div>
+
           <!-- Días de la semana -->
           <div class="col-span-1 md:col-span-2">
             <label class="block text-xs font-semibold text-slate-700 mb-1">Días de la semana</label>
@@ -1086,7 +1093,21 @@
               <label class="block text-xs font-semibold text-slate-700 mb-1">Aula</label>
               <input type="text" [(ngModel)]="nuevaClase.aulaPresencial" name="aulaPresencial" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none" />
             </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Piso</label>
+              <input type="text" [(ngModel)]="nuevaClase.pisoPresencial" name="pisoPresencial" placeholder="Ej. Piso 2" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none" />
+            </div>
           }
+
+          <!-- Observaciones -->
+          <div class="col-span-1 md:col-span-2">
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Observaciones</label>
+            <textarea [(ngModel)]="nuevaClase.observaciones"
+                      name="observaciones"
+                      rows="3"
+                      placeholder="Indicaciones adicionales para la sesión (opcional)"
+                      class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none bg-white resize-y"></textarea>
+          </div>
 
           <!-- Botón Guardar -->
           <div class="col-span-1 md:col-span-2 flex justify-end mt-2">
@@ -1165,7 +1186,7 @@
         </button>
 
         <button
-          (click)="subTabRecursos = 'actividades'"
+          (click)="subTabRecursos = 'actividades'; actualizarRecursosYActividades()"
           [class]="subTabRecursos === 'actividades' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
           class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2">
           <i class="fa-solid fa-list-check"></i>
@@ -1303,6 +1324,155 @@
                 No hay recursos registrados aún para esta cátedra.
               </div>
             }
+          </div>
+        </div>
+      }
+
+      <!-- ========================================================= -->
+      <!-- ACTIVIDADES Y TALLERES - RF-017 -->
+      <!-- ========================================================= -->
+      @if (subTabRecursos === 'actividades') {
+        <div class="space-y-6">
+          <div class="glass-card rounded-2xl p-6 border border-slate-200 bg-white shadow-sm">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <i class="fa-solid fa-list-check text-indigo-600"></i>
+                  Crear Actividad o Taller
+                </h3>
+                <p class="text-xs text-slate-500 mt-1">
+                  La actividad quedará asociada a la materia seleccionada y disponible para sus estudiantes.
+                </p>
+              </div>
+              <button
+                type="button"
+                (click)="actualizarRecursosYActividades()"
+                class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-2">
+                <i class="fa-solid fa-rotate"></i>
+                Actualizar
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Título de la actividad</label>
+                <input
+                  type="text"
+                  [(ngModel)]="nuevaActividad.titulo"
+                  placeholder="Ej: Taller de estructura de informes técnicos"
+                  class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Tipo</label>
+                <select
+                  [(ngModel)]="nuevaActividad.tipo"
+                  class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400">
+                  <option value="Taller">Taller</option>
+                  <option value="Tarea">Tarea</option>
+                  <option value="Practica">Práctica</option>
+                  <option value="Investigacion">Investigación</option>
+                  <option value="Proyecto">Proyecto</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Fecha límite</label>
+                <input
+                  type="datetime-local"
+                  [(ngModel)]="nuevaActividad.fechaEntrega"
+                  class="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Descripción / instrucciones</label>
+                <textarea
+                  [(ngModel)]="nuevaActividad.descripcion"
+                  rows="3"
+                  placeholder="Describe qué debe realizar el estudiante..."
+                  class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"></textarea>
+              </div>
+
+              <div class="md:col-span-3 flex items-center justify-end">
+                <button
+                  type="button"
+                  (click)="crearActividadPedagogica()"
+                  [disabled]="isLoading"
+                  class="py-2.5 px-5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center gap-2">
+                  <i class="fa-solid fa-plus"></i>
+                  {{ isLoading ? 'Guardando...' : 'Publicar Actividad' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card rounded-2xl p-5 border border-slate-200 bg-white shadow-sm">
+            <div class="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 class="text-sm font-bold text-slate-900">Actividades publicadas</h3>
+                <p class="text-xs text-slate-500 mt-1">Información cargada desde el backend para la materia seleccionada.</p>
+              </div>
+              <span class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
+                {{ actividadesMateria.length }} actividad(es)
+              </span>
+            </div>
+
+            <div class="space-y-3">
+              @for (act of actividadesMateria; track act.id) {
+                <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-colors">
+                  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                    <div class="flex items-start gap-3 min-w-0">
+                      <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-clipboard-list"></i>
+                      </div>
+
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <h4 class="text-sm font-bold text-slate-900">{{ act.titulo }}</h4>
+                          <span class="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
+                            {{ act.tipo || 'Actividad' }}
+                          </span>
+                          <span class="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100">
+                            {{ act.estado || 'Pendiente' }}
+                          </span>
+                        </div>
+
+                        <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+                          {{ act.descripcion || 'Sin descripción.' }}
+                        </p>
+
+                        <div class="flex items-center gap-4 flex-wrap mt-3 text-[11px] text-slate-500">
+                          <span class="inline-flex items-center gap-1.5">
+                            <i class="fa-regular fa-calendar text-indigo-500"></i>
+                            Fecha límite: {{ act.fechaEntrega | date:'dd/MM/yyyy HH:mm' }}
+                          </span>
+                          <span class="inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-book text-indigo-500"></i>
+                            {{ materiaSeleccionada?.nombre || 'Materia' }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        (click)="descargarActividadDocumento(act)"
+                        class="px-3 py-2 text-[11px] font-bold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-download"></i>
+                        Guía
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              } @empty {
+                <div class="py-10 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-xs text-slate-500">
+                  <i class="fa-solid fa-clipboard-list text-2xl text-slate-300 mb-2"></i>
+                  <p class="font-semibold text-slate-600">No hay actividades registradas aún para esta materia.</p>
+                  <p class="mt-1">Crea la primera actividad usando el formulario superior.</p>
+                </div>
+              }
+            </div>
           </div>
         </div>
       }

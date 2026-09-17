@@ -42,6 +42,7 @@ export interface CreateClaseSesionDto {
   edificioPresencial?: string;
   aulaPresencial?: string;
   pisoPresencial?: string;
+  observaciones?: string;
 }
 
 export interface ClaseSesionDto {
@@ -58,10 +59,11 @@ export interface ClaseSesionDto {
   edificioPresencial?: string;
   aulaPresencial?: string;
   pisoPresencial?: string;
+  observaciones?: string;
 }
 
 export interface CreateAsistenciaDto {
-  claseSesionId: number;
+  claseSesionId?: number;
   estudianteId: number;
   presente: boolean;
 }
@@ -71,6 +73,27 @@ export interface AsistenciaDto {
   claseSesionId: number;
   estudianteId: number;
   presente: boolean;
+  nombreEstudiante?: string;
+  fechaSesion?: string;
+}
+
+export interface EstudianteSesionAsistenciaDto {
+  estudianteId: number;
+  nombre: string;
+  correo: string;
+  asistenciaRegistrada: boolean;
+  asistenciaId?: number | null;
+  presente?: boolean | null;
+}
+
+export interface EstudiantesSesionResponse {
+  claseSesionId: number;
+  materiaId: number;
+  claseId?: number | null;
+  fecha: string;
+  horaInicio: string;
+  horaFin: string;
+  estudiantes: EstudianteSesionAsistenciaDto[];
 }
 
 @Injectable({
@@ -296,40 +319,164 @@ export class ClaseService {
     return this.http.get(`${this.apiUrl}/${claseId}/estudiantes`);
   }
 
-  // Sesiones
+  // ==================== SESIONES (RF-019) ====================
+
   createClaseSesion(dto: CreateClaseSesionDto): Observable<ClaseSesionDto> {
-    return this.http.post<ClaseSesionDto>(this.sesionApiUrl, dto);
+    return this.http.post<ClaseSesionDto>(this.sesionApiUrl, dto).pipe(
+      tap((sesion) => {
+        const actual = this.sesionesSubject.value;
+        this.sesionesSubject.next([
+          sesion,
+          ...actual.filter(s => Number(s.id) !== Number(sesion.id))
+        ]);
+      })
+    );
   }
 
   getClaseSesionById(id: number): Observable<ClaseSesionDto> {
-    const found = this.sesionesSubject.value.find(s => Number(s.id) === Number(id));
-    if (found) return of(found);
-    return this.http.get<ClaseSesionDto>(`${this.sesionApiUrl}/${id}`);
+    return this.http.get<ClaseSesionDto>(`${this.sesionApiUrl}/${id}`).pipe(
+      tap((sesion) => {
+        const actual = this.sesionesSubject.value;
+        this.sesionesSubject.next([
+          sesion,
+          ...actual.filter(s => Number(s.id) !== Number(sesion.id))
+        ]);
+      })
+    );
   }
 
   getSesionesByMateria(materiaId: number): Observable<ClaseSesionDto[]> {
-    return this.sesiones$.pipe(
-      map(list => list.filter(s => Number(s.materiaId) === Number(materiaId)))
-    );
+    return this.http
+      .get<ClaseSesionDto[]>(`${this.sesionApiUrl}/materia/${materiaId}`)
+      .pipe(
+        map((res: any) => this.normalizarSesiones(res)),
+        tap((sesiones) => this.actualizarSesionesCache(sesiones, 'materia', materiaId)),
+        catchError((err) => {
+          if (err?.status === 404) {
+            this.actualizarSesionesCache([], 'materia', materiaId);
+            return of([]);
+          }
+          return throwError(() => err);
+        })
+      );
   }
 
   getSesionesByClase(claseId: number): Observable<ClaseSesionDto[]> {
-    return this.sesiones$.pipe(
-      map(list => list.filter(s => Number(s.claseId) === Number(claseId)))
+    return this.http
+      .get<ClaseSesionDto[]>(`${this.sesionApiUrl}/clase/${claseId}`)
+      .pipe(
+        map((res: any) => this.normalizarSesiones(res)),
+        tap((sesiones) => this.actualizarSesionesCache(sesiones, 'clase', claseId)),
+        catchError((err) => {
+          if (err?.status === 404) {
+            this.actualizarSesionesCache([], 'clase', claseId);
+            return of([]);
+          }
+          return throwError(() => err);
+        })
+      );
+  }
+
+  private normalizarSesiones(res: any): ClaseSesionDto[] {
+    const list = Array.isArray(res)
+      ? res
+      : Array.isArray(res?.$values)
+        ? res.$values
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+    return list.map((s: any) => ({
+      id: Number(s.id ?? s.claseSesionId),
+      materiaId: Number(s.materiaId),
+      claseId: s.claseId != null ? Number(s.claseId) : undefined,
+      docenteId: Number(s.docenteId),
+      fecha: String(s.fecha ?? ''),
+      horaInicio: String(s.horaInicio ?? ''),
+      horaFin: String(s.horaFin ?? ''),
+      tipoClase: String(s.tipoClase ?? ''),
+      linkVirtual: s.linkVirtual ?? '',
+      aplicacionVirtual: s.aplicacionVirtual ?? '',
+      edificioPresencial: s.edificioPresencial ?? '',
+      aulaPresencial: s.aulaPresencial ?? '',
+      pisoPresencial: s.pisoPresencial ?? '',
+      observaciones: s.observaciones ?? ''
+    }));
+  }
+
+  private actualizarSesionesCache(
+    nuevas: ClaseSesionDto[],
+    filtro: 'materia' | 'clase',
+    id: number
+  ): void {
+    const otras = this.sesionesSubject.value.filter((s) =>
+      filtro === 'materia'
+        ? Number(s.materiaId) !== Number(id)
+        : Number(s.claseId) !== Number(id)
+    );
+    this.sesionesSubject.next([...nuevas, ...otras]);
+  }
+
+  // ==================== ASISTENCIA (RF-020) ====================
+
+  getEstudiantesDeSesion(claseSesionId: number): Observable<EstudiantesSesionResponse> {
+    return this.http.get<EstudiantesSesionResponse>(
+      `${this.sesionApiUrl}/${claseSesionId}/estudiantes`
     );
   }
 
-  // Asistencia
-  registrarAsistencia(claseSesionId: number, dto: CreateAsistenciaDto): Observable<AsistenciaDto> {
-    return this.http.post<AsistenciaDto>(`${this.sesionApiUrl}/${claseSesionId}/asistencia`, dto);
+  registrarAsistencia(
+    claseSesionId: number,
+    dto: CreateAsistenciaDto
+  ): Observable<AsistenciaDto> {
+    const payload = {
+      estudianteId: Number(dto.estudianteId),
+      presente: Boolean(dto.presente)
+    };
+
+    return this.http
+      .post<any>(`${this.sesionApiUrl}/${claseSesionId}/asistencia`, payload)
+      .pipe(
+        map((res: any) => {
+          const a = res?.asistencia ?? res;
+          return {
+            id: Number(a.id),
+            claseSesionId: Number(a.claseSesionId ?? claseSesionId),
+            estudianteId: Number(a.estudianteId ?? dto.estudianteId),
+            presente: Boolean(a.presente),
+            nombreEstudiante: a.nombreEstudiante,
+            fechaSesion: a.fechaSesion
+          } as AsistenciaDto;
+        })
+      );
   }
 
   getAsistenciaBySesion(claseSesionId: number): Observable<AsistenciaDto[]> {
-    return this.http.get<AsistenciaDto[]>(`${this.sesionApiUrl}/${claseSesionId}/asistencia`);
+    return this.http
+      .get<any>(`${this.sesionApiUrl}/${claseSesionId}/asistencia`)
+      .pipe(
+        map((res: any) => {
+          const registros = Array.isArray(res)
+            ? res
+            : Array.isArray(res?.registros)
+              ? res.registros
+              : Array.isArray(res?.$values)
+                ? res.$values
+                : [];
+
+          return registros.map((a: any) => ({
+            id: Number(a.id),
+            claseSesionId: Number(a.claseSesionId ?? claseSesionId),
+            estudianteId: Number(a.estudianteId),
+            presente: Boolean(a.presente),
+            nombreEstudiante: a.nombreEstudiante,
+            fechaSesion: a.fechaSesion ?? res?.fecha
+          }));
+        })
+      );
   }
 
   getAsistenciaEstudiante(claseSesionId: number): Observable<any> {
     return this.http.get<any>(`${this.sesionApiUrl}/estudiante/asistencia/${claseSesionId}`);
   }
 }
-
