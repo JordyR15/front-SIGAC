@@ -6,6 +6,6 @@ import { AyudantiasDashboardComponent } from '../ayudantias-dashboard/ayudantias
   selector: 'app-ayudantias-admin',
   standalone: true,
   imports: [CommonModule, AyudantiasDashboardComponent],
-  template: `<app-ayudantias-dashboard></app-ayudantias-dashboard>`
+  template: `<app-ayudantias-dashboard [tabInicial]="'solicitudes'"></app-ayudantias-dashboard>`
 })
 export class AyudantiasAdminComponent {}

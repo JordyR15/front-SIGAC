@@ -19,13 +19,7 @@ export interface EstudianteDirectorioDto {
   estado?: string;
 }
 
-const DIRECTORIO_BASE: EstudianteDirectorioDto[] = [
-  { id: 101, nombre: 'Julián Cárdenas', correo: 'j.cardenas@uteq.edu.ec', username: 'j.cardenas', cedula: '1729384101', matricula: '2024-IS-101', carrera: 'Ingeniería de Software', nota: 4.4, asistencia: 92, estado: 'Regular' },
-  { id: 102, nombre: 'Camila Villacís', correo: 'c.villacis@uteq.edu.ec', username: 'c.villacis', cedula: '1729384102', matricula: '2024-IS-102', carrera: 'Ingeniería de Software', nota: 4.7, asistencia: 96, estado: 'Destacado' },
-  { id: 103, nombre: 'Felipe Zambrano', correo: 'f.zambrano@uteq.edu.ec', username: 'f.zambrano', cedula: '1729384103', matricula: '2024-IS-103', carrera: 'Ingeniería de Software', nota: 3.8, asistencia: 78, estado: 'En Riesgo' },
-  { id: 104, nombre: 'Daniela Montes', correo: 'd.montes@uteq.edu.ec', username: 'd.montes', cedula: '1729384104', matricula: '2024-IS-104', carrera: 'Ingeniería de Software', nota: 4.6, asistencia: 90, estado: 'Regular' },
-  { id: 105, nombre: 'Martín Barahona', correo: 'm.barahona@uteq.edu.ec', username: 'm.barahona', cedula: '1729384105', matricula: '2024-IS-105', carrera: 'Ingeniería de Software', nota: 4.1, asistencia: 85, estado: 'Regular' }
-];
+const DIRECTORIO_BASE: EstudianteDirectorioDto[] = [];
 
 @Injectable({
   providedIn: 'root'
@@ -61,9 +55,6 @@ export class DirectorioService {
     }
   }
 
-  /**
-   * Recarga los datos del Directorio Institucional desde el backend o almacén sincronizado.
-   */
   cargarDirectorio(): Observable<EstudianteDirectorioDto[]> {
     return this.http.get<any[]>(this.apiUrl).pipe(
       tap((backendData) => {
@@ -76,14 +67,13 @@ export class DirectorioService {
             cedula: b.cedula || '',
             matricula: b.matricula || '',
             carrera: b.carrera || 'Ingeniería de Software',
-            nota: b.nota || 4.5,
-            asistencia: b.asistencia || 100,
+            nota: b.nota || 0,
+            asistencia: b.asistencia || 0,
             estado: b.estado || 'Regular'
           }));
           this.directorioSubject.next(mapped);
           this.saveStorage(mapped);
         } else {
-          // Si responde vacío, asegurar persistencia local actualizada
           this.directorioSubject.next(this.loadStorage());
         }
       }),
@@ -99,53 +89,25 @@ export class DirectorioService {
     return this.directorioSubject.value;
   }
 
-  /**
-   * Agrega un nuevo estudiante al Directorio General Institucional
-   */
-  agregarEstudiante(est: Partial<EstudianteDirectorioDto>): EstudianteDirectorioDto {
-    const current = this.directorioSubject.value;
-    const nuevoId = est.id || (Date.now() % 100000);
-    const username = est.username || (est.correo ? est.correo.split('@')[0] : `estudiante.${nuevoId}`);
-    const nuevo: EstudianteDirectorioDto = {
-      id: nuevoId,
-      nombre: est.nombre || 'Nuevo Estudiante',
-      correo: est.correo || `${username}@uteq.edu.ec`,
-      username: username,
-      cedula: est.cedula || '17' + Math.floor(10000000 + Math.random() * 90000000),
-      matricula: est.matricula || `2026-IS-${nuevoId}`,
-      carrera: est.carrera || 'Ingeniería de Software',
-      telefono: est.telefono || '',
-      nota: est.nota || 4.5,
-      asistencia: est.asistencia || 100,
-      estado: est.estado || 'Regular'
+  agregarEstudiante(nuevo: Partial<EstudianteDirectorioDto>): Observable<any> {
+    const list = this.directorioSubject.value;
+    const est: EstudianteDirectorioDto = {
+      id: nuevo.id || Date.now(),
+      nombre: nuevo.nombre || 'Estudiante Nuevo',
+      correo: nuevo.correo || '',
+      username: nuevo.username || (nuevo.correo ? nuevo.correo.split('@')[0] : 'estudiante'),
+      cedula: nuevo.cedula || '',
+      matricula: nuevo.matricula || '',
+      carrera: nuevo.carrera || 'Ingeniería de Software',
+      nota: nuevo.nota || 0,
+      asistencia: nuevo.asistencia || 0,
+      estado: nuevo.estado || 'Regular'
     };
-
-    const filtrados = current.filter(e => Number(e.id) !== Number(nuevo.id) && e.correo !== nuevo.correo);
-    const actualizados = [nuevo, ...filtrados];
-    this.directorioSubject.next(actualizados);
-    this.saveStorage(actualizados);
-    return nuevo;
-  }
-
-  /**
-   * Elimina un estudiante de una clase llamando al endpoint:
-   * DELETE /api/Clase/{claseId}/estudiantes/{estudianteId}
-   */
-  eliminarEstudiante(claseId: number, estudianteId: number): Observable<any> {
-    return this.claseService.eliminarEstudiante(claseId, estudianteId);
-  }
-
-  /**
-   * Elimina un estudiante del Directorio General llamando a DELETE /api/Persona/{id}
-   */
-  eliminarDelDirectorio(estudianteId: number): Observable<any> {
-    const current = this.directorioSubject.value;
-    const filtrados = current.filter(e => Number(e.id) !== Number(estudianteId));
-    this.directorioSubject.next(filtrados);
-    this.saveStorage(filtrados);
-
-    return this.http.delete(`${getApiBase()}/api/Persona/${estudianteId}`).pipe(
-      catchError(() => of({ success: true }))
+    const updated = [est, ...list];
+    this.directorioSubject.next(updated);
+    this.saveStorage(updated);
+    return this.http.post(this.apiUrl, est).pipe(
+      catchError(() => of(est))
     );
   }
 }

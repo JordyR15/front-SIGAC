@@ -1,8 +1,8 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { Subscription } from 'rxjs';
+import { combineLatest, Subscription } from 'rxjs';
 import { MateriaDto, MateriaService } from '../../../services/materia.service';
 import { ClaseDto, ClaseService } from '../../../services/clase.service';
 
@@ -22,6 +22,10 @@ export interface GrupoClaseMaterias {
   templateUrl: './materias-admin.html'
 })
 export class MateriasAdminComponent implements OnInit, OnDestroy {
+  private cdr = inject(ChangeDetectorRef);
+  private materiaService = inject(MateriaService);
+  private claseService = inject(ClaseService);
+
   materias: MateriaDto[] = [];
   materiasFiltradas: MateriaDto[] = [];
   clases: ClaseDto[] = [];
@@ -32,58 +36,47 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
   filtroSemestre = 'todos';
   modoVista: 'grid' | 'por_clase' = 'grid';
 
-  private subMaterias?: Subscription;
-  private subClases?: Subscription;
-
-  constructor(
-    private materiaService: MateriaService,
-    private claseService: ClaseService
-  ) {}
+  private subDatos?: Subscription;
 
   ngOnInit() {
     this.cargarDatos();
   }
 
   ngOnDestroy() {
-    this.subMaterias?.unsubscribe();
-    this.subClases?.unsubscribe();
+    this.subDatos?.unsubscribe();
   }
 
   cargarDatos(): void {
-    this.cargarMaterias();
-    this.cargarClases();
-  }
-
-  cargarMaterias(): void {
-    this.subMaterias?.unsubscribe();
-    this.subMaterias = this.materiaService.getMaterias().subscribe({
-      next: (materias) => {
+    this.subDatos?.unsubscribe();
+    this.subDatos = combineLatest([
+      this.materiaService.getMaterias(),
+      this.claseService.getClases()
+    ]).subscribe({
+      next: ([materias, clases]) => {
         this.materias = Array.isArray(materias) ? materias : [];
-        this.actualizarRelacionClasesMaterias();
-        this.aplicarFiltros();
-      },
-      error: (err) => {
-        console.error('Error al cargar materias:', err);
-        this.materias = [];
-        this.aplicarFiltros();
-      }
-    });
-  }
-
-  cargarClases(): void {
-    this.subClases?.unsubscribe();
-    this.subClases = this.claseService.getClases().subscribe({
-      next: (clases) => {
         this.clases = Array.isArray(clases) ? clases : [];
         this.actualizarRelacionClasesMaterias();
         this.aplicarFiltros();
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       },
       error: (err) => {
-        console.error('Error al cargar clases:', err);
+        console.error('Error al cargar materias y clases:', err);
+        this.materias = [];
         this.clases = [];
         this.aplicarFiltros();
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }
     });
+  }
+
+  cargarMaterias(): void {
+    this.cargarDatos();
+  }
+
+  cargarClases(): void {
+    this.cargarDatos();
   }
 
   actualizarRelacionClasesMaterias(): void {
@@ -189,6 +182,8 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
     }
 
     this.materiasFiltradas = resultado;
+    this.cdr.markForCheck();
+    this.cdr.detectChanges();
   }
 
   eliminarMateria(id: number, event?: Event): void {
@@ -198,11 +193,11 @@ export class MateriasAdminComponent implements OnInit, OnDestroy {
     if (confirm('¿Estás seguro de eliminar esta materia del sistema?')) {
       this.materiaService.eliminarMateria(id).subscribe({
         next: () => {
-          this.cargarMaterias();
+          this.cargarDatos();
         },
         error: (err) => {
           console.error('Error al eliminar materia:', err);
-          this.cargarMaterias();
+          this.cargarDatos();
         }
       });
     }

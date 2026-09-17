@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import Swal from 'sweetalert2';
 import { JuradoService, PresentacionDetalleDto, ResultadoPresentacionDto, EvaluacionJuradoDto } from '../../../services/jurado.service';
 
 @Component({
@@ -118,7 +119,7 @@ export class EvaluacionTribunalComponent implements OnInit {
 
   /**
    * Envía la evaluación del miembro del jurado
-   * Consume: POST /api/jurado/presentaciones/{id}/evaluaciones
+   * Consume: POST /api/Jurado/presentaciones/{id}/evaluaciones
    */
   enviarEvaluacion(): void {
     if (!this.presentacionSeleccionada) return;
@@ -126,6 +127,11 @@ export class EvaluacionTribunalComponent implements OnInit {
     if (this.evaluacionForm.invalid) {
       this.evaluacionForm.markAllAsTouched();
       this.mensajeError = 'Por favor complete todos los criterios de la rúbrica y las observaciones técnicas.';
+      Swal.fire({
+        icon: 'warning',
+        title: 'Formulario Incompleto',
+        text: 'Por favor complete todos los criterios de la rúbrica y las observaciones técnicas.'
+      });
       return;
     }
 
@@ -154,6 +160,15 @@ export class EvaluacionTribunalComponent implements OnInit {
           this.presentacionSeleccionada.yaEvaluadoPorMi = true;
           this.presentacionSeleccionada.estado = 'Evaluada';
         }
+
+        Swal.fire({
+          icon: 'success',
+          title: '¡Nota y Evaluación Registradas!',
+          html: `La nota ponderada de <b>${val.notaFinalCalculada} / 10.0</b> ha sido guardada exitosamente.<br><small class="text-slate-500">Se ha notificado al estudiante postulante y a la coordinación de carrera.</small>`,
+          confirmButtonColor: '#059669',
+          confirmButtonText: 'Aceptar'
+        });
+
         // Recargar el resultado consolidado
         this.cargarResultado(currentPresId);
         this.tabActiva = 'resultado';
@@ -161,6 +176,11 @@ export class EvaluacionTribunalComponent implements OnInit {
       error: () => {
         this.isSubmitting = false;
         this.mensajeError = 'No se pudo guardar la evaluación en el servidor del jurado.';
+        Swal.fire({
+          icon: 'error',
+          title: 'Error de Calificación',
+          text: 'No se pudo guardar la evaluación en el servidor.'
+        });
       }
     });
   }
@@ -174,6 +194,12 @@ export class EvaluacionTribunalComponent implements OnInit {
     if (this.resultadoActual) {
       this.resultadoActual.estadoFinal = 'Aprobado';
     }
+    Swal.fire({
+      icon: 'success',
+      title: '¡Ayudantía Posesionada y Aprobada!',
+      text: 'Se ha formalizado la aprobación del tribunal. Notificación despachada.',
+      confirmButtonColor: '#059669'
+    });
     this.tabActiva = 'resultado';
   }
 }

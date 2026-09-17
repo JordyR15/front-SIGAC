@@ -177,7 +177,7 @@
           {{ mensajeAsignacion[c.id] }}
         </div>
         <div class="flex items-center justify-between gap-2">
-          <a [routerLink]="['/admin/crear-materia']" class="text-xs text-accent font-semibold hover:underline flex items-center gap-1">
+          <a [routerLink]="['/admin/crear-materia']" [queryParams]="{ claseId: c.id }" class="text-xs text-accent font-semibold hover:underline flex items-center gap-1">
             <i class="fa-solid fa-plus text-[10px]"></i> Añadir materia
           </a>
           <a [routerLink]="['/horarios', c.id]" class="text-xs text-slate-600 hover:text-accent font-semibold flex items-center gap-1.5 transition-colors">

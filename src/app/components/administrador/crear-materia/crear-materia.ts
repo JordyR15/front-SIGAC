@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { Subscription } from 'rxjs';
 import Swal from 'sweetalert2';
 import { MateriaService } from '../../../services/materia.service';
@@ -23,6 +23,7 @@ interface DocenteSelectorItem {
 export class CrearMateriaComponent implements OnInit, OnDestroy {
   private subDocentes?: Subscription;
   private subClases?: Subscription;
+  private subRoute?: Subscription;
 
   docentes: DocenteSelectorItem[] = [];
   clases: ClaseDto[] = [];
@@ -47,12 +48,19 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
 
   constructor(
     private router: Router,
+    private route: ActivatedRoute,
     private materiaService: MateriaService,
     private adminDocenteService: AdminDocenteService,
     private claseService: ClaseService
   ) {}
 
   ngOnInit() {
+    this.subRoute = this.route.queryParams.subscribe(params => {
+      if (params['claseId']) {
+        this.nuevaMateria.claseId = Number(params['claseId']);
+      }
+    });
+
     this.subDocentes = this.adminDocenteService.getDocentes().subscribe({
       next: (list) => {
         const safeList = Array.isArray(list) ? list : ((list as any)?.$values || (list as any)?.data || []);
@@ -97,6 +105,7 @@ export class CrearMateriaComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.subDocentes?.unsubscribe();
     this.subClases?.unsubscribe();
+    this.subRoute?.unsubscribe();
   }
 
   guardarMateria() {

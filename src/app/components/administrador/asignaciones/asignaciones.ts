@@ -11,6 +11,7 @@ import { CoordinadorService, SolicitudAyudantiaDto } from '../../../services/coo
 })
 export class AsignacionesComponent implements OnInit {
   solicitudesPendientes: SolicitudAyudantiaDto[] = [];
+
   asignacion = {
     ayudantiaId: 0
   };
@@ -21,32 +22,26 @@ export class AsignacionesComponent implements OnInit {
 
   constructor(private coordinadorService: CoordinadorService) {}
 
-  ngOnInit() {
+  ngOnInit(): void {
     this.cargarSolicitudes();
   }
 
-  cargarSolicitudes() {
+  cargarSolicitudes(): void {
     this.coordinadorService.getSolicitudesAyudantia().subscribe({
-      next: (data) => {
-        if (data && data.length > 0) {
-          this.solicitudesPendientes = data;
-        } else {
-          this.solicitudesPendientes = [
-            { ayudantiaId: 1, estudianteId: 1, nombreEstudiante: 'María González', catedraId: 1, nombreCatedra: 'Cálculo Avanzado', estado: 'Pendiente' },
-            { ayudantiaId: 2, estudianteId: 2, nombreEstudiante: 'Carlos Pérez', catedraId: 2, nombreCatedra: 'Mecánica Cuántica', estado: 'Pendiente' }
-          ];
-        }
+      next: (list) => {
+        this.solicitudesPendientes = list.filter(s => s.estado === 'Pendiente' || s.estado === 'Convocada');
       },
       error: () => {
-        this.solicitudesPendientes = [
-          { ayudantiaId: 1, estudianteId: 1, nombreEstudiante: 'María González', catedraId: 1, nombreCatedra: 'Cálculo Avanzado', estado: 'Pendiente' },
-          { ayudantiaId: 2, estudianteId: 2, nombreEstudiante: 'Carlos Pérez', catedraId: 2, nombreCatedra: 'Mecánica Cuántica', estado: 'Pendiente' }
-        ];
+        this.solicitudesPendientes = [];
       }
     });
   }
 
-  asignar() {
+  asignar(): void {
+    this.guardarAsignacion();
+  }
+
+  guardarAsignacion(): void {
     if (!this.asignacion.ayudantiaId) {
       this.errorMessage = 'Por favor selecciona una postulación/ayudantía.';
       return;
@@ -64,7 +59,7 @@ export class AsignacionesComponent implements OnInit {
         this.asignacion.ayudantiaId = 0;
         setTimeout(() => this.successMessage = '', 4000);
       },
-      error: (err) => {
+      error: (err: any) => {
         this.isLoading = false;
         this.successMessage = 'Asignación procesada.';
         this.solicitudesPendientes = this.solicitudesPendientes.filter(s => s.ayudantiaId !== Number(this.asignacion.ayudantiaId));

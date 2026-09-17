@@ -5,13 +5,22 @@ import { catchError, map, tap } from 'rxjs/operators';
 import { getApiBase } from '../api';
 
 export interface CrearPresentacionDto {
-  ayudantiaId: number;
-  fecha: string;
-  profesoresAsignados: string[];
+  ayudantiaId?: number;
+  postulanteId?: number;
+  estudianteId?: number;
+  catedraId?: number;
+  materiaId?: number;
+  juradoId?: number;
+  docentesIds?: number[];
+  fechaPresentacion?: string;
+  fecha?: string;
+  tema?: string;
+  temaSilabo?: string;
+  lugar?: string;
+  lugarOEnlace?: string;
+  profesoresAsignados?: string[];
   decanoId?: number;
   coordinadorCarreraId?: number;
-  temaSilabo?: string;
-  lugarOEnlace?: string;
 }
 
 export interface EvaluacionJuradoDto {
@@ -62,8 +71,9 @@ export interface PresentacionDetalleDto {
   decanoNombre?: string;
   coordinadorNombre?: string;
   profesoresAsignados: string[];
-  estado: 'Pendiente' | 'Evaluada' | 'En Progreso' | 'Aprobada';
+  estado: 'Pendiente' | 'Evaluada' | 'En Progreso' | 'Aprobada' | 'Convocada';
   yaEvaluadoPorMi?: boolean;
+  promedioNota?: number;
 }
 
 @Injectable({
@@ -79,7 +89,6 @@ export class JuradoService {
   private STORAGE_PRESENTACIONES = 'sigac_jurado_presentaciones_v2';
   private STORAGE_RESULTADOS = 'sigac_jurado_resultados_v2';
 
-  // Base en memoria para presentaciones - Sin datos ficticios
   private presentacionesDefault: PresentacionDetalleDto[] = [];
 
   private loadStorage<T>(key: string, fallback: T): T {
@@ -112,48 +121,74 @@ export class JuradoService {
   public presentaciones$ = this.presentacionesSubject.asObservable();
 
   /**
-   * POST /api/Jurado/presentaciones
-   * Roles autorizados: Coordinador
-   * Registra una sustentación de tema de sílabo ante el tribunal (Decano, Coord y 2 docentes expertos)
+   * POST /api/Jurado/presentaciones o /api/Coordinador/ayudantias/convocar-tribunal
+   * Registra una sustentación de tema de sílabo ante el tribunal
    */
-  crearPresentacion(dto: CrearPresentacionDto): Observable<PresentacionDetalleDto> {
-    const nuevaId = Math.floor((Date.now() / 1000) % 2000000000) + 1;
-    const nueva: PresentacionDetalleDto = {
-      id: nuevaId,
-      ayudantiaId: dto.ayudantiaId,
-      estudianteId: 1,
-      estudianteNombre: 'Postulante Seleccionado',
-      estudianteCorreo: 'postulante@universidad.edu',
-      catedraId: 101,
-      catedraNombre: 'Cátedra de Ayudantía',
-      fecha: dto.fecha,
-      temaSilabo: dto.temaSilabo || 'Sustentación de Contenido Programático del Sílabo',
-      lugarOEnlace: dto.lugarOEnlace || 'Auditorio Principal / Videoconferencia',
-      decanoNombre: 'Dr. Roberto Zambrano (Decano)',
-      coordinadorNombre: 'Mgtr. Patricia Silva (Coordinadora)',
-      profesoresAsignados: dto.profesoresAsignados,
-      estado: 'Pendiente',
-      yaEvaluadoPorMi: false
+  crearPresentacion(dto: CrearPresentacionDto): Observable<any> {
+    const payload = {
+      ayudantiaId: Number(dto.ayudantiaId || dto.postulanteId || dto.estudianteId || 0),
+      AyudantiaId: Number(dto.ayudantiaId || dto.postulanteId || dto.estudianteId || 0),
+      postulanteId: Number(dto.postulanteId || dto.estudianteId || dto.ayudantiaId || 0),
+      estudianteId: Number(dto.estudianteId || dto.postulanteId || dto.ayudantiaId || 0),
+      catedraId: Number(dto.catedraId || dto.materiaId || 0),
+      materiaId: Number(dto.catedraId || dto.materiaId || 0),
+      juradoId: Number(dto.juradoId || (dto.docentesIds && dto.docentesIds.length > 0 ? dto.docentesIds[0] : 0)),
+      docentesIds: dto.docentesIds || (dto.juradoId ? [dto.juradoId] : []),
+      fechaPresentacion: dto.fechaPresentacion || dto.fecha || new Date().toISOString(),
+      fecha: dto.fechaPresentacion || dto.fecha || new Date().toISOString(),
+      tema: dto.tema || dto.temaSilabo || 'Evaluación Pedagógica y Sílabo',
+      temaSilabo: dto.tema || dto.temaSilabo || 'Evaluación Pedagógica y Sílabo',
+      lugar: dto.lugar || dto.lugarOEnlace || 'Aula Magna / Virtual',
+      lugarOEnlace: dto.lugar || dto.lugarOEnlace || 'Aula Magna / Virtual',
+      profesoresAsignados: dto.profesoresAsignados || []
     };
 
-    const actualizadas = [nueva, ...this.presentacionesSubject.value];
-    this.presentacionesSubject.next(actualizadas);
-    this.saveStorage(this.STORAGE_PRESENTACIONES, actualizadas);
+    const urlCoordinador = `${getApiBase()}/api/Coordinador/ayudantias/convocar-tribunal`;
+    const urlCoordinadorId = `${getApiBase()}/api/Coordinador/ayudantias/${payload.ayudantiaId}/convocar-tribunal`;
+    const urlJurado = `${this.apiUrl}/presentaciones`;
+    const urlAyudantias = `${getApiBase()}/api/ayudantias/convocar-tribunal`;
 
-    return this.http.post<PresentacionDetalleDto>(`${this.apiUrl}/presentaciones`, dto).pipe(
-      catchError(() => of(nueva))
+    return this.http.post<any>(urlCoordinador, payload).pipe(
+      catchError(() => this.http.post<any>(urlCoordinadorId, payload)),
+      catchError(() => this.http.post<any>(urlJurado, payload)),
+      catchError(() => this.http.post<any>(urlAyudantias, payload)),
+      tap((res) => {
+        const itemCreado = this.mapPresentacion(res || payload);
+        const actualizadas = [itemCreado, ...this.presentacionesSubject.value.filter(p => p.id !== itemCreado.id)];
+        this.presentacionesSubject.next(actualizadas);
+        this.saveStorage(this.STORAGE_PRESENTACIONES, actualizadas);
+      }),
+      catchError(() => {
+        const fallbackId = Math.floor((Date.now() / 1000) % 2000000000) + 1;
+        const fallbackItem: PresentacionDetalleDto = {
+          id: fallbackId,
+          ayudantiaId: payload.ayudantiaId,
+          estudianteId: payload.postulanteId,
+          estudianteNombre: 'Postulante Seleccionado',
+          estudianteCorreo: 'postulante@uteq.edu.ec',
+          catedraId: payload.catedraId,
+          catedraNombre: 'Cátedra de Ayudantía',
+          fecha: payload.fecha,
+          temaSilabo: payload.tema,
+          lugarOEnlace: payload.lugar,
+          profesoresAsignados: payload.profesoresAsignados,
+          estado: 'Convocada',
+          yaEvaluadoPorMi: false
+        };
+        const actualizadas = [fallbackItem, ...this.presentacionesSubject.value];
+        this.presentacionesSubject.next(actualizadas);
+        this.saveStorage(this.STORAGE_PRESENTACIONES, actualizadas);
+        return of(fallbackItem);
+      })
     );
   }
 
   /**
    * POST /api/Jurado/presentaciones/{id}/evaluaciones
-   * Roles autorizados: Jurado (Decano, Coordinador o Docentes expertos asignados)
-   * Agrega la calificación y observaciones del miembro del tribunal
    */
   evaluarPresentacion(presentacionId: number, dto: EvaluacionJuradoDto): Observable<{ mensaje: string; evaluacionId: number }> {
     const evaluacionId = Math.floor((Date.now() / 1000) % 2000000000) + 1;
 
-    // Actualizar estado local
     const list = this.presentacionesSubject.value.map(p => {
       if (p.id === presentacionId) {
         return { ...p, yaEvaluadoPorMi: true, estado: 'Evaluada' as const };
@@ -182,10 +217,6 @@ export class JuradoService {
     );
   }
 
-  /**
-   * POST /api/Jurado/presentaciones/{id}/evaluaciones
-   * Alias de compatibilidad estricta: registrarEvaluacion
-   */
   registrarEvaluacion(presentacionId: number, body: { nota: number; observaciones: string; criterios?: any }): Observable<any> {
     return this.evaluarPresentacion(presentacionId, {
       nota: body.nota,
@@ -210,18 +241,23 @@ export class JuradoService {
       coordinadorNombre: raw.coordinadorNombre ?? raw.CoordinadorNombre ?? 'Coordinador de Carrera',
       profesoresAsignados: raw.profesoresAsignados ?? raw.ProfesoresAsignados ?? [],
       estado: raw.estado ?? raw.Estado ?? 'Pendiente',
-      yaEvaluadoPorMi: raw.yaEvaluadoPorMi ?? raw.YaEvaluadoPorMi ?? false
+      yaEvaluadoPorMi: raw.yaEvaluadoPorMi ?? raw.YaEvaluadoPorMi ?? false,
+      promedioNota: raw.promedioNota ?? raw.PromedioNota ?? raw.promedioFinal ?? raw.PromedioFinal ?? 0
     };
   }
 
-  /**
-   * GET /api/Jurado/presentaciones/{id}/resultado
-   * Obtiene el resultado de la sustentación del backend en vivo con fallback seguro.
-   */
   getResultadoPresentacion(presentacionId: number): Observable<ResultadoPresentacionDto> {
-    const pres = this.presentacionesSubject.value.find(p => p.id === presentacionId) || this.presentacionesSubject.value[0];
+    const pres = this.presentacionesSubject.value.find(p => p.id === presentacionId);
     return this.http.get<any>(`${this.apiUrl}/presentaciones/${presentacionId}/resultado`).pipe(
       map(raw => {
+        const evs = (raw.evaluaciones ?? raw.Evaluaciones ?? []).map((e: any) => ({
+          juradoNombre: e.juradoNombre ?? e.JuradoNombre ?? 'Miembro del Tribunal',
+          rolJurado: e.rolJurado ?? e.RolJurado ?? 'Jurado Evaluador',
+          nota: e.nota ?? e.Nota ?? 0,
+          observaciones: e.observaciones ?? e.Observaciones ?? '',
+          fechaEvaluacion: e.fechaEvaluacion ?? e.FechaEvaluacion ?? ''
+        }));
+
         return {
           presentacionId: raw.presentacionId ?? raw.PresentacionId ?? presentacionId,
           ayudantiaId: raw.ayudantiaId ?? raw.AyudantiaId ?? (pres?.ayudantiaId || 0),
@@ -229,73 +265,34 @@ export class JuradoService {
           catedraNombre: raw.catedraNombre ?? raw.CatedraNombre ?? (pres?.catedraNombre || 'Cátedra'),
           temaSilabo: raw.temaSilabo ?? raw.TemaSilabo ?? (pres?.temaSilabo || 'Sustentación de Sílabo'),
           fechaSustentacion: raw.fechaSustentacion ?? raw.FechaSustentacion ?? (pres?.fecha || new Date().toISOString()),
-          promedioFinal: raw.promedioFinal ?? raw.PromedioFinal ?? 0,
-          notaMinimaAprobatoria: raw.notaMinimaAprobatoria ?? raw.NotaMinimaAprobatoria ?? 8.00,
-          estadoFinal: raw.estadoFinal ?? raw.EstadoFinal ?? 'En Evaluación',
-          totalEvaluadores: raw.totalEvaluadores ?? raw.TotalEvaluadores ?? 4,
-          evaluacionesCompletadas: raw.evaluacionesCompletadas ?? raw.EvaluacionesCompletadas ?? 0,
-          evaluaciones: (raw.evaluaciones ?? raw.Evaluaciones ?? []).map((e: any) => ({
-            juradoNombre: e.juradoNombre ?? e.JuradoNombre ?? 'Miembro del Tribunal',
-            rolJurado: e.rolJurado ?? e.RolJurado ?? 'Jurado Evaluador',
-            nota: e.nota ?? e.Nota ?? 0,
-            observaciones: e.observaciones ?? e.Observaciones ?? '',
-            fechaEvaluacion: e.fechaEvaluacion ?? e.FechaEvaluacion ?? ''
-          }))
+          promedioFinal: raw.promedioFinal ?? raw.PromedioFinal ?? (pres?.promedioNota || 0),
+          notaMinimaAprobatoria: raw.notaMinimaAprobatoria ?? raw.NotaMinimaAprobatoria ?? 7.00,
+          estadoFinal: raw.estadoFinal ?? raw.EstadoFinal ?? ((raw.promedioFinal ?? pres?.promedioNota ?? 0) >= 7.0 ? 'Aprobado' : 'En Evaluación'),
+          totalEvaluadores: raw.totalEvaluadores ?? raw.TotalEvaluadores ?? (pres?.profesoresAsignados?.length || 0),
+          evaluacionesCompletadas: raw.evaluacionesCompletadas ?? raw.EvaluacionesCompletadas ?? evs.length,
+          evaluaciones: evs
         };
       }),
       catchError(() => {
         const fallback: ResultadoPresentacionDto = {
           presentacionId: pres ? pres.id : presentacionId,
-          ayudantiaId: pres ? pres.ayudantiaId : 101,
-          estudianteNombre: pres ? pres.estudianteNombre : 'Alejandro García Mendoza',
-          catedraNombre: pres ? pres.catedraNombre : 'Arquitectura de Software',
-          temaSilabo: pres ? pres.temaSilabo : 'Patrones Arquitectónicos y Microservicios',
+          ayudantiaId: pres ? pres.ayudantiaId : 0,
+          estudianteNombre: pres ? pres.estudianteNombre : 'Estudiante Postulante',
+          catedraNombre: pres ? pres.catedraNombre : 'Cátedra de Ayudantía',
+          temaSilabo: pres ? pres.temaSilabo : 'Sustentación de Sílabo',
           fechaSustentacion: pres ? pres.fecha : new Date().toISOString(),
-          promedioFinal: 9.25,
-          notaMinimaAprobatoria: 8.00,
-          estadoFinal: 'Aprobado',
-          totalEvaluadores: 4,
-          evaluacionesCompletadas: 4,
-          evaluaciones: [
-            {
-              juradoNombre: 'Dr. Roberto Zambrano',
-              rolJurado: 'Decano de Facultad',
-              nota: 9.5,
-              observaciones: 'Excelente solvencia teórica y manejo del tiempo en la exposición.',
-              fechaEvaluacion: '2026-09-12 10:45'
-            },
-            {
-              juradoNombre: 'Mgtr. Patricia Silva',
-              rolJurado: 'Coordinadora de Carrera',
-              nota: 9.0,
-              observaciones: 'Buena claridad pedagógica. Respondió con criterio las dudas metodológicas.',
-              fechaEvaluacion: '2026-09-12 10:47'
-            },
-            {
-              juradoNombre: 'Ing. Marco Morales',
-              rolJurado: 'Docente Experto 1',
-              nota: 9.2,
-              observaciones: 'Demostración práctica precisa y fundamentada en el sílabo oficial.',
-              fechaEvaluacion: '2026-09-12 10:50'
-            },
-            {
-              juradoNombre: 'Dra. Elena Ruiz',
-              rolJurado: 'Docente Experto 2',
-              nota: 9.3,
-              observaciones: 'Excelente empatía docente y uso apropiado de recursos didácticos.',
-              fechaEvaluacion: '2026-09-12 10:52'
-            }
-          ]
+          promedioFinal: pres?.promedioNota || 0,
+          notaMinimaAprobatoria: 7.00,
+          estadoFinal: (pres?.promedioNota || 0) >= 7.0 ? 'Aprobado' : 'En Evaluación',
+          totalEvaluadores: pres?.profesoresAsignados?.length || 0,
+          evaluacionesCompletadas: 0,
+          evaluaciones: []
         };
         return of(fallback);
       })
     );
   }
 
-  /**
-   * GET /api/Jurado/presentaciones
-   * Consume la lista de sustentaciones convocadas del backend y sincroniza el store reactivo local.
-   */
   getPresentaciones(): Observable<PresentacionDetalleDto[]> {
     return this.http.get<any[]>(`${this.apiUrl}/presentaciones`).pipe(
       map(datos => {
@@ -315,9 +312,6 @@ export class JuradoService {
     );
   }
 
-  /**
-   * Obtiene una presentación por ID
-   */
   getPresentacionById(id: number): Observable<PresentacionDetalleDto | undefined> {
     return of(this.presentacionesSubject.value.find(p => p.id === id));
   }

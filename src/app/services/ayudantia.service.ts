@@ -27,4 +27,16 @@ export class AyudantiaService {
   asignarAyudante(dto: any) {
     return this.coordinadorService.asignarAyudante(dto);
   }
+
+  asignarAyudanteOficial(body: any) {
+    return this.coordinadorService.asignarAyudanteOficial(body);
+  }
+
+  actualizarEstadoAyudantia(id: number, estado: string) {
+    return this.coordinadorService.actualizarEstadoAyudantia(id, estado);
+  }
+
+  getReportesAdministrativos() {
+    return this.coordinadorService.getReportesAdministrativos();
+  }
 }

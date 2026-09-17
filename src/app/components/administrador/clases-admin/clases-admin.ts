@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -21,6 +21,12 @@ export interface ClaseConMaterias extends ClaseDto {
   templateUrl: './clases-admin.html'
 })
 export class ClasesAdminComponent implements OnInit, OnDestroy {
+  private cdr = inject(ChangeDetectorRef);
+  private claseService = inject(ClaseService);
+  private materiaService = inject(MateriaService);
+  private adminDocenteService = inject(AdminDocenteService);
+  private authService = inject(AuthService);
+
   clasesConMaterias: ClaseConMaterias[] = [];
   materias: MateriaDto[] = [];
   docentesMap: Map<number, string> = new Map();
@@ -32,13 +38,6 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
 
   private sub?: Subscription;
   private subDocentes?: Subscription;
-
-  constructor(
-    private claseService: ClaseService,
-    private materiaService: MateriaService,
-    private adminDocenteService: AdminDocenteService,
-    private authService: AuthService
-  ) {}
 
   hasRole(role: string): boolean {
     return this.authService.hasRole(role);
@@ -59,6 +58,7 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
   }
 
   cargarDocentes() {
+    this.subDocentes?.unsubscribe();
     this.subDocentes = this.adminDocenteService.getDocentes().subscribe({
       next: (list) => {
         const safe = Array.isArray(list) ? list : ((list as any)?.$values || (list as any)?.data || []);
@@ -75,6 +75,8 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
             ...c,
             docenteNombre: c.docenteNombre || (c.docenteId ? this.docentesMap.get(c.docenteId) : undefined) || 'Docente no asignado'
           }));
+          this.cdr.markForCheck();
+          this.cdr.detectChanges();
         }
       },
       error: () => {}
@@ -82,15 +84,25 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
   }
 
   cargarDatos() {
-    this.claseService.refreshClases().subscribe();
-    this.materiaService.getMaterias().subscribe();
-
+    this.sub?.unsubscribe();
     this.sub = combineLatest([
-      this.claseService.clases$,
-      this.materiaService.materias$
-    ]).subscribe(([clases, materias]) => {
-      this.materias = materias;
-      this.procesarClases(clases, materias);
+      this.claseService.getClases(),
+      this.materiaService.getMaterias()
+    ]).subscribe({
+      next: ([clases, materias]) => {
+        const safeClases = Array.isArray(clases) ? clases : [];
+        const safeMaterias = Array.isArray(materias) ? materias : [];
+        this.materias = safeMaterias;
+        this.procesarClases(safeClases, safeMaterias);
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('Error al cargar clases y materias:', err);
+        this.procesarClases([], []);
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -188,7 +200,7 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
               timer: 1500,
               showConfirmButton: false
             });
-            this.claseService.refreshClases().subscribe();
+            this.cargarDatos();
           },
           error: (err) => {
             console.error('Error al eliminar clase:', err);
@@ -225,13 +237,19 @@ export class ClasesAdminComponent implements OnInit, OnDestroy {
         this.mensajeAsignacion[claseId] = res.mensaje;
         this.ayudanteEmailPorClase[claseId] = '';
         this.asignandoAyudanteId = null;
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       },
       error: () => {
         this.mensajeAsignacion[claseId] = 'No se pudo completar la asignación del ayudante.';
         this.asignandoAyudanteId = null;
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       },
       complete: () => {
         this.asignandoAyudanteId = null;
+        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }
     });
   }
