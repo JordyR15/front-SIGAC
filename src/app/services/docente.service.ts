@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, of } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import { getApiBase } from '../api';
 
 export interface PreguntaCuestionarioDto {
@@ -138,12 +138,14 @@ export interface ActividadAyudantiaDto {
   recursosSugeridos?: string;
 }
 
-export interface MonitoreoAyudantiaDto {
+export interface AyudanteCatedraDto {
+  id: number;
   ayudantiaId: number;
-  nombreAyudante: string;
-  nombreCatedra?: string;
-  planificacion: ActividadAyudantiaDto[];
-  bitacoras: BitacoraDto[];
+  catedraId: number;
+  estudianteId: number;
+  nombre: string;
+  correo: string;
+  estado: string;
 }
 
 export interface BitacoraDto {
@@ -151,6 +153,53 @@ export interface BitacoraDto {
   fecha: string;
   actividadesRealizadas: string;
   evidenciaUrl: string;
+  tieneEvidencia?: boolean;
+}
+
+export interface ResumenMonitoreoAyudantiaDto {
+  totalActividades: number;
+  actividadesCumplidas: number;
+  actividadesPendientes: number;
+  porcentajeAvance: number;
+}
+
+export interface ActividadMonitoreoAyudantiaDto extends ActividadAyudantiaDto {
+  estadoCumplimiento: string;
+  bitacora: BitacoraDto | null;
+}
+
+export interface ActividadPendienteAyudantiaDto {
+  id: number;
+  descripcion: string;
+  fechaPlanificada: string;
+  estadoCumplimiento: string;
+}
+
+export interface MonitoreoAyudantiaDto {
+  ayudantiaId: number;
+  catedraId?: number;
+  estudianteId?: number;
+  nombreAyudante: string;
+  nombreCatedra?: string;
+  estadoAyudantia?: string;
+  resumen?: ResumenMonitoreoAyudantiaDto;
+  actividades?: ActividadMonitoreoAyudantiaDto[];
+  actividadesPendientes?: ActividadPendienteAyudantiaDto[];
+  // Alias de compatibilidad con la pantalla actual.
+  planificacion: ActividadAyudantiaDto[];
+  bitacoras: BitacoraDto[];
+}
+
+interface MonitoreoAyudantiaBackendDto {
+  ayudantiaId: number;
+  catedraId: number;
+  estudianteId: number;
+  nombreAyudante: string;
+  estadoAyudantia: string;
+  resumen: ResumenMonitoreoAyudantiaDto;
+  actividades: ActividadMonitoreoAyudantiaDto[];
+  actividadesPendientes: ActividadPendienteAyudantiaDto[];
+  bitacoras: BitacoraDto[];
 }
 
 export interface HorarioOcupadoAlumnoDto {
@@ -200,6 +249,24 @@ export interface ClaseDocenteDto {
   estudiantesCount: number;
   estudianteIds?: number[];
   estudiantes: EstudianteClaseDocenteDto[];
+}
+
+// RF-016 - Materias/cátedras activas del docente autenticado
+export interface ClaseMateriaActivaDto {
+  claseId: number;
+  nombre: string;
+  materiaId: number;
+}
+
+export interface MateriaActivaDocenteDto {
+  catedraId: number;
+  materiaId: number | null;
+  nombre: string;
+  codigo: string;
+  descripcion: string;
+  semestre: string;
+  docenteId: number;
+  clases: ClaseMateriaActivaDto[];
 }
 
 export interface CatedraResumenDto {
@@ -285,6 +352,16 @@ export class DocenteService {
 
   cargarClasesDocente(docenteId?: number): Observable<ClaseDocenteDto[]> {
     return this.getClasesDocente();
+  }
+
+  /**
+   * RF-016
+   * GET /api/Docente/materias-activas
+   * Devuelve solo las cátedras del periodo vigente del docente autenticado,
+   * con su MateriaId, CatedraId y clases relacionadas.
+   */
+  getMateriasActivas(): Observable<MateriaActivaDocenteDto[]> {
+    return this.http.get<MateriaActivaDocenteDto[]>(`${this.apiUrl}/materias-activas`);
   }
 
   /* =========================================================
@@ -412,41 +489,49 @@ export class DocenteService {
      AYUDANTÍAS
      ========================================================= */
 
+  getAyudantesCatedra(catedraId: number): Observable<AyudanteCatedraDto[]> {
+    return this.http.get<AyudanteCatedraDto[]>(
+      `${this.apiUrl}/catedras/${catedraId}/ayudantes`,
+    );
+  }
+
   planificarActividadAyudantia(
     ayudantiaId: number,
     dto: ActividadAyudantiaDto,
   ): Observable<ActividadAyudantiaDto> {
-    const itemGuardado: ActividadAyudantiaDto = {
-      ...dto,
-      id: dto.id || Math.floor((Date.now() / 1000) % 2000000000) + 1,
-
-      ayudantiaId: Number(ayudantiaId),
-    };
-
-    const currentMap = {
-      ...this.planificacionesSubject.value,
-    };
-
-    const listaActual = currentMap[ayudantiaId] || [];
-
-    currentMap[ayudantiaId] = [itemGuardado, ...listaActual];
-
-    this.planificacionesSubject.next(currentMap);
-
-    this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
-
     return this.http
       .post<ActividadAyudantiaDto>(`${this.apiUrl}/ayudantias/${ayudantiaId}/planificacion`, dto)
       .pipe(
-        tap((res) => {
-          if (res && res.id) {
-            itemGuardado.id = res.id;
-
-            this.saveStorage(this.STORAGE_PLANIFICACION, this.planificacionesSubject.value);
-          }
+        tap((actividadCreada) => {
+          const currentMap = { ...this.planificacionesSubject.value };
+          const listaActual = currentMap[ayudantiaId] || [];
+          currentMap[ayudantiaId] = [actividadCreada, ...listaActual];
+          this.planificacionesSubject.next(currentMap);
+          this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
         }),
+      );
+  }
 
-        catchError(() => of(itemGuardado)),
+  actualizarActividadAyudantia(
+    ayudantiaId: number,
+    actividadId: number,
+    dto: ActividadAyudantiaDto,
+  ): Observable<ActividadAyudantiaDto> {
+    return this.http
+      .put<ActividadAyudantiaDto>(
+        `${this.apiUrl}/ayudantias/${ayudantiaId}/planificacion/${actividadId}`,
+        dto,
+      )
+      .pipe(
+        tap((actividadActualizada) => {
+          const currentMap = { ...this.planificacionesSubject.value };
+          const lista = currentMap[ayudantiaId] || [];
+          currentMap[ayudantiaId] = lista.map((actividad) =>
+            actividad.id === actividadId ? actividadActualizada : actividad,
+          );
+          this.planificacionesSubject.next(currentMap);
+          this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
+        }),
       );
   }
 
@@ -516,40 +601,50 @@ export class DocenteService {
   }
 
   getPlanificacionAyudantia(ayudantiaId: number): Observable<ActividadAyudantiaDto[]> {
-    return this.planificaciones$.pipe(
-      map((mapa) => mapa[ayudantiaId] || PLANIFICACIONES_DEFAULT[ayudantiaId] || []),
-    );
+    return this.http
+      .get<ActividadAyudantiaDto[]>(`${this.apiUrl}/ayudantias/${ayudantiaId}/planificacion`)
+      .pipe(
+        tap((planificacion) => {
+          const currentMap = { ...this.planificacionesSubject.value };
+          currentMap[ayudantiaId] = Array.isArray(planificacion) ? planificacion : [];
+          this.planificacionesSubject.next(currentMap);
+          this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
+        }),
+      );
   }
 
   monitorearAyudantia(ayudantiaId: number): Observable<MonitoreoAyudantiaDto> {
-    const planLocal = this.planificacionesSubject.value[ayudantiaId] || [];
-
     return this.http
-      .get<MonitoreoAyudantiaDto>(`${this.apiUrl}/ayudantias/${ayudantiaId}/monitoreo`)
+      .get<MonitoreoAyudantiaBackendDto>(`${this.apiUrl}/ayudantias/${ayudantiaId}/monitoreo`)
       .pipe(
-        map((backendRes) => ({
-          ayudantiaId,
+        map((backendRes) => {
+          const planificacion = (backendRes.actividades || []).map((actividad) => ({
+            id: actividad.id,
+            ayudantiaId: actividad.ayudantiaId,
+            descripcion: actividad.descripcion,
+            fechaPlanificada: actividad.fechaPlanificada,
+            completada: actividad.completada,
+          }));
 
-          nombreAyudante: backendRes?.nombreAyudante || 'Ayudante de Cátedra',
-
-          nombreCatedra: backendRes?.nombreCatedra,
-
-          planificacion: backendRes?.planificacion || planLocal,
-
-          bitacoras: backendRes?.bitacoras || [],
-        })),
-
-        catchError(() =>
-          of({
-            ayudantiaId,
-
-            nombreAyudante: 'Ayudante de Cátedra',
-
-            planificacion: planLocal,
-
-            bitacoras: [],
-          }),
-        ),
+          return {
+            ayudantiaId: backendRes.ayudantiaId,
+            catedraId: backendRes.catedraId,
+            estudianteId: backendRes.estudianteId,
+            nombreAyudante: backendRes.nombreAyudante,
+            estadoAyudantia: backendRes.estadoAyudantia,
+            resumen: backendRes.resumen,
+            actividades: backendRes.actividades || [],
+            actividadesPendientes: backendRes.actividadesPendientes || [],
+            planificacion,
+            bitacoras: backendRes.bitacoras || [],
+          };
+        }),
+        tap((monitoreo) => {
+          const currentMap = { ...this.planificacionesSubject.value };
+          currentMap[ayudantiaId] = monitoreo.planificacion;
+          this.planificacionesSubject.next(currentMap);
+          this.saveStorage(this.STORAGE_PLANIFICACION, currentMap);
+        }),
       );
   }
 

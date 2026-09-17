@@ -26,11 +26,15 @@ import {
   ResumenEvaluacionDiagnosticaDto,
   CronogramaActividadDto,
   HistorialCronogramaDto,
+  MateriaActivaDocenteDto,
+  ClaseDocenteDto,
 } from '../../../services/docente.service';
 
 export interface ClaseCreada {
+  // En RF-019 este id representa el Id real de ClaseSesion.
   id: number;
   materiaId: number;
+  claseId?: number | null;
   catedraId?: number | null;
   nombreMateria: string;
   dias: string[];
@@ -49,7 +53,10 @@ export interface ClaseCreada {
     presente: boolean;
     correo?: string;
     username?: string;
+    asistenciaRegistrada?: boolean;
+    asistenciaId?: number | null;
   }[];
+  observaciones?: string;
 }
 export interface RespuestaCuestionarioVisual {
   preguntaId: number;
@@ -95,6 +102,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   docenteIdLogueado: number = 1;
   nombreDocente: string = 'Dra. Evelyn Vance';
   materias: MateriaDto[] = [];
+  private materiasActivasBackend: MateriaActivaDocenteDto[] = [];
   materiaSeleccionadaId: number = 101;
 
   // Clases programadas
@@ -116,6 +124,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     edificioPresencial: 'Edificio de Ingeniería',
     aulaPresencial: 'Aula Magna 302',
     pisoPresencial: 'Piso 3',
+    observaciones: '',
   };
 
   // Detección de conflicto de horarios
@@ -339,6 +348,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
 
     if (tab === 'horarios' || tab === 'crear-clase') {
       this.revisarConflictoHorario();
+      this.cargarSesionesMateriaActual();
     }
 
     if (tab === 'recursos') {
@@ -368,6 +378,18 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     // Primero actualizamos exactamente lo seleccionado por el usuario.
     this.materiaSeleccionadaId = Number(materiaId);
     this.nuevaClase.materiaId = this.materiaSeleccionadaId;
+
+    const activa = this.materiasActivasBackend.find(
+      (m) => Number(m.materiaId) === Number(this.materiaSeleccionadaId),
+    );
+    const primeraClase = activa?.clases?.[0];
+    if (primeraClase) {
+      this.nuevaClase.claseId = Number(primeraClase.claseId);
+    }
+    if (activa) {
+      this.nuevaClase.docenteId = Number(activa.docenteId);
+    }
+
     this.actualizarRecursosYActividades();
 
     // Limpiamos los datos de la materia anterior antes de consultar la nueva.
@@ -394,10 +416,11 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
     }
 
-    // Actualizar ayudante seleccionado si corresponde
-    const ayudante = this.ayudantesCatedra.find((a) => a.catedraId === this.materiaSeleccionadaId);
-    if (ayudante) {
-      this.seleccionarAyudanteParaSilabo(ayudante);
+    // Actualizar los ayudantes de la cátedra real asociada a la materia seleccionada.
+    this.cargarAyudantesCatedraActual();
+
+    if (this.tabActiva === 'horarios' || this.tabActiva === 'crear-clase') {
+      this.cargarSesionesMateriaActual();
     }
 
     this.revisarConflictoHorario();
@@ -412,6 +435,21 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   private obtenerCatedraIdPorMateria(materiaId: number | null | undefined): number | null {
     if (materiaId == null || Number.isNaN(Number(materiaId))) {
       return null;
+    }
+
+    // RF-016 es la fuente principal para resolver Materia -> Cátedra.
+    const activa = this.materiasActivasBackend.find(
+      (m) => Number(m.materiaId) === Number(materiaId),
+    );
+
+    if (activa && Number(activa.catedraId) > 0) {
+      return Number(activa.catedraId);
+    }
+
+    // Compatibilidad para cátedras sin MateriaId asociada.
+    const materia = this.materias.find((m) => Number(m.id) === Number(materiaId));
+    if (materia?.catedraId != null && Number(materia.catedraId) > 0) {
+      return Number(materia.catedraId);
     }
 
     const clase = this.clasesCreadas.find(
@@ -429,7 +467,55 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   }
 
   get ayudantesDeMateriaActual(): AyudanteCatedraInfo[] {
-    return this.ayudantesCatedra.filter((a) => a.catedraId === Number(this.materiaSeleccionadaId));
+    const catedraId = this.catedraSeleccionadaId;
+    if (!catedraId) {
+      return [];
+    }
+
+    return this.ayudantesCatedra.filter((a) => Number(a.catedraId) === Number(catedraId));
+  }
+
+  private cargarAyudantesCatedraActual(): void {
+    const catedraId = this.catedraSeleccionadaId;
+
+    this.ayudanteSeleccionado = null;
+    this.planificacionSilabo = [];
+
+    if (!catedraId) {
+      this.ayudantesCatedra = [];
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.docenteService.getAyudantesCatedra(catedraId).subscribe({
+      next: (ayudantes) => {
+        this.ayudantesCatedra = (Array.isArray(ayudantes) ? ayudantes : []).map((ayudante) => ({
+          id: Number(ayudante.id || ayudante.estudianteId),
+          ayudantiaId: Number(ayudante.ayudantiaId),
+          catedraId: Number(ayudante.catedraId),
+          nombre: ayudante.nombre || 'Ayudante de Cátedra',
+          correo: ayudante.correo || '',
+          estado: ayudante.estado || 'Asignada',
+          horasAsignadas: 30,
+          horasCompletadas: 0,
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(ayudante.nombre || 'Ayudante')}&background=e0e7ff&color=4338ca`,
+        }));
+
+        const primero = this.ayudantesDeMateriaActual[0] || null;
+        if (primero) {
+          this.seleccionarAyudanteParaSilabo(primero);
+        }
+
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Error cargando ayudantes de la cátedra:', error);
+        this.ayudantesCatedra = [];
+        this.ayudanteSeleccionado = null;
+        this.planificacionSilabo = [];
+        this.cdr.detectChanges();
+      },
+    });
   }
 
   // ==========================================
@@ -1079,213 +1165,306 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   // ==========================================
 
   /**
-   * Consume la API oficial (/api/Docente/clases o /api/Clase/docente/{id})
-   * para reflejar de inmediato cualquier materia que el Administrador haya asignado al docente.
+   * RF-016: carga únicamente las materias/cátedras activas del docente autenticado.
+   * La fuente de verdad para el selector superior es GET /api/Docente/materias-activas.
+   * GET /api/Docente/clases se usa solo para completar estudiantes reales de cada clase.
+   * No se crean materias, alumnos ni horarios ficticios cuando la API no responde.
    */
   cargarClasesDocente(): void {
     this.isLoading = true;
-    const docId = this.docenteIdLogueado || 102;
-    const urlDocenteClases = `${getApiBase()}/api/Docente/clases`;
-    const urlDocenteClasesLower = `${getApiBase()}/api/docente/clases`;
-    const urlClaseDocente = `${getApiBase()}/api/Clase/docente/${docId}`;
-    const urlClaseDocenteLower = `${getApiBase()}/api/clase/docente/${docId}`;
+    this.errorMessage = '';
 
-    this.http
-      .get<any[]>(urlDocenteClases)
-      .pipe(
-        catchError(() => this.http.get<any[]>(urlDocenteClasesLower)),
-        catchError(() => this.http.get<any[]>(urlClaseDocente)),
-        catchError(() => this.http.get<any[]>(urlClaseDocenteLower)),
-        catchError(() => of([])),
-      )
-      .subscribe({
-        next: (res) => {
+    this.docenteService.getMateriasActivas().subscribe({
+      next: (materiasActivas) => {
+        const activas = Array.isArray(materiasActivas) ? materiasActivas : [];
+        this.materiasActivasBackend = activas;
+
+        if (activas.length === 0) {
+          this.materias = [];
+          this.clasesCreadas = [];
+          this.ayudantesCatedra = [];
+          this.ayudanteSeleccionado = null;
+          this.planificacionSilabo = [];
+          this.materiaService.syncMaterias([]);
           this.isLoading = false;
-          let listaBackend: any[] = [];
-          if (Array.isArray(res)) {
-            listaBackend = res;
-          } else if (res && Array.isArray((res as any).clases)) {
-            listaBackend = (res as any).clases;
-          } else if (res && Array.isArray((res as any).materias)) {
-            listaBackend = (res as any).materias;
-          }
-
-          if (listaBackend.length > 0) {
-            this.procesarClasesBackend(listaBackend);
-          } else {
-            this.cargarClasesLocalesFallback();
-          }
-
-          // Si Diagnóstica ya está abierta, primero procesarClasesBackend()
-          // deja establecida la materia del SELECT y recién después consultamos.
-          if (this.tabActiva === 'recursos' && this.subTabRecursos === 'diagnostica') {
-            this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
-          }
-
-          if (this.tabActiva === 'cronograma') {
-            this.cargarCronogramaCatedra();
-          }
-
           this.cdr.detectChanges();
-        },
-        error: () => {
-          this.isLoading = false;
-          this.cargarClasesLocalesFallback();
+          return;
+        }
 
-          if (this.tabActiva === 'recursos' && this.subTabRecursos === 'diagnostica') {
-            this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
-          }
+        // La lista de clases aporta los estudiantes reales. Si esta segunda
+        // consulta falla, RF-016 sigue mostrando las materias activas sin inventar datos.
+        this.docenteService
+          .getClasesDocente()
+          .pipe(
+            catchError((error) => {
+              console.error('No se pudieron cargar los detalles de las clases:', error);
+              return of([] as ClaseDocenteDto[]);
+            }),
+          )
+          .subscribe({
+            next: (clasesReales) => {
+              this.procesarMateriasActivas(activas, clasesReales || []);
+              this.isLoading = false;
+              this.cargarAyudantesCatedraActual();
 
-          if (this.tabActiva === 'cronograma') {
-            this.cargarCronogramaCatedra();
-          }
+              if (this.tabActiva === 'recursos' && this.subTabRecursos === 'diagnostica') {
+                this.cargarEvaluacionesDiagnosticas(this.materiaSeleccionadaId);
+              }
 
-          this.cdr.detectChanges();
-        },
-      });
+              if (this.tabActiva === 'cronograma') {
+                this.cargarCronogramaCatedra();
+              }
+
+              if (this.tabActiva === 'horarios' || this.tabActiva === 'crear-clase') {
+                this.cargarSesionesMateriaActual();
+              }
+
+              this.cdr.detectChanges();
+            },
+          });
+      },
+      error: (error) => {
+        console.error('Error cargando materias activas del docente:', error);
+        this.materiasActivasBackend = [];
+        this.materias = [];
+        this.clasesCreadas = [];
+        this.ayudantesCatedra = [];
+        this.ayudanteSeleccionado = null;
+        this.planificacionSilabo = [];
+        this.materiaService.syncMaterias([]);
+        this.isLoading = false;
+        this.errorMessage =
+          error?.error?.message || 'No se pudieron cargar las materias activas del docente.';
+        this.cdr.detectChanges();
+      },
+    });
   }
 
-  private procesarClasesBackend(lista: any[]) {
+  private procesarMateriasActivas(
+    activas: MateriaActivaDocenteDto[],
+    clasesReales: ClaseDocenteDto[],
+  ): void {
     const nuevasMaterias: MateriaDto[] = [];
-    const nuevasClasesCreadas: ClaseCreada[] = [];
+    const nuevasClases: ClaseCreada[] = [];
 
-    lista.forEach((item, idx) => {
-      const matId = Number(item.materiaId || item.id || idx + 101);
-      const matNombre =
-        item.materia?.nombre || item.nombreMateria || item.nombre || `Materia ${matId}`;
-      const matCodigo = item.materia?.codigo || item.codigo || `MAT-${matId}`;
-      const matCreditos = Number(item.materia?.creditos || item.creditos || 4);
+    for (const activa of activas) {
+      // En RF-016 la MateriaId puede ser null si la cátedra todavía no está
+      // vinculada a una entidad Materia. Para poder mostrarla en el selector
+      // usamos CatedraId únicamente como identificador visual en ese caso.
+      const materiaId = Number(activa.materiaId ?? activa.catedraId);
+      const clasesActivas = Array.isArray(activa.clases) ? activa.clases : [];
+      const primeraClase = clasesActivas[0];
 
-      const matDto: MateriaDto = {
-        id: matId,
-        nombre: matNombre,
-        codigo: matCodigo,
+      const clasesDetalle = clasesReales.filter((clase) =>
+        clasesActivas.some(
+          (claseActiva) => Number(claseActiva.claseId) === Number(clase.claseId ?? clase.id),
+        ),
+      );
+
+      const estudiantesUnicos = new Map<number, any>();
+      for (const clase of clasesDetalle) {
+        for (const estudiante of clase.estudiantes || []) {
+          const estudianteId = Number(estudiante.estudianteId || estudiante.id);
+          if (!estudianteId || estudiantesUnicos.has(estudianteId)) continue;
+
+          estudiantesUnicos.set(estudianteId, {
+            id: estudianteId,
+            nombre:
+              estudiante.nombreCompleto ||
+              estudiante.nombre ||
+              estudiante.username ||
+              'Estudiante',
+            correo: estudiante.correo || estudiante.email || '',
+            cedula: estudiante.cedula || estudiante.ci || '',
+            matricula: estudiante.username || '',
+            nota:
+              estudiante.promedioActual == null
+                ? undefined
+                : Number(estudiante.promedioActual),
+            estado: estudiante.alertaRendimiento === true ? 'Riesgo' : 'Regular',
+          });
+        }
+      }
+
+      const materiaDto: MateriaDto = {
+        id: materiaId,
+        catedraId: Number(activa.catedraId),
+        nombre: activa.nombre,
+        codigo: activa.codigo,
+        descripcion: activa.descripcion || '',
         docente: this.nombreDocente,
-        docenteResponsableId: this.docenteIdLogueado,
-        creditos: matCreditos,
-        semestre: item.semestre || '2026-2',
-        claseId: Number(item.id || item.claseId || matId),
-        claseNombre: item.nombreClase || item.nombre || 'Cohorte Asignada',
-        semana: item.semana || 1,
-        totalSemanas: item.totalSemanas || 16,
-        grupo: item.grupo || 'Grupo A',
-        estudiantes: item.estudiantes || [
-          {
-            id: 1,
-            nombre: 'Alejandro García',
-            correo: 'a.garcia@uteq.edu.ec',
-            nota: 4.8,
-            asistencia: 100,
-          },
-          {
-            id: 2,
-            nombre: 'María López',
-            correo: 'm.lopez@uteq.edu.ec',
-            nota: 4.6,
-            asistencia: 95,
-          },
-        ],
+        docenteResponsableId: Number(activa.docenteId),
+        docenteId: Number(activa.docenteId),
+        docenteNombre: this.nombreDocente,
+        semestre: activa.semestre,
+        claseId: primeraClase ? Number(primeraClase.claseId) : undefined,
+        claseNombre: primeraClase?.nombre || '',
+        clases: clasesActivas,
+        estudiantes: Array.from(estudiantesUnicos.values()),
       };
-      nuevasMaterias.push(matDto);
 
-      const claseProg: ClaseCreada = {
-        id: Number(item.id || idx + 1),
-        materiaId: matId,
-        catedraId: item.catedraId != null ? Number(item.catedraId) : null,
-        nombreMateria: matNombre,
-        dias: Array.isArray(item.dias) && item.dias.length > 0 ? item.dias : ['Lunes', 'Miércoles'],
-        fecha: item.fecha || '2026-08-25',
-        horaInicio: item.horaInicio || '08:00',
-        horaFin: item.horaFin || '10:00',
-        tipoClase: item.tipoClase || (item.linkVirtual ? 'Virtual' : 'Presencial'),
-        linkVirtual: item.linkVirtual || 'https://meet.google.com/uteq-clase-virtual',
-        aplicacionVirtual: item.aplicacionVirtual || 'Google Meet',
-        edificioPresencial: item.edificioPresencial || 'Edificio Central de Ingeniería',
-        aulaPresencial: item.aulaPresencial || 'Aula 302',
-        pisoPresencial: item.pisoPresencial || 'Piso 3',
-        estudiantes: item.estudiantes || [
-          { id: 1, nombre: 'Alejandro García', presente: true },
-          { id: 2, nombre: 'María López', presente: true },
-        ],
-      };
-      nuevasClasesCreadas.push(claseProg);
-    });
+      nuevasMaterias.push(materiaDto);
 
-    if (nuevasClasesCreadas.length > 0) {
-      this.clasesCreadas = nuevasClasesCreadas;
-      this.guardarEnStorage();
+      for (const claseActiva of clasesActivas) {
+        const claseId = Number(claseActiva.claseId);
+        const detalle = clasesReales.find(
+          (clase) => Number(clase.claseId ?? clase.id) === claseId,
+        );
+
+        nuevasClases.push({
+          id: claseId,
+          claseId,
+          materiaId,
+          catedraId: Number(activa.catedraId),
+          nombreMateria: activa.nombre,
+          dias: [],
+          horaInicio: '',
+          horaFin: '',
+          tipoClase: '',
+          estudiantes: (detalle?.estudiantes || []).map((estudiante) => ({
+            id: Number(estudiante.estudianteId || estudiante.id),
+            nombre:
+              estudiante.nombreCompleto ||
+              estudiante.nombre ||
+              estudiante.username ||
+              'Estudiante',
+            presente: false,
+            correo: estudiante.correo || estudiante.email || '',
+            username: estudiante.username || '',
+          })),
+        });
+      }
     }
 
-    if (nuevasMaterias.length > 0) {
-      this.materiaService.syncMaterias(nuevasMaterias);
-    }
+    this.materias = nuevasMaterias;
+    this.clasesCreadas = nuevasClases;
+    this.materiaService.syncMaterias(nuevasMaterias);
 
-    // No dependemos del orden en que materiaService emita su BehaviorSubject.
-    // Validamos la selección directamente contra las clases recién recibidas.
-    const existeMateriaSeleccionada = nuevasClasesCreadas.some(
-      (clase) => Number(clase.materiaId) === Number(this.materiaSeleccionadaId),
+    const existeSeleccion = nuevasMaterias.some(
+      (materia) => Number(materia.id) === Number(this.materiaSeleccionadaId),
     );
 
-    if (!existeMateriaSeleccionada && nuevasClasesCreadas.length > 0) {
-      this.materiaSeleccionadaId = Number(nuevasClasesCreadas[0].materiaId);
-      this.nuevaClase.materiaId = this.materiaSeleccionadaId;
+    if (!existeSeleccion && nuevasMaterias.length > 0) {
+      this.materiaSeleccionadaId = Number(nuevasMaterias[0].id);
+    }
+
+    const activaSeleccionada = this.materiasActivasBackend.find(
+      (m) => Number(m.materiaId ?? m.catedraId) === Number(this.materiaSeleccionadaId),
+    );
+    const primeraClaseSeleccionada = activaSeleccionada?.clases?.[0];
+
+    this.nuevaClase.materiaId = this.materiaSeleccionadaId;
+    this.nuevaClase.docenteId = Number(
+      activaSeleccionada?.docenteId || this.docenteIdLogueado,
+    );
+    if (primeraClaseSeleccionada) {
+      this.nuevaClase.claseId = Number(primeraClaseSeleccionada.claseId);
     }
 
     this.actualizarRecursosYActividades();
   }
 
-  private cargarClasesLocalesFallback() {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(this.STORAGE_DOCENTE_CLASES);
-        if (stored) {
-          this.clasesCreadas = JSON.parse(stored);
-          return;
-        }
-      } catch (e) {
-        console.warn('Error reading stored docente clases', e);
-      }
+  /**
+   * RF-019: carga desde el backend únicamente las sesiones programadas
+   * para la materia actualmente seleccionada.
+   */
+  cargarSesionesMateriaActual(): void {
+    const materiaId = Number(this.materiaSeleccionadaId);
+    if (!materiaId || Number.isNaN(materiaId)) {
+      this.clasesCreadas = [];
+      return;
     }
 
-    // Default inicial
-    this.clasesCreadas = [
-      {
-        id: 1,
-        materiaId: 101,
-        nombreMateria: 'Cálculo Avanzado',
-        dias: ['Lunes', 'Miércoles'],
-        fecha: '2026-08-25',
-        horaInicio: '08:00',
-        horaFin: '10:00',
-        tipoClase: 'Presencial',
-        edificioPresencial: 'Edificio de Ingeniería',
-        aulaPresencial: 'Aula Magna 302',
-        pisoPresencial: 'Piso 3',
-        estudiantes: [
-          { id: 1, nombre: 'Alejandro García', presente: true },
-          { id: 2, nombre: 'María López', presente: true },
-          { id: 3, nombre: 'Carlos Ruiz', presente: false },
-          { id: 4, nombre: 'Ana Torres', presente: true },
-        ],
+    this.claseService.getSesionesByMateria(materiaId).subscribe({
+      next: (sesiones) => {
+        const materia = this.materias.find((m) => Number(m.id) === materiaId);
+        const catedraId = this.obtenerCatedraIdPorMateria(materiaId);
+
+        this.clasesCreadas = (sesiones || []).map((sesion) => ({
+          id: Number(sesion.id),
+          claseId: sesion.claseId != null ? Number(sesion.claseId) : null,
+          materiaId: Number(sesion.materiaId),
+          catedraId,
+          nombreMateria: materia?.nombre || 'Materia',
+          dias: [this.obtenerDiaSemana(sesion.fecha)],
+          fecha: sesion.fecha,
+          horaInicio: sesion.horaInicio,
+          horaFin: sesion.horaFin,
+          tipoClase: sesion.tipoClase,
+          linkVirtual: sesion.linkVirtual || '',
+          aplicacionVirtual: sesion.aplicacionVirtual || '',
+          edificioPresencial: sesion.edificioPresencial || '',
+          aulaPresencial: sesion.aulaPresencial || '',
+          pisoPresencial: sesion.pisoPresencial || '',
+          observaciones: sesion.observaciones || '',
+          estudiantes: [],
+        }));
+
+        // Se cargan los estudiantes reales y el estado de asistencia de cada sesión.
+        for (const sesion of this.clasesCreadas) {
+          this.cargarEstudiantesSesion(sesion.id);
+        }
+
+        this.cdr.detectChanges();
       },
-      {
-        id: 2,
-        materiaId: 102,
-        nombreMateria: 'Mecánica Cuántica',
-        dias: ['Jueves'],
-        fecha: '2026-08-28',
-        horaInicio: '10:00',
-        horaFin: '12:00',
-        tipoClase: 'Virtual',
-        linkVirtual: 'https://meet.google.com/qnt-mech-2026',
-        aplicacionVirtual: 'Google Meet',
-        estudiantes: [
-          { id: 1, nombre: 'Alejandro García', presente: true },
-          { id: 2, nombre: 'María López', presente: false },
-        ],
+      error: (error) => {
+        console.error('No se pudieron cargar las sesiones reales:', error);
+        this.clasesCreadas = [];
+        this.errorMessage =
+          error?.error?.message || 'No se pudieron cargar las sesiones programadas.';
+        setTimeout(() => (this.errorMessage = ''), 3500);
+        this.cdr.detectChanges();
       },
+    });
+  }
+
+  private cargarEstudiantesSesion(claseSesionId: number): void {
+    this.claseService.getEstudiantesDeSesion(claseSesionId).subscribe({
+      next: (respuesta) => {
+        const sesion = this.clasesCreadas.find(
+          (c) => Number(c.id) === Number(claseSesionId),
+        );
+        if (!sesion) return;
+
+        sesion.estudiantes = (respuesta?.estudiantes || []).map((estudiante) => ({
+          id: Number(estudiante.estudianteId),
+          nombre: estudiante.nombre || 'Estudiante',
+          correo: estudiante.correo || '',
+          presente: estudiante.presente === true,
+          asistenciaRegistrada: estudiante.asistenciaRegistrada === true,
+          asistenciaId:
+            estudiante.asistenciaId == null ? null : Number(estudiante.asistenciaId),
+        }));
+
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(
+          `No se pudieron cargar los estudiantes de la sesión ${claseSesionId}:`,
+          error,
+        );
+      },
+    });
+  }
+
+  private obtenerDiaSemana(fecha: string): string {
+    if (!fecha) return '';
+
+    const fechaSolo = String(fecha).split('T')[0];
+    const partes = fechaSolo.split('-').map(Number);
+    if (partes.length !== 3 || partes.some((p) => Number.isNaN(p))) return '';
+
+    const fechaLocal = new Date(partes[0], partes[1] - 1, partes[2], 12, 0, 0);
+    const dias = [
+      'Domingo',
+      'Lunes',
+      'Martes',
+      'Miércoles',
+      'Jueves',
+      'Viernes',
+      'Sábado',
     ];
-    this.guardarEnStorage();
+    return dias[fechaLocal.getDay()] || '';
   }
 
   private guardarEnStorage() {
@@ -1313,84 +1492,110 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   }
 
   guardarClase() {
-    if (this.nuevaClase.diasSeleccionados.length === 0) {
-      alert('Debes seleccionar al menos un día de la semana para la clase.');
+    const materiaId = Number(this.nuevaClase.materiaId);
+    const claseId = Number(this.nuevaClase.claseId);
+    const fechaSesion = String(this.nuevaClase.fecha || '').trim();
+    const horaInicio = String(this.nuevaClase.horaInicio || '').trim();
+    const horaFin = String(this.nuevaClase.horaFin || '').trim();
+
+    if (!materiaId || Number.isNaN(materiaId)) {
+      alert('Debes seleccionar una materia válida.');
       return;
     }
 
-    // Verificar si hay choque de horario con alumnos
+    if (!claseId || Number.isNaN(claseId)) {
+      alert('No se encontró la clase asociada a esta materia.');
+      return;
+    }
+
+    if (!fechaSesion) {
+      alert('Debes seleccionar la fecha de la sesión.');
+      return;
+    }
+
+    if (!horaInicio || !horaFin || horaFin <= horaInicio) {
+      alert('La hora de finalización debe ser posterior a la hora de inicio.');
+      return;
+    }
+
+    if (
+      this.nuevaClase.tipoClase === 'Virtual' &&
+      (!this.nuevaClase.aplicacionVirtual.trim() || !this.nuevaClase.linkVirtual.trim())
+    ) {
+      alert('Para una clase virtual debes indicar la plataforma y el enlace de acceso.');
+      return;
+    }
+
+    if (
+      this.nuevaClase.tipoClase === 'Presencial' &&
+      (!this.nuevaClase.edificioPresencial.trim() ||
+        !this.nuevaClase.aulaPresencial.trim() ||
+        !this.nuevaClase.pisoPresencial.trim())
+    ) {
+      alert('Para una clase presencial debes indicar edificio, aula y piso.');
+      return;
+    }
+
+    // Verificar si hay choque de horario con alumnos.
     this.revisarConflictoHorario();
     if (this.conflictoDetectado) {
       const confirmacion = confirm(
-        `⚠️ ADVERTENCIA: Los estudiantes están ocupados en '${this.conflictoDetectado.materiaOcupada}' en este horario.\n¿Estás seguro de que deseas forzar la creación de la clase de todas formas?`,
+        `⚠️ ADVERTENCIA: Los estudiantes están ocupados en '${this.conflictoDetectado.materiaOcupada}' en este horario.\n¿Estás seguro de que deseas continuar?`,
       );
-      if (!confirmacion) {
-        return;
-      }
+      if (!confirmacion) return;
     }
 
-    const materiaObj = this.materiaService.getMateriaById(Number(this.nuevaClase.materiaId));
+    const materiaObj = this.materiaService.getMateriaById(materiaId);
     const nombreMat = materiaObj?.nombre || 'Materia';
-    const fechaSesion = this.nuevaClase.fecha || new Date().toISOString().split('T')[0];
 
-    const estudiantesIniciales = materiaObj?.estudiantes?.map((e) => ({
-      id: e.id,
-      nombre: e.nombre,
-      presente: false,
-    })) || [
-      { id: 1, nombre: 'Alejandro García', presente: false },
-      { id: 2, nombre: 'María López', presente: false },
-      { id: 3, nombre: 'Carlos Ruiz', presente: false },
-    ];
-
-    const claseParaAgregar: ClaseCreada = {
-      id: Date.now(),
-      materiaId: Number(this.nuevaClase.materiaId),
-      nombreMateria: nombreMat,
-      dias: [...this.nuevaClase.diasSeleccionados],
-      fecha: fechaSesion,
-      horaInicio: this.nuevaClase.horaInicio || '08:00',
-      horaFin: this.nuevaClase.horaFin || '10:00',
-      tipoClase: this.nuevaClase.tipoClase,
-      linkVirtual: this.nuevaClase.linkVirtual,
-      aplicacionVirtual: this.nuevaClase.aplicacionVirtual,
-      edificioPresencial: this.nuevaClase.edificioPresencial,
-      aulaPresencial: this.nuevaClase.aulaPresencial,
-      pisoPresencial: this.nuevaClase.pisoPresencial,
-      estudiantes: estudiantesIniciales,
-    };
-
-    this.clasesCreadas.unshift(claseParaAgregar);
-    this.guardarEnStorage();
-
-    // Registrar en backend / servicio
     this.claseService
       .createClaseSesion({
-        materiaId: Number(this.nuevaClase.materiaId),
-        claseId: this.nuevaClase.claseId ? Number(this.nuevaClase.claseId) : undefined,
-        docenteId: this.docenteIdLogueado,
+        materiaId,
+        claseId,
+        docenteId: Number(this.nuevaClase.docenteId || this.docenteIdLogueado),
         fecha: fechaSesion,
-        horaInicio: this.nuevaClase.horaInicio || '08:00',
-        horaFin: this.nuevaClase.horaFin || '10:00',
+        horaInicio,
+        horaFin,
         tipoClase: this.nuevaClase.tipoClase,
-        linkVirtual: this.nuevaClase.linkVirtual,
-        aplicacionVirtual: this.nuevaClase.aplicacionVirtual,
-        edificioPresencial: this.nuevaClase.edificioPresencial,
-        aulaPresencial: this.nuevaClase.aulaPresencial,
-        pisoPresencial: this.nuevaClase.pisoPresencial,
+        linkVirtual:
+          this.nuevaClase.tipoClase === 'Virtual' ? this.nuevaClase.linkVirtual.trim() : '',
+        aplicacionVirtual:
+          this.nuevaClase.tipoClase === 'Virtual'
+            ? this.nuevaClase.aplicacionVirtual.trim()
+            : '',
+        edificioPresencial:
+          this.nuevaClase.tipoClase === 'Presencial'
+            ? this.nuevaClase.edificioPresencial.trim()
+            : '',
+        aulaPresencial:
+          this.nuevaClase.tipoClase === 'Presencial'
+            ? this.nuevaClase.aulaPresencial.trim()
+            : '',
+        pisoPresencial:
+          this.nuevaClase.tipoClase === 'Presencial'
+            ? this.nuevaClase.pisoPresencial.trim()
+            : '',
+        observaciones: this.nuevaClase.observaciones.trim(),
       })
-      .subscribe();
+      .subscribe({
+        next: () => {
+          this.successMessage = `¡Clase de ${nombreMat} programada exitosamente!`;
+          setTimeout(() => (this.successMessage = ''), 4000);
 
-    this.successMessage = `¡Clase de ${nombreMat} programada exitosamente!`;
-    setTimeout(() => (this.successMessage = ''), 4000);
+          // La lista se vuelve a consultar desde el backend para usar el Id real de ClaseSesion.
+          this.cargarSesionesMateriaActual();
 
-    // Resetear formulario manteniendo la materia
-    this.nuevaClase.diasSeleccionados = ['Lunes'];
-    this.nuevaClase.fecha = '';
-    this.nuevaClase.linkVirtual = '';
-    this.nuevaClase.edificioPresencial = '';
-    this.nuevaClase.aulaPresencial = '';
-    this.revisarConflictoHorario();
+          this.nuevaClase.fecha = '';
+          this.nuevaClase.observaciones = '';
+          this.revisarConflictoHorario();
+        },
+        error: (error) => {
+          console.error('No se pudo programar la sesión:', error);
+          this.errorMessage =
+            error?.error?.message || 'No se pudo programar la sesión de clase.';
+          setTimeout(() => (this.errorMessage = ''), 4000);
+        },
+      });
   }
 
   // ==========================================
@@ -1400,10 +1605,11 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   busquedaEstudianteAsistencia: string = '';
   filtroEstadoAsistencia: 'todos' | 'presentes' | 'ausentes' = 'todos';
 
-  abrirAsistencia(claseId: number) {
-    this.claseAsistenciaId = claseId;
+  abrirAsistencia(claseSesionId: number) {
+    this.claseAsistenciaId = claseSesionId;
     this.busquedaEstudianteAsistencia = '';
     this.filtroEstadoAsistencia = 'todos';
+    this.cargarEstudiantesSesion(claseSesionId);
   }
 
   cerrarAsistencia() {
@@ -1421,61 +1627,102 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     if (this.busquedaEstudianteAsistencia.trim()) {
       const q = this.busquedaEstudianteAsistencia.toLowerCase().trim();
       list = list.filter(
-        (e: any) => e.nombre?.toLowerCase().includes(q) || e.correo?.toLowerCase().includes(q),
+        (e: any) =>
+          e.nombre?.toLowerCase().includes(q) || e.correo?.toLowerCase().includes(q),
       );
     }
     return list;
   }
 
-  marcarTodosAsistencia(claseId: number, presente: boolean) {
-    const clase = this.clasesCreadas.find((c) => c.id === claseId);
+  marcarTodosAsistencia(claseSesionId: number, presente: boolean) {
+    const clase = this.clasesCreadas.find((c) => Number(c.id) === Number(claseSesionId));
     if (!clase || !clase.estudiantes) return;
-    clase.estudiantes.forEach((e) => {
-      e.presente = presente;
-      this.claseService
-        .registrarAsistencia(claseId, {
-          claseSesionId: claseId,
-          estudianteId: e.id,
-          presente: presente,
-        })
-        .subscribe();
-    });
-    this.guardarEnStorage();
-  }
 
-  invertirAsistencia(claseId: number) {
-    const clase = this.clasesCreadas.find((c) => c.id === claseId);
-    if (!clase || !clase.estudiantes) return;
-    clase.estudiantes.forEach((e) => {
-      e.presente = !e.presente;
-      this.claseService
-        .registrarAsistencia(claseId, {
-          claseSesionId: claseId,
-          estudianteId: e.id,
-          presente: e.presente,
-        })
-        .subscribe();
-    });
-    this.guardarEnStorage();
-  }
-
-  toggleAsistencia(claseId: number, estudianteId: number) {
-    const clase = this.clasesCreadas.find((c) => c.id === claseId);
-    if (clase) {
-      const estudiante = clase.estudiantes.find((e) => e.id === estudianteId);
-      if (estudiante) {
-        estudiante.presente = !estudiante.presente;
-        this.guardarEnStorage();
-
-        this.claseService
-          .registrarAsistencia(claseId, {
-            claseSesionId: claseId,
-            estudianteId: estudianteId,
-            presente: estudiante.presente,
-          })
-          .subscribe();
-      }
+    const pendientes = clase.estudiantes.filter((e) => !e.asistenciaRegistrada);
+    if (pendientes.length === 0) {
+      this.errorMessage = 'La asistencia de todos los estudiantes ya fue registrada.';
+      setTimeout(() => (this.errorMessage = ''), 3000);
+      return;
     }
+
+    pendientes.forEach((estudiante) => {
+      this.claseService
+        .registrarAsistencia(claseSesionId, {
+          estudianteId: estudiante.id,
+          presente,
+        })
+        .subscribe({
+          next: (registro) => {
+            estudiante.presente = registro.presente;
+            estudiante.asistenciaRegistrada = true;
+            estudiante.asistenciaId = registro.id;
+            this.cdr.detectChanges();
+          },
+          error: (error) => {
+            console.error('Error registrando asistencia:', error);
+            this.errorMessage =
+              error?.error?.message || 'No se pudo registrar una de las asistencias.';
+            setTimeout(() => (this.errorMessage = ''), 3500);
+          },
+        });
+    });
+  }
+
+  invertirAsistencia(claseSesionId: number) {
+    const clase = this.clasesCreadas.find((c) => Number(c.id) === Number(claseSesionId));
+    if (!clase) return;
+
+    if (clase.estudiantes.some((e) => e.asistenciaRegistrada)) {
+      this.errorMessage =
+        'No se puede invertir una asistencia ya registrada porque el backend evita registros duplicados.';
+      setTimeout(() => (this.errorMessage = ''), 3500);
+      return;
+    }
+
+    clase.estudiantes.forEach((e) => (e.presente = !e.presente));
+  }
+
+  toggleAsistencia(claseSesionId: number, estudianteId: number) {
+    const clase = this.clasesCreadas.find(
+      (c) => Number(c.id) === Number(claseSesionId),
+    );
+    if (!clase) return;
+
+    const estudiante = clase.estudiantes.find(
+      (e) => Number(e.id) === Number(estudianteId),
+    );
+    if (!estudiante) return;
+
+    if (estudiante.asistenciaRegistrada) {
+      this.errorMessage =
+        'La asistencia de este estudiante ya fue registrada para esta sesión.';
+      setTimeout(() => (this.errorMessage = ''), 3000);
+      return;
+    }
+
+    const nuevoEstado = !estudiante.presente;
+
+    this.claseService
+      .registrarAsistencia(claseSesionId, {
+        estudianteId,
+        presente: nuevoEstado,
+      })
+      .subscribe({
+        next: (registro) => {
+          estudiante.presente = registro.presente;
+          estudiante.asistenciaRegistrada = true;
+          estudiante.asistenciaId = registro.id;
+          this.successMessage = 'Asistencia registrada correctamente.';
+          setTimeout(() => (this.successMessage = ''), 2500);
+          this.cdr.detectChanges();
+        },
+        error: (error) => {
+          console.error('No se pudo registrar la asistencia:', error);
+          this.errorMessage =
+            error?.error?.message || 'No se pudo registrar la asistencia.';
+          setTimeout(() => (this.errorMessage = ''), 3500);
+        },
+      });
   }
 
   getClaseById(id: number): ClaseCreada | undefined {
@@ -1517,13 +1764,13 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const clase = this.clasesCreadas.find((c) => c.id === claseId);
+    const clase = this.clasesCreadas.find((c) => Number(c.id) === Number(claseId));
+    const claseRealId = Number(clase?.claseId || claseId);
     if (clase && clase.estudiantes) {
       clase.estudiantes = clase.estudiantes.filter((e) => e.id !== estudianteId);
-      this.guardarEnStorage();
     }
 
-    this.claseService.eliminarEstudiante(claseId, estudianteId).subscribe({
+    this.claseService.eliminarEstudiante(claseRealId, estudianteId).subscribe({
       next: () => {
         this.successMessage = 'Estudiante eliminado de la clase exitosamente.';
         setTimeout(() => (this.successMessage = ''), 4000);
@@ -1563,7 +1810,7 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     const tempPassword = `Uteq${new Date().getFullYear()}*`;
 
     const nuevoId = Date.now();
-    const clase = this.clasesCreadas.find((c) => c.id === claseId);
+    const clase = this.clasesCreadas.find((c) => Number(c.id) === Number(claseId));
     if (clase) {
       if (!clase.estudiantes) clase.estudiantes = [];
       clase.estudiantes.push({
@@ -1622,10 +1869,39 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
   // ==========================================
 
   actualizarRecursosYActividades() {
-    this.recursosMateria = this.materiaService.getRecursosSnapshot(this.materiaSeleccionadaId);
-    this.actividadesMateria = this.materiaService.getActividadesSnapshot(
-      this.materiaSeleccionadaId,
-    );
+    const materiaId = Number(this.materiaSeleccionadaId);
+
+    if (!materiaId) {
+      this.recursosMateria = [];
+      this.actividadesMateria = [];
+      return;
+    }
+
+    // RF-017: cargar siempre los recursos reales desde el backend.
+    this.materiaService.getRecursosByMateria(materiaId).subscribe({
+      next: (recursos) => {
+        this.recursosMateria = Array.isArray(recursos) ? recursos : [];
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('Error al cargar recursos de la materia:', err);
+        this.recursosMateria = [];
+        this.cdr.detectChanges();
+      },
+    });
+
+    // RF-017: cargar siempre las actividades reales desde el backend.
+    this.materiaService.getActividadesByMateria(materiaId).subscribe({
+      next: (actividades) => {
+        this.actividadesMateria = Array.isArray(actividades) ? actividades : [];
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('Error al cargar actividades de la materia:', err);
+        this.actividadesMateria = [];
+        this.cdr.detectChanges();
+      },
+    });
   }
 
   onArchivoRecursoChange(event: Event): void {
@@ -2336,3 +2612,4 @@ export class GestionClasesComponent implements OnInit, OnDestroy {
     setTimeout(() => (this.successMessage = ''), 4000);
   }
 }
+
